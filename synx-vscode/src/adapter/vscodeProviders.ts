@@ -1,41 +1,16 @@
-import * as vscode from "vscode";
-import { MarkupContent, MarkedString } from "vscode-languageserver-types";
-import type { ISynxLanguageService } from "../language/synxLanguageService";
-import type { DocContext, Position, Range, DiagnosticSeverity } from "../language/types";
-import type { Hover } from "../language/types";
-
 /**
- * Adapt editor-agnostic LSP types to VSCode.
- * Converts between vscode.TextDocument/Position/Range and LSP DocContext/Position/Range.
+ * VSCode extension providers: register completion, hover, diagnostics with the editor.
+ * Uses language service (LSP types) and lspToVscode for conversion only.
  */
-function toDocContext(document: vscode.TextDocument): DocContext {
-    return { text: document.getText() };
-}
-
-function toLspPosition(vscodePos: vscode.Position): Position {
-    return { line: vscodePos.line, character: vscodePos.character };
-}
-
-function toVscodeRange(lspRange: Range): vscode.Range {
-    return new vscode.Range(
-        lspRange.start.line,
-        lspRange.start.character,
-        lspRange.end.line,
-        lspRange.end.character,
-    );
-}
-
-function hoverContentsToMarkdown(contents: Hover["contents"]): vscode.MarkdownString {
-    if (typeof contents === "string") return new vscode.MarkdownString(contents);
-    if (MarkupContent.is(contents)) return new vscode.MarkdownString(contents.value);
-    if (Array.isArray(contents)) {
-        const parts = contents.map((c) =>
-            typeof c === "string" ? c : c.value,
-        );
-        return new vscode.MarkdownString(parts.join("\n\n"));
-    }
-    return new vscode.MarkdownString(contents.value);
-}
+import * as vscode from "vscode";
+import {
+    toDocContext,
+    toLspPosition,
+    toVscodeHover,
+    toVscodeDiagnostic,
+    toVscodeCompletionItem,
+} from "./lspToVscode";
+import type { ISynxLanguageService } from "../language/synxLanguageService";
 
 export function createCompletionItemProvider(
     service: ISynxLanguageService,
@@ -48,16 +23,7 @@ export function createCompletionItemProvider(
             const doc = toDocContext(document);
             const pos = toLspPosition(position);
             const items = service.getCompletions(doc, pos);
-            return items.map((item) => {
-                const vscodeItem = new vscode.CompletionItem(item.label);
-                if (item.insertText !== undefined) vscodeItem.insertText = item.insertText;
-                if (item.detail !== undefined) vscodeItem.detail = item.detail;
-                const range = item.textEdit && "range" in item.textEdit
-                    ? item.textEdit.range
-                    : undefined;
-                if (range !== undefined) vscodeItem.range = toVscodeRange(range);
-                return vscodeItem;
-            });
+            return items.map(toVscodeCompletionItem);
         },
     };
 }
@@ -72,31 +38,10 @@ export function createHoverProvider(service: ISynxLanguageService): vscode.Hover
             const pos = toLspPosition(position);
             const hover = service.getHover(doc, pos);
             if (hover === null) return null;
-            const contents = hoverContentsToMarkdown(hover.contents);
-            const range =
-                hover.range !== undefined
-                    ? toVscodeRange(hover.range)
-                    : new vscode.Range(position, position);
-            return new vscode.Hover(contents, range);
+            const fallbackRange = new vscode.Range(position, position);
+            return toVscodeHover(hover, fallbackRange);
         },
     };
-}
-
-function toVscodeDiagnosticSeverity(
-    sev: DiagnosticSeverity | undefined,
-): vscode.DiagnosticSeverity {
-    switch (sev) {
-        case 1:
-            return vscode.DiagnosticSeverity.Error;
-        case 2:
-            return vscode.DiagnosticSeverity.Warning;
-        case 3:
-            return vscode.DiagnosticSeverity.Information;
-        case 4:
-            return vscode.DiagnosticSeverity.Hint;
-        default:
-            return vscode.DiagnosticSeverity.Error;
-    }
 }
 
 /**
@@ -111,17 +56,7 @@ export function subscribeDiagnostics(
     function update(doc: vscode.TextDocument): void {
         if (doc.languageId !== "synx") return;
         const diagnostics = service.getDiagnostics(toDocContext(doc));
-        collection.set(
-            doc.uri,
-            diagnostics.map((d) => {
-                const range = toVscodeRange(d.range);
-                return new vscode.Diagnostic(
-                    range,
-                    d.message,
-                    toVscodeDiagnosticSeverity(d.severity),
-                );
-            }),
-        );
+        collection.set(doc.uri, diagnostics.map(toVscodeDiagnostic));
     }
 
     context.subscriptions.push(
