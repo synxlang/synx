@@ -1,0 +1,25 @@
+{
+  "name": "synx",
+  "displayName": "synx",
+  "description": "Syntax highlighting and language support for Synx",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.109.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [{
+      "id": "synx",
+      "aliases": ["synx", "synx"],
+      "extensions": [".synx"],
+      "configuration": "./language-configuration.json"
+    }],
+    "grammars": [{
+      "language": "synx",
+      "scopeName": "source.synx",
+      "path": "./syntaxes/synx.tmLanguage.json"
+    }]
+  }
+}
