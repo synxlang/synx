@@ -3,7 +3,7 @@ import type {
     DocContext,
     Position,
     CompletionItem,
-    HoverContent,
+    Hover,
     Diagnostic,
 } from "../language/types";
 
@@ -16,7 +16,7 @@ export class EmbeddedSynxLanguageService implements ISynxLanguageService {
         return [];
     }
 
-    getHover(_doc: DocContext, _position: Position): HoverContent | null {
+    getHover(_doc: DocContext, _position: Position): Hover | null {
         return null;
     }
 
