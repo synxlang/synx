@@ -3,23 +3,34 @@
   "displayName": "synx",
   "description": "Syntax highlighting and language support for Synx",
   "version": "0.0.1",
-  "engines": {
-    "vscode": "^1.109.0"
-  },
-  "categories": [
-    "Programming Languages"
-  ],
+  "engines": { "vscode": "^1.109.0" },
+  "categories": ["Programming Languages"],
+  "main": "./dist/extension.js",
+  "activationEvents": ["onLanguage:synx"],
   "contributes": {
-    "languages": [{
-      "id": "synx",
-      "aliases": ["synx", "synx"],
-      "extensions": [".synx"],
-      "configuration": "./language-configuration.json"
-    }],
-    "grammars": [{
-      "language": "synx",
-      "scopeName": "source.synx",
-      "path": "./syntaxes/synx.tmLanguage.json"
-    }]
+    "languages": [
+      {
+        "id": "synx",
+        "aliases": ["synx", "synx"],
+        "extensions": [".synx"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "synx",
+        "scopeName": "source.synx",
+        "path": "./syntaxes/synx.tmLanguage.json"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.109.0",
+    "typescript": "^5.0.0"
   }
 }
