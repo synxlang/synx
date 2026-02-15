@@ -1,0 +1,88 @@
+Digit=0~9;
+Letter={a~z;A~Z;'_';OtherLanguageLetter};
+SymbolChar={Letter;Digit};
+SpaceChar= \oneof ' \t\v\n';
+Delimiter=';';
+LineDelimiter={'\n';'\r\n'};
+CommentPrefix='\\\\';
+StringEscapePrefix='\\';
+
+ParanPair='()';
+BracketPair='[]';
+BracePair='{}';
+
+Space=SpaceChar+;
+DigitLiteral=Digit+;
+Symbol=Letter,SymbolChar*;
+SymbolDotChain=(symbols:(Symbol \splitby '.'))=>symbols;
+GeneralSymbol=\suppattern {Symbol;SymbolDotChain} {CharSet;Pattern};          
+
+Comment=(CommentPrefix,AnyChar*,LineDelimiter?);
+
+EscapeChar=('\\',char:AnyChar)=>char;
+StringLiteral=(text:{AnyChar;EscapeChar}* \enclosedby '\'')=>text;
+SingleCharString=\subpattern (single_char:{AnyChar;EscapeChar} \enclosedby '\'')=>single_char;
+GeneralChar={SymbolChar;SingleCharString;};
+CharRange=(first:GeneralChar, '~', last:GeneralChar)=>[.first=first, .last=last];
+
+FieldAssignment={('.', symbol:Symbol, '=', expr:Expr \ignore Space)=>[.target=symbol, .source=expr];}
+Struct=(field_assignments:FieldAssignment* \splitby ',' \ignore Space \enclosedby BracketPair)=>field_assignments;
+
+GeneralCharSet=(charsets:CharSet* \splitby ';' \ignore Space \enclosedby BracePair)=>charsets;
+CharSet = {
+    CharRange;
+    ('\\oneof', string:StringLiteral)=>string;
+    GeneralCharSet;
+    \associateby ParanPair;
+};
+
+Option=(pattern:Pattern, '?')=>pattern;
+OneOrMany=(pattern:Pattern, '*')=>pattern;
+Many=(pattern:Pattern, '+')=>pattern;
+
+AssociateByPart=('\\associateby', pattern:Pattern)=>pattern;
+PatternSet=((patterns:PatternSet* \splitby ';' \ignore Space), 
+    associateby_part:AssociateByPart? \ignore Space \enclosedby BracePair)=>[.patterns=patterns, .associateby=associateby_part];
+
+SplitbyPart=('\\splitby', pattern:Pattern \ignore Space)=>pattern;
+IgnorePart=('\\ignore', pattern:Pattern \ignore Space)=>pattern;
+EnclosedbyPart=('\\enclosedby', pattern:Pattern, \ignore Space)=>pattern;
+PatternSeq=(
+    (patterns:Pattern* \splitby ',' \ignore Space), 
+    splitby_part:SplitbyPart?, ignore_part:IgnorePart?, enclosedby_part:EnclosedbyPart? 
+    \ignore Space
+)=>[.patterns=patterns, .splitby=splitby_part, .ignore=ignore_part, .enclosedby=enclosedby_part];
+
+PatternBinding=(symbol:Symbol,':',pattern:Pattern)=>[.symbol=symbol, .pattern=pattern];
+Rule=(pattern:PatternSeq,'=>',returned:Expr)=>[.pattern=pattern, .returned=returned];
+
+SubPattern=('\\subpattern', pattern:Pattern, of_pattern:Pattern? \ignore Space)=>[.pattern=pattern, .of_pattern=of_pattern];  \\ if no of_pattern, parser will induce of_pattern by pattern
+SupPattern=('\\suppattern', pattern:Pattern, of_pattern:Pattern? \ignore Space)=>[.pattern=pattern, .of_pattern=of_pattern];  \\ if no of_pattern, parser will induce of_pattern by pattern
+
+Pattern=\suppattern {CharSet;StringLiteral;Option;OneOrMany;Many;PatternSeq;PatternSet;PatternBinding;Rule;SubPattern;SupPattern \associateby ParanPair};
+
+List=(exprs:Expr* \splitby ',' \ignore Space \enclosedby BracketPair)=>exprs;
+
+Assignment = {
+    (symbol:Symbol, '=', expr:Expr \ignore Space)=>[.target=symbol, .source=expr];
+};
+
+Expr={
+    Assignment;
+    GeneralSymbol;
+    List;
+    Struct;
+    Pattern;
+};
+
+Keyword=\suppattern {
+    '\\oneof'; 
+    '\\splitby'; '\\ignore'; '\\enclosedby';
+    '\\associateby';
+    '\\subpattern'; \\ Parser assumes subpattern is more precise representation of target pattern in any context.
+    '\\suppattern'; \\ Parser assumes suppattern is less precise representation of target pattern in any context.
+};
+
+Synx=(expr:({Expr} \splitby ';' \ignore Space));
+
+
