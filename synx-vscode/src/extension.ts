@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { createCompletionItemProvider, createHoverProvider, subscribeDiagnostics } from "./adapter/vscodeProviders";
+import { LANGUAGE_ID } from "./constants";
 import { EmbeddedSynxLanguageService } from "./impl/embeddedSynxLanguageService";
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -7,16 +8,16 @@ export function activate(context: vscode.ExtensionContext): void {
 
     context.subscriptions.push(
         vscode.languages.registerCompletionItemProvider(
-            { language: "synx" },
+            { language: LANGUAGE_ID },
             createCompletionItemProvider(service),
         ),
         vscode.languages.registerHoverProvider(
-            { language: "synx" },
+            { language: LANGUAGE_ID },
             createHoverProvider(service),
         ),
     );
 
-    const diagnosticsCollection = vscode.languages.createDiagnosticCollection("synx");
+    const diagnosticsCollection = vscode.languages.createDiagnosticCollection(LANGUAGE_ID);
     context.subscriptions.push(
         subscribeDiagnostics(context, service, diagnosticsCollection),
     );

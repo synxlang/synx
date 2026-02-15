@@ -1,6 +1,6 @@
 /**
  * VSCode extension providers: register completion, hover, diagnostics with the editor.
- * Uses language service (LSP types) and lspToVscode for conversion only.
+ * Uses language service (LSP types) and lspVscodeConvert for conversion only.
  */
 import * as vscode from "vscode";
 import {
@@ -9,8 +9,9 @@ import {
     toVscodeHover,
     toVscodeDiagnostic,
     toVscodeCompletionItem,
-} from "./lspToVscode";
+} from "./lspVscodeConvert";
 import type { ISynxLanguageService } from "../language/synxLanguageService";
+import { LANGUAGE_ID } from "../constants";
 
 export function createCompletionItemProvider(
     service: ISynxLanguageService,
@@ -54,7 +55,7 @@ export function subscribeDiagnostics(
     collection: vscode.DiagnosticCollection,
 ): vscode.Disposable {
     function update(doc: vscode.TextDocument): void {
-        if (doc.languageId !== "synx") return;
+        if (doc.languageId !== LANGUAGE_ID) return;
         const diagnostics = service.getDiagnostics(toDocContext(doc));
         collection.set(doc.uri, diagnostics.map(toVscodeDiagnostic));
     }
@@ -62,6 +63,11 @@ export function subscribeDiagnostics(
     context.subscriptions.push(
         vscode.workspace.onDidChangeTextDocument((e) => {
             update(e.document);
+        }),
+    );
+    context.subscriptions.push(
+        vscode.workspace.onDidOpenTextDocument((doc) => {
+            update(doc);
         }),
     );
     for (const doc of vscode.workspace.textDocuments) {
