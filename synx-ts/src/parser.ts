@@ -5,9 +5,12 @@ export interface ASTNode {
     /** Matched parser nodes, usually 1; multiple nodes indicate multiple interpretations with decreasing priority from left to right */
     parser_nodes: ParserNode[];
     range: [number, number];    // [start, end)
-    /** Semantic value, constructed exactly according to the => return value on the right side of the rule definition (e.g., [.symbol=symbol, .pattern=pattern], exprs, field_assignments, etc.) */
+    /** 
+     * Semantic value, constructed exactly according to the => return value on the right side of the rule definition.
+     * For PatternSeq nodes with no custom rule: consecutive CharMatchNode children are merged into strings.
+     */
     value: any;
-    /** Raw AST value; when no custom AST construction is used, value and raw_value are identical */
+    /** Raw AST value; always an array of child AST nodes for PatternSeq, never merged */
     raw_value: any;
 }
 
