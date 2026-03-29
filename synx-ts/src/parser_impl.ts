@@ -10,6 +10,7 @@ import {
     Quantifier,
 } from "./parser_node";
 import type { Parser, ParserConfig, ParseResult, ParserInput } from "./parser";
+import { ParseResultKind } from "./parser";
 import type { ASTNode } from "./parser";
 
 /** Parser implementation class, used by mkParser and tests; not exported as public API */
@@ -33,7 +34,40 @@ export class ParserImpl implements Parser {
 
     parse(input: ParserInput, root: ParserNode): ParseResult {
         this.initParse(input);
-        throw new Error("Not implemented");
+        const ast_nodes = this.parseNode(root, " ");
+        
+        if (this.last_error !== null) {
+            return {
+                kind: ParseResultKind.Failure,
+                ast_nodes: [],
+                end_pos: this.input.pos,
+            };
+        }
+        
+        return {
+            kind: ParseResultKind.Success,
+            ast_nodes,
+            end_pos: this.input.pos,
+        };
+    }
+
+    parseAll(input: ParserInput, node: ParserNode): ASTNode[] {
+        this.initParse(input);
+        const results: ASTNode[] = [];
+        
+        while (this.input.pos < this.input.src.length) {
+            const start = this.input.pos;
+            this.last_error = null;
+            const ast_nodes = this.parseNode(node, " ");
+            
+            if (this.last_error === null) {
+                results.push(...ast_nodes);
+            } else {
+                this.input.pos = start + 1;
+            }
+        }
+        
+        return results;
     }
 
     parseNode(node: ParserNode, quantifier: Quantifier): ASTNode[] {
