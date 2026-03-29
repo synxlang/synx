@@ -4,6 +4,7 @@ import type {
     CompletionItem,
     Hover,
     Diagnostic,
+    SemanticToken,
 } from "./types";
 
 /**
@@ -17,4 +18,6 @@ export interface ISynxLanguageService {
     getHover(doc: DocContext, position: Position): Hover | null;
 
     getDiagnostics(doc: DocContext): Diagnostic[];
+
+    getSemanticTokens(doc: DocContext): SemanticToken[];
 }

@@ -22,6 +22,15 @@
         "scopeName": "source.synx",
         "path": "./syntaxes/synx.tmLanguage.json"
       }
+    ],
+    "semanticTokenScopes": [
+      {
+        "scopes": {
+          "symbol": [
+            "entity.name.function"
+          ]
+        }
+      }
     ]
   },
   "scripts": {
@@ -34,6 +43,7 @@
     "typescript": "^5.0.0"
   },
   "dependencies": {
+    "@synxlang/parser": "^0.0.1",
     "vscode-languageserver-types": "^3.17.0"
   }
 }
