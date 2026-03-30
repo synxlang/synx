@@ -12,15 +12,15 @@ BracketPair="[]";
 BracePair="{}";
 
 Space=SpaceChar+;
-DigitLiteral=Digit+;
-Symbol=Letter,SymbolChar*;
+DigitLiteral=\token Digit+;
+Symbol=\token Letter,SymbolChar*;
 SymbolDotChain=(symbols:(Symbol \splitby "."))=>symbols;
 GeneralSymbol=\suppattern {Symbol;SymbolDotChain} {CharSet;Pattern};          
 
-Comment=(CommentPrefix,AnyChar*,LineDelimiter?);
+Comment=(CommentPrefix,comment:AnyChar*,LineDelimiter?)=>comment;
 
 EscapeChar=("\\",char:AnyChar)=>char;
-StringLiteral=(text:{AnyChar;EscapeChar}* \enclosedby "\"")=>text;
+StringLiteral=\token (text:{AnyChar;EscapeChar}* \enclosedby "\"")=>text;
 SingleCharString=\subpattern (single_char:{AnyChar;EscapeChar} \enclosedby "\"")=>single_char;
 GeneralChar={SymbolChar;SingleCharString;};
 CharRange=(first:GeneralChar, "~", last:GeneralChar)=>[.first=first, .last=last];
@@ -40,13 +40,13 @@ Option=(pattern:Pattern, "?")=>pattern;
 OneOrMany=(pattern:Pattern, "*")=>pattern;
 Many=(pattern:Pattern, "+")=>pattern;
 
-AssociateByPart=("\\associateby", pattern:Pattern)=>pattern;
+AssociateByPart=("\\associateby", pattern:Pattern \ignore Space)=>pattern;
 PatternSet=((patterns:PatternSet* \splitby ";" \ignore Space), 
     associateby_part:AssociateByPart? \ignore Space \enclosedby BracePair)=>[.patterns=patterns, .associateby=associateby_part];
 
 SplitbyPart=("\\splitby", pattern:Pattern \ignore Space)=>pattern;
 IgnorePart=("\\ignore", pattern:Pattern \ignore Space)=>pattern;
-EnclosedbyPart=("\\enclosedby", pattern:Pattern, \ignore Space)=>pattern;
+EnclosedbyPart=("\\enclosedby", pattern:Pattern \ignore Space)=>pattern;
 PatternSeq=(
     (patterns:Pattern* \splitby "," \ignore Space), 
     splitby_part:SplitbyPart?, ignore_part:IgnorePart?, enclosedby_part:EnclosedbyPart? 
@@ -60,6 +60,8 @@ SubPattern=("\\subpattern", pattern:Pattern, of_pattern:Pattern? \ignore Space)=
 SupPattern=("\\suppattern", pattern:Pattern, of_pattern:Pattern? \ignore Space)=>[.pattern=pattern, .of_pattern=of_pattern];  \\ if no of_pattern, parser will induce of_pattern by pattern
 
 Pattern=\suppattern {CharSet;StringLiteral;Option;OneOrMany;Many;PatternSeq;PatternSet;PatternBinding;Rule;SubPattern;SupPattern \associateby ParanPair};
+
+Token=("\\token", pattern:Pattern \ignore Space)=>pattern;
 
 List=(exprs:Expr* \splitby "," \ignore Space \enclosedby BracketPair)=>exprs;
 

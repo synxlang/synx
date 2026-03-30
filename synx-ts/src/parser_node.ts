@@ -4,6 +4,7 @@ export enum ParserNodeKind {
     CharMatchSet,
     PatternSeq,
     ParserNodeKindEnd,
+    Token,
 }
 
 export type Quantifier = '?' | '*' | '+' | ' ';
@@ -26,6 +27,11 @@ export interface PatternSeq {
     kind: ParserNodeKind;
     sub_nodes: ParserNode[];
     sub_quantifiers: string;  // one char per sub_node: ' ' | '?' | '*' | '+'
+}
+
+export interface Token {
+  kind: ParserNodeKind;
+  sub_node: ParserNode;
 }
 
 export const AnyChar = {kind: ParserNodeKind.AnyChar};
