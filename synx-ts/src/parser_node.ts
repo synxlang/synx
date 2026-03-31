@@ -10,7 +10,7 @@ export enum ParserNodeKind {
 export type Quantifier = '?' | '*' | '+' | ' ';
 
 export interface CharMatchRange {
-    kind: ParserNodeKind;
+    kind: ParserNodeKind.CharMatchRange;
     /** Range lower bound: a single logical character, potentially composed of multiple UTF-16 code units (e.g., emoji) */
     start: string;
     /** Range upper bound: a single logical character, potentially composed of multiple UTF-16 code units (e.g., emoji) */
@@ -18,13 +18,13 @@ export interface CharMatchRange {
 }
 
 export interface CharMatchSet {
-    kind: ParserNodeKind;
+    kind: ParserNodeKind.CharMatchSet;
     /** Array of child nodes, or a string (indicating matching any logical character in the string, each character may consist of multiple code units) */
     sub_nodes: CharMatchNode[] | string;
 }
 
 export interface PatternSeq {
-    kind: ParserNodeKind;
+    kind: ParserNodeKind.PatternSeq;
     sub_nodes: ParserNode[];
     sub_quantifiers: string;  // one char per sub_node: ' ' | '?' | '*' | '+'
     flat:boolean;
@@ -35,7 +35,7 @@ export interface PatternSet {
     patterns: ParserNode[];
 }
 
-export const AnyChar = {kind: ParserNodeKind.AnyChar};
+export const AnyChar = { kind: ParserNodeKind.AnyChar } as const;
 
 export type CharMatchNode = CharMatchRange | CharMatchSet | typeof AnyChar;
 export type ParserNode = CharMatchNode | PatternSeq | PatternSet;
