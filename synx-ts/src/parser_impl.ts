@@ -144,7 +144,7 @@ export class ParserImpl implements Parser {
         return res.matched;
     }
 
-    /** Match a sequence once: parse each sub_node in order using the corresponding sub_quantifier; raw_value is an array of child AST nodes, value merges consecutive CharMatchNode into strings */
+    /** Match a sequence once: parse each sub_node in order using the corresponding sub_quantifier; raw_value is an array of child AST nodes, value is flat string if flat=true, otherwise same as raw_value */
     parsePatternSeq(node: PatternSeq): ASTNode | null {
         const start = this.input.pos;
         const children: ASTNode[] = [];
@@ -157,24 +157,11 @@ export class ParserImpl implements Parser {
             }
             children.push(...part);
         }
-        
-        const value: (ASTNode | string)[] = [];
-        let currentStr = '';
-        for (const child of children) {
-            if (CHAR_MATCH_NODE_KINDS.includes(child.parser_nodes[0].kind)) {
-                currentStr += child.value;
-            } else {
-                if (currentStr !== '') {
-                    value.push(currentStr);
-                    currentStr = '';
-                }
-                value.push(child);
-            }
-        }
-        if (currentStr !== '') {
-            value.push(currentStr);
-        }
-        
+
+        const value = node.flat 
+            ? this.input.src.slice(start, this.input.pos)
+            : children;
+
         return {
             parser_nodes: [node],
             range: [start, this.input.pos],

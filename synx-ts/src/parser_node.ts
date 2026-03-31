@@ -26,6 +26,7 @@ export interface PatternSeq {
     kind: ParserNodeKind;
     sub_nodes: ParserNode[];
     sub_quantifiers: string;  // one char per sub_node: ' ' | '?' | '*' | '+'
+    flat:boolean;
 }
 
 export const AnyChar = {kind: ParserNodeKind.AnyChar};
@@ -63,7 +64,7 @@ export function mkCharSet(
   return { kind: ParserNodeKind.CharMatchSet, sub_nodes: chars_or_nodes };
 }
 
-export function mkPatternSeq(sub_nodes: ParserNode[], sub_quantifiers: string): PatternSeq {
-  return { kind: ParserNodeKind.PatternSeq, sub_nodes, sub_quantifiers };
+export function mkPatternSeq(sub_nodes: ParserNode[], sub_quantifiers: string, flat: boolean = false): PatternSeq {
+  return { kind: ParserNodeKind.PatternSeq, sub_nodes, sub_quantifiers, flat };
 }
 
