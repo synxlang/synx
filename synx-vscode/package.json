@@ -43,7 +43,8 @@
     "typescript": "^5.0.0"
   },
   "dependencies": {
-    "@synxlang/parser": "^0.0.1",
+    "@synxlang/parser": "file:../synx-ts",
+    "vscode-languageserver-textdocument": "^1.0.11",
     "vscode-languageserver-types": "^3.17.0"
   }
 }

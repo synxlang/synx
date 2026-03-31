@@ -9,6 +9,7 @@ import type {
 } from "../language/types";
 import { ParserImpl, Symbol } from "@synxlang/parser";
 import { SemanticTokenType } from "../language/types";
+import { TextDocument } from "vscode-languageserver-textdocument";
 
 /**
  * Embedded (in-extension) implementation of Synx language support.
@@ -34,37 +35,16 @@ export class EmbeddedSynxLanguageService implements ISynxLanguageService {
 
     getSemanticTokens(doc: DocContext): SemanticToken[] {
         const astNodes = this.parser.parseAll({ src: doc.text, pos: 0 }, Symbol);
-        
-        const lines = doc.text.split('\n');
-        
-        function offsetToPosition(offset: number): Position {
-            let line = 0;
-            let char = 0;
-            let currentOffset = 0;
-            
-            for (let i = 0; i < lines.length; i++) {
-                const lineLength = lines[i]!.length;
-                const lineEnd = currentOffset + lineLength;
-                
-                if (offset <= lineEnd) {
-                    return { line: i, character: offset - currentOffset };
-                }
-                
-                currentOffset = lineEnd + 1;
-                if (currentOffset <= offset) {
-                    line = i + 1;
-                }
-            }
-            
-            return { line: lines.length - 1, character: lines[lines.length - 1]!.length };
-        }
+
+        // Use LSP TextDocument's offset<->position conversion (handles CRLF and edge cases correctly).
+        const textDoc = TextDocument.create("inmemory://synx", "synx", 0, doc.text);
         
         return astNodes.map(astNode => {
             const [start, end] = astNode.range;
             return {
                 range: {
-                    start: offsetToPosition(start),
-                    end: offsetToPosition(end),
+                    start: textDoc.positionAt(start),
+                    end: textDoc.positionAt(end),
                 },
                 tokenType: SemanticTokenType.Symbol,
             };
