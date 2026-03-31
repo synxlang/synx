@@ -14,5 +14,5 @@ export const Letter: CharMatchSet = mkCharSet([
 // SymbolChar = { Letter; Digit }
 export const SymbolChar: CharMatchSet = mkCharSet([Letter, Digit]);
 
-// Symbol = Letter, SymbolChar*
-export const Symbol: PatternSeq = mkPatternSeq([Letter, SymbolChar], ' *');
+// Symbol = \flat (Letter, SymbolChar*)  — 与 synx.synx 一致
+export const Symbol: PatternSeq = mkPatternSeq([Letter, SymbolChar], ' *', true);
