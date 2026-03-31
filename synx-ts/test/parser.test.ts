@@ -1,9 +1,9 @@
 import { mkParser, ParserConfig, ParserInput, ParseResult, ASTNode } from '../src/parser';
 import type { ParserNode } from '../src/parser_node';
 import { Symbol, Letter, SymbolChar } from '../src/synx_parser_node';
+import { ParserNodeKind } from '../src/parser_node';
 import assert from 'assert';
 
-/** parse (Symbol and other entry points): multiple (config, input, root, expected) cases, iterate through test cases and assert within function */
 function test_parser(): void {
   const config: ParserConfig = { parser_nodes: [Symbol] };
   const cases: Array<{
@@ -25,6 +25,8 @@ function test_parser(): void {
 
 function test_parseAll(): void {
   const config: ParserConfig = { parser_nodes: [Symbol] };
+  // Note: Symbol is now a Token node, so its value is a string (the matched text),
+  // while raw_value preserves the inner PatternSeq's child structure
   const cases: Array<{
     id: number;
     input: ParserInput;
@@ -33,33 +35,22 @@ function test_parseAll(): void {
   }> = [
     { id: 1, input: { src: '', pos: 0 }, node: Symbol, expected: [] },
     { id: 2, input: { src: 'abc', pos: 0 }, node: Symbol, expected: [
-      { parser_nodes: [Symbol], range: [0, 3], value: [
-        { parser_nodes: [Letter], range: [0, 1], value: 'a', raw_value: 'a' },
-        { parser_nodes: [SymbolChar], range: [1, 3], value: 'bc', raw_value: 'bc' },
-      ], raw_value: [
+      { parser_nodes: [Symbol], range: [0, 3], value: "abc", raw_value: [
         { parser_nodes: [Letter], range: [0, 1], value: 'a', raw_value: 'a' },
         { parser_nodes: [SymbolChar], range: [1, 3], value: 'bc', raw_value: 'bc' },
       ] },
     ] },
     { id: 3, input: { src: 'a', pos: 0 }, node: Symbol, expected: [
-      { parser_nodes: [Symbol], range: [0, 1], value: [
-        { parser_nodes: [Letter], range: [0, 1], value: 'a', raw_value: 'a' },
-      ], raw_value: [
+      { parser_nodes: [Symbol], range: [0, 1], value: "a", raw_value: [
         { parser_nodes: [Letter], range: [0, 1], value: 'a', raw_value: 'a' },
       ] },
     ] },
     { id: 4, input: { src: 'abc def', pos: 0 }, node: Symbol, expected: [
-      { parser_nodes: [Symbol], range: [0, 3], value: [
-        { parser_nodes: [Letter], range: [0, 1], value: 'a', raw_value: 'a' },
-        { parser_nodes: [SymbolChar], range: [1, 3], value: 'bc', raw_value: 'bc' },
-      ], raw_value: [
+      { parser_nodes: [Symbol], range: [0, 3], value: "abc", raw_value: [
         { parser_nodes: [Letter], range: [0, 1], value: 'a', raw_value: 'a' },
         { parser_nodes: [SymbolChar], range: [1, 3], value: 'bc', raw_value: 'bc' },
       ] },
-      { parser_nodes: [Symbol], range: [4, 7], value: [
-        { parser_nodes: [Letter], range: [4, 5], value: 'd', raw_value: 'd' },
-        { parser_nodes: [SymbolChar], range: [5, 7], value: 'ef', raw_value: 'ef' },
-      ], raw_value: [
+      { parser_nodes: [Symbol], range: [4, 7], value: "def", raw_value: [
         { parser_nodes: [Letter], range: [4, 5], value: 'd', raw_value: 'd' },
         { parser_nodes: [SymbolChar], range: [5, 7], value: 'ef', raw_value: 'ef' },
       ] },
