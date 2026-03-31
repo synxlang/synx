@@ -12,23 +12,23 @@ BracketPair="[]";
 BracePair="{}";
 
 Space=SpaceChar+;
-DigitLiteral=\token Digit+;
-Symbol=\token (Letter,SymbolChar*);
-SymbolDotChain=(symbols:(Symbol \splitby "."))=>symbols;
+DigitLiteral=Digit+;
+Symbol=\flat (Letter,SymbolChar*);
+SymbolDotChain=(symbols:(Symbol \sepby "."))=>symbols;
 GeneralSymbol=\suppattern {Symbol;SymbolDotChain} {CharSet;Pattern};          
 
 Comment=(CommentPrefix,comment:AnyChar*,LineDelimiter?)=>comment;
 
 EscapeChar=("\\",char:AnyChar)=>char;
-StringLiteral=\token (text:{AnyChar;EscapeChar}* \enclosedby "\"")=>text;
+StringLiteral=(text:{AnyChar;EscapeChar}* \enclosedby "\"")=>text;
 SingleCharString=\subpattern (single_char:{AnyChar;EscapeChar} \enclosedby "\"")=>single_char;
 GeneralChar={SymbolChar;SingleCharString;};
 CharRange=(first:GeneralChar, "~", last:GeneralChar)=>[.first=first, .last=last];
 
 FieldAssignment={(".", symbol:Symbol, "=", expr:Expr \ignore Space)=>[.target=symbol, .source=expr];}
-Struct=(field_assignments:FieldAssignment* \splitby "," \ignore Space \enclosedby BracketPair)=>field_assignments;
+Struct=(field_assignments:FieldAssignment* \sepby "," \ignore Space \enclosedby BracketPair)=>field_assignments;
 
-GeneralCharSet=(charsets:CharSet* \splitby ";" \ignore Space \enclosedby BracePair)=>charsets;
+GeneralCharSet=(charsets:CharSet* \sepby ";" \ignore Space \enclosedby BracePair)=>charsets;
 CharSet = {
     CharRange;
     ("\\oneof", string:StringLiteral)=>string;
@@ -41,17 +41,17 @@ OneOrMany=(pattern:Pattern, "*")=>pattern;
 Many=(pattern:Pattern, "+")=>pattern;
 
 AssociateByPart=("\\associateby", pattern:Pattern \ignore Space)=>pattern;
-PatternSet=((patterns:PatternSet* \splitby ";" \ignore Space), 
+PatternSet=((patterns:PatternSet* \sepby ";" \ignore Space), 
     associateby_part:AssociateByPart? \ignore Space \enclosedby BracePair)=>[.patterns=patterns, .associateby=associateby_part];
 
-SplitbyPart=("\\splitby", pattern:Pattern \ignore Space)=>pattern;
+SplitbyPart=("\\sepby", pattern:Pattern \ignore Space)=>pattern;
 IgnorePart=("\\ignore", pattern:Pattern \ignore Space)=>pattern;
 EnclosedbyPart=("\\enclosedby", pattern:Pattern \ignore Space)=>pattern;
 PatternSeq=(
-    (patterns:Pattern* \splitby "," \ignore Space), 
+    (patterns:Pattern* \sepby "," \ignore Space), 
     splitby_part:SplitbyPart?, ignore_part:IgnorePart?, enclosedby_part:EnclosedbyPart? 
     \ignore Space
-)=>[.patterns=patterns, .splitby=splitby_part, .ignore=ignore_part, .enclosedby=enclosedby_part];
+)=>[.patterns=patterns, .sepby=splitby_part, .ignore=ignore_part, .enclosedby=enclosedby_part];
 
 PatternBinding=(symbol:Symbol,":",pattern:Pattern)=>[.symbol=symbol, .pattern=pattern];
 Rule=(pattern:PatternSeq,"=>",returned:Expr)=>[.pattern=pattern, .returned=returned];
@@ -61,9 +61,9 @@ SupPattern=("\\suppattern", pattern:Pattern, of_pattern:Pattern? \ignore Space)=
 
 Pattern=\suppattern {CharSet;StringLiteral;Option;OneOrMany;Many;PatternSeq;PatternSet;PatternBinding;Rule;SubPattern;SupPattern \associateby ParanPair};
 
-Token=("\\token", pattern:Pattern \ignore Space)=>pattern;
+Flat=("\\flat", pattern:Pattern \ignore Space)=>pattern;
 
-List=(exprs:Expr* \splitby "," \ignore Space \enclosedby BracketPair)=>exprs;
+List=(exprs:Expr* \sepby "," \ignore Space \enclosedby BracketPair)=>exprs;
 
 Assignment = {
     (symbol:Symbol, "=", expr:Expr \ignore Space)=>[.target=symbol, .source=expr];
@@ -75,17 +75,18 @@ Expr={
     List;
     Struct;
     Pattern;
+    Flat;
 };
 
 Keyword=\suppattern {
     "\\oneof"; 
-    "\\splitby"; "\\ignore"; "\\enclosedby";
+    "\\sepby"; "\\ignore"; "\\enclosedby";
     "\\associateby";
     "\\subpattern"; \\ Parser assumes subpattern is more precise representation of target pattern in any context.
     "\\suppattern"; \\ Parser assumes suppattern is less precise representation of target pattern in any context.
-    "\\token";
+    "\\flat";  \\ flattern all matched pieces into single string
 };
 
-Synx=(expr:({Expr} \splitby ";" \ignore Space));
+Synx=(expr:({Expr} \sepby ";" \ignore Space));
 
 
