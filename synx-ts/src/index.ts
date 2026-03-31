@@ -7,9 +7,11 @@ export {
   CharMatchRange,
   CharMatchSet,
   PatternSeq,
+  PatternSet,
   mkCharRange,
   mkCharSet,
   mkPatternSeq,
+  mkPatternSet,
   Quantifier,
 } from './parser_node';
 export { Symbol, Letter, Digit, SymbolChar } from './synx_parser_node';

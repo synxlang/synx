@@ -3,6 +3,7 @@ export enum ParserNodeKind {
     CharMatchRange,
     CharMatchSet,
     PatternSeq,
+    PatternSet,
     ParserNodeKindEnd,
 }
 
@@ -29,10 +30,15 @@ export interface PatternSeq {
     flat:boolean;
 }
 
+export interface PatternSet {
+    kind: ParserNodeKind.PatternSet;
+    patterns: ParserNode[];
+}
+
 export const AnyChar = {kind: ParserNodeKind.AnyChar};
 
 export type CharMatchNode = CharMatchRange | CharMatchSet | typeof AnyChar;
-export type ParserNode = CharMatchNode | PatternSeq;
+export type ParserNode = CharMatchNode | PatternSeq | PatternSet;
 
 /** All kinds that belong to CharMatchNode, used for branch checking to avoid hardcoding multiple kinds */
 export const CHAR_MATCH_NODE_KINDS: ParserNodeKind[] = [
@@ -66,5 +72,9 @@ export function mkCharSet(
 
 export function mkPatternSeq(sub_nodes: ParserNode[], sub_quantifiers: string, flat: boolean = false): PatternSeq {
   return { kind: ParserNodeKind.PatternSeq, sub_nodes, sub_quantifiers, flat };
+}
+
+export function mkPatternSet(patterns: ParserNode[]): PatternSet {
+  return { kind: ParserNodeKind.PatternSet, patterns };
 }
 
