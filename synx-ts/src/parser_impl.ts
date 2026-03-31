@@ -7,6 +7,7 @@ import {
     CharMatchRange,
     CharMatchSet,
     PatternSeq,
+    Token,
     Quantifier,
 } from "./parser_node";
 import type { Parser, ParserConfig, ParseResult, ParserInput } from "./parser";
@@ -15,7 +16,7 @@ import type { ASTNode } from "./parser";
 
 /** Parser implementation class, used by mkParser and tests; not exported as public API */
 export class ParserImpl implements Parser {
-    /** Current parse input and read position (parse state stored on this, child functions read/write through this) */
+    /** Current parse input and read position (parse state stored on this, child functions read/write through this). Index maintenance convention: only successful matches need to update input.pos; on failure, index recovery is handled by the caller that detects the failure. */
     input!: ParserInput;
     /** Error message recorded on the last match failure, used by parse() to return Failure, etc. */
     last_error: string | null = null;
@@ -57,13 +58,13 @@ export class ParserImpl implements Parser {
         
         while (this.input.pos < this.input.src.length) {
             const start = this.input.pos;
-            this.last_error = null;
             const ast_nodes = this.parseNode(node, " ");
             
             if (this.last_error === null) {
                 results.push(...ast_nodes);
             } else {
                 this.input.pos = start + 1;
+                this.last_error = null;
             }
         }
         
@@ -75,26 +76,40 @@ export class ParserImpl implements Parser {
             const result = this.parseCharMatchNode(node as CharMatchNode, quantifier);
             return result === null ? [] : [result];
         }
-        if (node.kind === ParserNodeKind.PatternSeq) {
-            const first = this.parsePatternSeq(node as PatternSeq);
-            if (first === null) {
-                if (quantifier === " " || quantifier === "+") this.setError();
-                return [];
-            }
-            if (quantifier === " " || quantifier === "?") return [first];
-            const out: ASTNode[] = [first];
-            for (;;) {
-                const n = this.parsePatternSeq(node as PatternSeq);
-                if (n === null) break;
-                out.push(n);
-            }
-            return out;
+        const first = this.parseSingleNode(node);
+        if (first === null) {
+            if (quantifier === " " || quantifier === "+") this.setError();
+            return [];
         }
-        this.setError("Unknown node kind");
-        return [];
+        if (quantifier === " " || quantifier === "?") return [first];
+        const out: ASTNode[] = [first];
+        for (;;) {
+            const start = this.input.pos;
+            const next = this.parseSingleNode(node);
+            if (next === null) {
+                this.input.pos = start;
+                break;
+            }
+            out.push(next);
+        }
+        return out;
     }
 
-    /** Character matching: match according to quantifier and merge into a string, returns an ASTNode (value/raw_value is the matched string); returns null on failure */
+    parseSingleNode(node: ParserNode): ASTNode | null {
+        if (CHAR_MATCH_NODE_KINDS.includes(node.kind)) {
+            return this.parseCharMatchNode(node as CharMatchNode, " ");
+        }
+        if (node.kind === ParserNodeKind.PatternSeq) {
+            return this.parsePatternSeq(node as PatternSeq);
+        }
+        if (node.kind === ParserNodeKind.Token) {
+            return this.parseToken(node as Token);
+        }
+        this.setError("Unknown node kind");
+        return null;
+    }
+
+    /** Character matching: handles quantifier locally and returns an ASTNode (value/raw_value is the matched string); returns null on failure */
     parseCharMatchNode(node: CharMatchNode, quantifier: Quantifier): ASTNode | null {
         const mk_char_node = (start: number, end: number): ASTNode => ({
             parser_nodes: [node],
@@ -162,6 +177,20 @@ export class ParserImpl implements Parser {
             range: [start, this.input.pos],
             value: children,
             raw_value: children,
+        };
+    }
+
+    parseToken(node: Token): ASTNode | null {
+        this.last_error = null;
+        const child = this.parseSingleNode(node.sub_node);
+        if (child === null) {
+            return null;
+        }
+        return {
+            parser_nodes: [node],
+            range: [child.range[0], child.range[1]],
+            value: this.input.src.slice(child.range[0], child.range[1]),
+            raw_value: child.raw_value,
         };
     }
 }

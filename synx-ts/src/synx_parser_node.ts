@@ -1,5 +1,5 @@
-import { mkCharRange, mkCharSet, mkPatternSeq } from './parser_node';
-import type { CharMatchRange, CharMatchSet, PatternSeq } from './parser_node';
+import { mkCharRange, mkCharSet, mkPatternSeq, mkToken } from './parser_node';
+import type { CharMatchRange, CharMatchSet, PatternSeq, Token } from './parser_node';
 
 // Digit = 0~9
 export const Digit: CharMatchRange = mkCharRange('0', '9');
@@ -14,5 +14,5 @@ export const Letter: CharMatchSet = mkCharSet([
 // SymbolChar = { Letter; Digit }
 export const SymbolChar: CharMatchSet = mkCharSet([Letter, Digit]);
 
-// Symbol = Letter, SymbolChar*
-export const Symbol: PatternSeq = mkPatternSeq([Letter, SymbolChar], ' *');
+// SymbolToken = \token Letter, SymbolChar*
+export const Symbol: Token = mkToken(mkPatternSeq([Letter, SymbolChar], ' *'));

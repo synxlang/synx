@@ -13,7 +13,7 @@ BracePair="{}";
 
 Space=SpaceChar+;
 DigitLiteral=\token Digit+;
-Symbol=\token Letter,SymbolChar*;
+Symbol=\token (Letter,SymbolChar*);
 SymbolDotChain=(symbols:(Symbol \splitby "."))=>symbols;
 GeneralSymbol=\suppattern {Symbol;SymbolDotChain} {CharSet;Pattern};          
 
@@ -83,6 +83,7 @@ Keyword=\suppattern {
     "\\associateby";
     "\\subpattern"; \\ Parser assumes subpattern is more precise representation of target pattern in any context.
     "\\suppattern"; \\ Parser assumes suppattern is less precise representation of target pattern in any context.
+    "\\token";
 };
 
 Synx=(expr:({Expr} \splitby ";" \ignore Space));

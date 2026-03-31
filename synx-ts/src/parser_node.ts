@@ -37,7 +37,7 @@ export interface Token {
 export const AnyChar = {kind: ParserNodeKind.AnyChar};
 
 export type CharMatchNode = CharMatchRange | CharMatchSet | typeof AnyChar;
-export type ParserNode = CharMatchNode | PatternSeq;
+export type ParserNode = CharMatchNode | PatternSeq | Token;
 
 /** All kinds that belong to CharMatchNode, used for branch checking to avoid hardcoding multiple kinds */
 export const CHAR_MATCH_NODE_KINDS: ParserNodeKind[] = [
@@ -73,3 +73,6 @@ export function mkPatternSeq(sub_nodes: ParserNode[], sub_quantifiers: string): 
   return { kind: ParserNodeKind.PatternSeq, sub_nodes, sub_quantifiers };
 }
 
+export function mkToken(sub_node: ParserNode): Token {
+  return { kind: ParserNodeKind.Token, sub_node };
+}
