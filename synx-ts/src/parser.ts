@@ -7,7 +7,7 @@ export interface ASTNode {
     range: [number, number];    // [start, end)
     /** 
      * Semantic value, constructed exactly according to the => return value on the right side of the rule definition.
-     * For PatternSeq nodes with no custom rule: consecutive CharMatchNode children are merged into strings.
+     * For PatternSeq nodes with no custom rule: if node.flat=true, value is the matched substring; otherwise value is the array of child AST nodes.
      */
     value: any;
     /** Raw AST value; always an array of child AST nodes for PatternSeq, never merged */
