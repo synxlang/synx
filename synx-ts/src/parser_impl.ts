@@ -207,7 +207,7 @@ export class ParserImpl implements Parser {
 
             const child = this.parseSingleNode(alt);
             if (child !== null) {
-                child.parser_nodes.unshift(node);
+                child.parser_nodes.push(node);
                 return child;
             }
         }
