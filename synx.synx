@@ -7,10 +7,6 @@ LineDelimiter={"\n";"\r\n"};
 CommentPrefix="\\\\";
 StringEscapePrefix="\\";
 
-ParanPair="()";
-BracketPair="[]";
-BracePair="{}";
-
 Space=SpaceChar+;
 DigitLiteral=Digit+;
 Symbol=\flat (Letter,SymbolChar*);
@@ -26,15 +22,15 @@ GeneralChar={SymbolChar;SingleCharString;};
 CharRange=(first:GeneralChar, "~", last:GeneralChar)=>[.first=first, .last=last];
 
 FieldAssignment={(".", symbol:Symbol, "=", expr:Expr \ignore Space)=>[.target=symbol, .source=expr];}
-Struct=(field_assignments:FieldAssignment* \sepby "," \ignore Space \enclosedby BracketPair)=>field_assignments;
+Struct=(field_assignments:FieldAssignment* \sepby "," \ignore Space \enclosedby "[]")=>field_assignments;
 
-GeneralCharSet=(charsets:CharSet* \sepby ";" \ignore Space \enclosedby BracePair)=>charsets;
+GeneralCharSet=(charsets:CharSet* \sepby ";" \ignore Space \enclosedby "{}")=>charsets;
 CharSet = {
     CharRange;
     ("\\oneof", string:StringLiteral)=>string;
     GeneralCharSet;
     GeneralSymbol;
-    \associateby ParanPair;
+    \associateby "()";
 };
 
 Option=(pattern:Pattern, "?")=>pattern;+
@@ -44,7 +40,7 @@ FlatPattern=("\\flat", pattern:Pattern \sepby Space+)=>pattern;
 
 AssociateByPart=("\\associateby", pattern:Pattern \sepby Space+)=>pattern;
 PatternSet=((patterns:PatternSet* \sepby ";" \ignore Space), 
-    associateby_part:AssociateByPart? \ignore Space \enclosedby BracePair)=>[.patterns=patterns, .associateby=associateby_part];
+    associateby_part:AssociateByPart? \ignore Space \enclosedby "{}")=>[.patterns=patterns, .associateby=associateby_part];
 
 SepbyPart=("\\sepby", pattern:Pattern \sepby Space+)=>pattern;
 IgnorePart=("\\ignore", pattern:Pattern \sepby Space+)=>pattern;
@@ -59,15 +55,15 @@ ConditionPattern=(pattern:Pattern, "\\where", condition:ConditionExpr \sepby Spa
 PatternBinding=(symbol:Symbol,":",pattern:Pattern)=>[.symbol=symbol, .pattern=pattern];
 Rule=(pattern:PatternSeq,"=>",returned:Expr)=>[.pattern=pattern, .returned=returned];
 
-Pattern={CharSet;StringLiteral;Option;OneOrMany;Many;FlatPattern;PatternSeq;PatternSet;PatternBinding;ConditionPattern;Rule;GeneralSymbol \associateby ParanPair};
+Pattern={CharSet;StringLiteral;Option;OneOrMany;Many;FlatPattern;PatternSeq;PatternSet;PatternBinding;ConditionPattern;Rule;GeneralSymbol \associateby "()"};
 
-List=(exprs:Expr* \sepby "," \ignore Space \enclosedby BracketPair)=>exprs;
+List=(exprs:Expr* \sepby "," \ignore Space \enclosedby "[]")=>exprs;
 
 Assignment = {
     (symbol:Symbol, "=", expr:Expr \ignore Space)=>[.target=symbol, .source=expr];
 };
 
-FuncCallArgsList=(args:Expr* \sepby "," \ignore Space \enclosedby ParanPair)=>args;
+FuncCallArgsList=(args:Expr* \sepby "," \ignore Space \enclosedby "()")=>args;
 FuncCallExpr=(func:GeneralSymbol, args_list:FuncCallArgsList \ignore Space)=>[.func=func, .args_list=args_list];
 EqExpr=(left:Expr, "==", right:Expr)=>[.left=left, .right=right];
 ConditionExpr={EqExpr;FuncCallExpr};
