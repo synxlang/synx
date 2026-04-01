@@ -40,6 +40,7 @@ CharSet = {
 Option=(pattern:Pattern, "?")=>pattern;
 OneOrMany=(pattern:Pattern, "*")=>pattern;
 Many=(pattern:Pattern, "+")=>pattern;
+FlatPattern=("\\flat", pattern:Pattern \ignore Space)=>pattern;
 
 AssociateByPart=("\\associateby", pattern:Pattern \ignore Space)=>pattern;
 PatternSet=((patterns:PatternSet* \sepby ";" \ignore Space), 
@@ -58,9 +59,7 @@ ConditionPattern=(pattern:Pattern, "\\where", condition:ConditionExpr \ignore Sp
 PatternBinding=(symbol:Symbol,":",pattern:Pattern)=>[.symbol=symbol, .pattern=pattern];
 Rule=(pattern:PatternSeq,"=>",returned:Expr)=>[.pattern=pattern, .returned=returned];
 
-Pattern={CharSet;StringLiteral;Option;OneOrMany;Many;PatternSeq;PatternSet;PatternBinding;ConditionPattern;Rule;GeneralSymbol \associateby ParanPair};
-
-Flat=("\\flat", pattern:Pattern \ignore Space)=>pattern;
+Pattern={CharSet;StringLiteral;Option;OneOrMany;Many;FlatPattern;PatternSeq;PatternSet;PatternBinding;ConditionPattern;Rule;GeneralSymbol \associateby ParanPair};
 
 List=(exprs:Expr* \sepby "," \ignore Space \enclosedby BracketPair)=>exprs;
 
