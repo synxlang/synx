@@ -7,7 +7,7 @@ import {
     CharMatchRange,
     CharMatchSet,
     PatternSeq,
-    StringPatternSeq,
+    CharSeq,
     Quantifier,
 } from "./parser_node";
 import type { Parser, ParserConfig, ParseResult, ParserInput } from "./parser";
@@ -92,8 +92,8 @@ export class ParserImpl implements Parser {
     }
 
     parseSingleNode(node: ParserNode): ASTNode | null {
-        if (node.kind === ParserNodeKind.StringPatternSeq) {
-            return this.parseStringPatternSeq(node as StringPatternSeq);
+        if (node.kind === ParserNodeKind.CharSeq) {
+            return this.parseCharSeq(node as CharSeq);
         }
         if (node.kind === ParserNodeKind.PatternSeq) {
             return this.parsePatternSeq(node as PatternSeq);
@@ -136,7 +136,7 @@ export class ParserImpl implements Parser {
     }
 
     /** Match a fixed literal once (quantifiers are handled in parseNode, like parsePatternSeq). */
-    parseStringPatternSeq(node: StringPatternSeq): ASTNode | null {
+    parseCharSeq(node: CharSeq): ASTNode | null {
         if (node.literal.length === 0) {
             return null;
         }

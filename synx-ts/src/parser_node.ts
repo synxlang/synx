@@ -3,8 +3,8 @@ export enum ParserNodeKind {
     CharMatchRange,
     CharMatchSet,
     PatternSeq,
-    /** Shorthand for a fixed literal sequence (e.g. quoted strings in synx). */
-    StringPatternSeq,
+    /** Fixed UTF-16 substring to match (e.g. quoted strings in synx). */
+    CharSeq,
     PatternSet,
     ParserNodeKindEnd,
 }
@@ -33,10 +33,10 @@ export interface PatternSeq {
 }
 
 /**
- * Literal string as a pattern: same intent as a PatternSeq of successive character matches, but easier to author by hand.
+ * Literal run to match with `startsWith`: same intent as a PatternSeq of successive character matches, but shorter to author.
  */
-export interface StringPatternSeq {
-    kind: ParserNodeKind.StringPatternSeq;
+export interface CharSeq {
+    kind: ParserNodeKind.CharSeq;
     /** Matched text as a contiguous substring; must be non-empty. */
     literal: string;
 }
@@ -49,7 +49,7 @@ export interface PatternSet {
 export const AnyChar = { kind: ParserNodeKind.AnyChar } as const;
 
 export type CharMatchNode = CharMatchRange | CharMatchSet | typeof AnyChar;
-export type ParserNode = CharMatchNode | PatternSeq | StringPatternSeq | PatternSet;
+export type ParserNode = CharMatchNode | PatternSeq | CharSeq | PatternSet;
 
 /** All kinds that belong to CharMatchNode, used for branch checking to avoid hardcoding multiple kinds */
 export const CHAR_MATCH_NODE_KINDS: ParserNodeKind[] = [
@@ -85,12 +85,12 @@ export function mkPatternSeq(sub_nodes: ParserNode[], sub_quantifiers: string, f
   return { kind: ParserNodeKind.PatternSeq, sub_nodes, sub_quantifiers, flat };
 }
 
-/** Builds a StringPatternSeq; throws if `literal` is empty. */
-export function mkStringPatternSeq(literal: string): StringPatternSeq {
+/** Builds a CharSeq; throws if `literal` is empty. */
+export function mkCharSeq(literal: string): CharSeq {
   if (literal.length === 0) {
-    throw new Error("StringPatternSeq.literal must be non-empty");
+    throw new Error("CharSeq.literal must be non-empty");
   }
-  return { kind: ParserNodeKind.StringPatternSeq, literal };
+  return { kind: ParserNodeKind.CharSeq, literal };
 }
 
 export function mkPatternSet(patterns: ParserNode[]): PatternSet {
