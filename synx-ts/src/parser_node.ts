@@ -3,7 +3,7 @@ export enum ParserNodeKind {
     CharMatchRange,
     CharMatchSet,
     PatternSeq,
-    /** Shorthand for a fixed literal sequence (e.g. quoted strings in synx); parsing not implemented yet in ParserImpl. */
+    /** Shorthand for a fixed literal sequence (e.g. quoted strings in synx). */
     StringPatternSeq,
     PatternSet,
     ParserNodeKindEnd,
@@ -34,7 +34,6 @@ export interface PatternSeq {
 
 /**
  * Literal string as a pattern: same intent as a PatternSeq of successive character matches, but easier to author by hand.
- * Parsing is not implemented in ParserImpl yet.
  */
 export interface StringPatternSeq {
     kind: ParserNodeKind.StringPatternSeq;

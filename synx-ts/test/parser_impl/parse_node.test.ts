@@ -1,5 +1,5 @@
 import { ParserImpl } from '../../src/parser_impl';
-import { mkCharRange, mkCharSet } from '../../src/parser_node';
+import { mkCharRange, mkCharSet, mkStringPatternSeq } from '../../src/parser_node';
 import type { CharMatchNode, ParserNode, Quantifier } from '../../src/parser_node';
 import type { ParserInput } from '../../src/parser';
 
@@ -20,6 +20,8 @@ function test_parseNode(): void {
     { id: 2, node: Digit, quantifier: ' ', input: { src: 'a', pos: 0 }, expected_count: 0, expected_error: true },
     { id: 3, node: Letter, quantifier: '?', input: { src: 'x', pos: 0 }, expected_count: 1, expected_error: false },
     { id: 4, node: UnknownKindNode, quantifier: ' ', input: { src: 'x', pos: 0 }, expected_count: 0, expected_error: true },
+    { id: 5, node: mkStringPatternSeq('=>'), quantifier: ' ', input: { src: '=>y', pos: 0 }, expected_count: 1, expected_error: false },
+    { id: 6, node: mkStringPatternSeq('=>'), quantifier: ' ', input: { src: '=y', pos: 0 }, expected_count: 0, expected_error: true },
   ];
   for (const c of cases) {
     const parser = new ParserImpl({ parser_nodes: [] });

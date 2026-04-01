@@ -7,6 +7,7 @@ import {
     CharMatchRange,
     CharMatchSet,
     PatternSeq,
+    StringPatternSeq,
     Quantifier,
 } from "./parser_node";
 import type { Parser, ParserConfig, ParseResult, ParserInput } from "./parser";
@@ -75,23 +76,32 @@ export class ParserImpl implements Parser {
             const result = this.parseCharMatchNode(node as CharMatchNode, quantifier);
             return result === null ? [] : [result];
         }
-        if (node.kind === ParserNodeKind.PatternSeq) {
-            const first = this.parsePatternSeq(node as PatternSeq);
-            if (first === null) {
-                if (quantifier === " " || quantifier === "+") this.setError();
-                return [];
-            }
-            if (quantifier === " " || quantifier === "?") return [first];
-            const out: ASTNode[] = [first];
-            for (;;) {
-                const n = this.parsePatternSeq(node as PatternSeq);
-                if (n === null) break;
-                out.push(n);
-            }
-            return out;
+        const first = this.parseSingleNode(node);
+        if (first === null) {
+            if (quantifier === " " || quantifier === "+") this.setError();
+            return [];
         }
-        this.setError("Unknown node kind");
-        return [];
+        if (quantifier === " " || quantifier === "?") return [first];
+        const out: ASTNode[] = [first];
+        for (;;) {
+            const n = this.parseSingleNode(node);
+            if (n === null) break;
+            out.push(n);
+        }
+        return out;
+    }
+
+    parseSingleNode(node: ParserNode): ASTNode | null {
+        if (node.kind === ParserNodeKind.StringPatternSeq) {
+            return this.parseStringPatternSeq(node as StringPatternSeq);
+        }
+        if (node.kind === ParserNodeKind.PatternSeq) {
+            return this.parsePatternSeq(node as PatternSeq);
+        }
+        if (CHAR_MATCH_NODE_KINDS.includes(node.kind)) {
+            return this.parseCharMatchNode(node as CharMatchNode, " ");
+        }
+        return null;
     }
 
     /** Character matching: match according to quantifier and merge into a string, returns an ASTNode (value/raw_value is the matched string); returns null on failure */
@@ -123,6 +133,26 @@ export class ParserImpl implements Parser {
         if (quantifier === " " || quantifier === "?") return mk_char_node(start, this.input.pos);
         while (try_one()) {}
         return mk_char_node(start, this.input.pos);
+    }
+
+    /** Match a fixed literal once (quantifiers are handled in parseNode, like parsePatternSeq). */
+    parseStringPatternSeq(node: StringPatternSeq): ASTNode | null {
+        if (node.literal.length === 0) {
+            return null;
+        }
+        const start = this.input.pos;
+        const { src, pos } = this.input;
+        if (!src.startsWith(node.literal, pos)) {
+            return null;
+        }
+        this.input.pos = pos + node.literal.length;
+        const end = this.input.pos;
+        return {
+            parser_nodes: [node],
+            range: [start, end],
+            value: this.input.src.slice(start, end),
+            raw_value: this.input.src.slice(start, end),
+        };
     }
 
     matchCharMatchRange(node: CharMatchRange): boolean {
