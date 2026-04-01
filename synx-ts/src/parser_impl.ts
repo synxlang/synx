@@ -9,6 +9,7 @@ import {
     CharMatchSet,
     PatternSeq,
     CharSeq,
+    PatternSet,
     Quantifier,
 } from "./parser_node";
 import type { Parser, ParserConfig, ParseResult, ParserInput } from "./parser";
@@ -96,6 +97,9 @@ export class ParserImpl implements Parser {
         if (node.kind === ParserNodeKind.CharSeq) {
             return this.parseCharSeq(node as CharSeq);
         }
+        if (node.kind === ParserNodeKind.PatternSet) {
+            return this.parsePatternSet(node as PatternSet);
+        }
         if (node.kind === ParserNodeKind.PatternSeq) {
             return this.parsePatternSeq(node as PatternSeq);
         }
@@ -154,6 +158,25 @@ export class ParserImpl implements Parser {
             value: this.input.src.slice(start, end),
             raw_value: this.input.src.slice(start, end),
         };
+    }
+
+    /**
+     * Match one of the alternatives in order.
+     */
+    parsePatternSet(node: PatternSet): ASTNode | null {
+        const start = this.input.pos;
+
+        for (const alt of node.patterns) {
+            // Always restart from the same position for each alternative.
+            this.input.pos = start;
+
+            const child = this.parseSingleNode(alt);
+            if (child !== null) {
+                child.parser_nodes.unshift(node);
+                return child;
+            }
+        }
+        return null;
     }
 
     matchCharMatchRange(node: CharMatchRange): boolean {
