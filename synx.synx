@@ -15,13 +15,13 @@ Space=SpaceChar+;
 DigitLiteral=Digit+;
 Symbol=\flat (Letter,SymbolChar*);
 SymbolDotChain=(symbols:(Symbol \sepby "."))=>symbols;
-GeneralSymbol=\suppattern {Symbol;SymbolDotChain} {CharSet;Pattern};          
+GeneralSymbol={Symbol;SymbolDotChain};          
 
 Comment=(CommentPrefix,comment:AnyChar*,LineDelimiter?)=>comment;
 
 EscapeChar=("\\",char:AnyChar)=>char;
 StringLiteral=(text:{AnyChar;EscapeChar}* \enclosedby "\"")=>text;
-SingleCharString=\subpattern (single_char:{AnyChar;EscapeChar} \enclosedby "\"")=>single_char;
+SingleCharString=(text:StringLiteral) \where char_cnt(text)==1;
 GeneralChar={SymbolChar;SingleCharString;};
 CharRange=(first:GeneralChar, "~", last:GeneralChar)=>[.first=first, .last=last];
 
@@ -33,6 +33,7 @@ CharSet = {
     CharRange;
     ("\\oneof", string:StringLiteral)=>string;
     GeneralCharSet;
+    GeneralSymbol;
     \associateby ParanPair;
 };
 
@@ -52,14 +53,12 @@ PatternSeq=(
     sepby_part:SepbyPart?, ignore_part:IgnorePart?, enclosedby_part:EnclosedbyPart? 
     \ignore Space
 )=>[.patterns=patterns, .sepby=sepby_part, .ignore=ignore_part, .enclosedby=enclosedby_part];
+ConditionPattern=(pattern:Pattern, "\\where", condition:ConditionExpr \ignore Space)=>[.pattern=pattern, .condition=condition];
 
 PatternBinding=(symbol:Symbol,":",pattern:Pattern)=>[.symbol=symbol, .pattern=pattern];
 Rule=(pattern:PatternSeq,"=>",returned:Expr)=>[.pattern=pattern, .returned=returned];
 
-SubPattern=("\\subpattern", pattern:Pattern, of_pattern:Pattern? \ignore Space)=>[.pattern=pattern, .of_pattern=of_pattern];  \\ if no of_pattern, parser will induce of_pattern by pattern
-SupPattern=("\\suppattern", pattern:Pattern, of_pattern:Pattern? \ignore Space)=>[.pattern=pattern, .of_pattern=of_pattern];  \\ if no of_pattern, parser will induce of_pattern by pattern
-
-Pattern=\suppattern {CharSet;StringLiteral;Option;OneOrMany;Many;PatternSeq;PatternSet;PatternBinding;Rule;SubPattern;SupPattern \associateby ParanPair};
+Pattern={CharSet;StringLiteral;Option;OneOrMany;Many;PatternSeq;PatternSet;PatternBinding;ConditionPattern;Rule;GeneralSymbol \associateby ParanPair};
 
 Flat=("\\flat", pattern:Pattern \ignore Space)=>pattern;
 
@@ -69,6 +68,11 @@ Assignment = {
     (symbol:Symbol, "=", expr:Expr \ignore Space)=>[.target=symbol, .source=expr];
 };
 
+FuncCallArgsList=(args:Expr* \sepby "," \ignore Space \enclosedby ParanPair)=>args;
+FuncCallExpr=(func:GeneralSymbol, args_list:FuncCallArgsList \ignore Space)=>[.func=func, .args_list=args_list];
+EqExpr=(left:Expr, "==", right:Expr)=>[.left=left, .right=right];
+ConditionExpr={EqExpr;FuncCallExpr};
+
 Expr={
     Assignment;
     GeneralSymbol;
@@ -76,14 +80,16 @@ Expr={
     Struct;
     Pattern;
     Flat;
+
+    FuncCallExpr;
+    FuncCallArgsList;
 };
 
-Keyword=\suppattern {
+Keyword={
     "\\oneof"; 
     "\\sepby"; "\\ignore"; "\\enclosedby";
+    "\\where";
     "\\associateby";
-    "\\subpattern"; \\ Parser assumes subpattern is more precise representation of target pattern in any context.
-    "\\suppattern"; \\ Parser assumes suppattern is less precise representation of target pattern in any context.
     "\\flat";  \\ flattern all matched pieces into single string
 };
 
