@@ -35,6 +35,8 @@ export class ParserImpl implements Parser {
     input!: ParserInput;
     /** Error message recorded on the last match failure, used by parse() to return Failure, etc. */
     last_error: string | null = null;
+    /** Active (node,pos) pairs in current call stack, for infinite recursion detection */
+    private active_parse_stack: Array<{ node: ParserNode; pos: number }> = [];
 
     constructor(public config: ParserConfig) {}
 
@@ -46,6 +48,7 @@ export class ParserImpl implements Parser {
     initParse(input: ParserInput): void {
         this.input = input;
         this.last_error = null;
+        this.active_parse_stack.length = 0;
     }
 
     parse(input: ParserInput, root: ParserNode): ParseResult {
@@ -106,20 +109,39 @@ export class ParserImpl implements Parser {
         return out;
     }
 
+    private isRecursiveCall(node: ParserNode, pos: number): boolean {
+        for (let i = this.active_parse_stack.length - 1; i >= 0; i--) {
+            const frame = this.active_parse_stack[i]!;
+            if (frame.node === node && frame.pos === pos) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     parseSingleNode(node: ParserNode): ASTNode | null {
+        const pos = this.input.pos;
+        if (this.isRecursiveCall(node, pos)) {
+            this.setError("Infinite recursion detected");
+            return null;
+        }
+        this.active_parse_stack.push({ node, pos });
+
+        let out: ASTNode | null;
         if (node.kind === ParserNodeKind.CharSeq) {
-            return this.parseCharSeq(node as CharSeq);
+            out = this.parseCharSeq(node as CharSeq);
+        } else if (node.kind === ParserNodeKind.PatternSet) {
+            out = this.parsePatternSet(node as PatternSet);
+        } else if (node.kind === ParserNodeKind.PatternSeq) {
+            out = this.parsePatternSeq(node as PatternSeq);
+        } else if (CHAR_MATCH_NODE_KINDS.includes(node.kind)) {
+            out = this.parseCharMatchNode(node as CharMatchNode, " ");
+        } else {
+            assert.fail(`Unknown node kind: ${node.kind}`);
         }
-        if (node.kind === ParserNodeKind.PatternSet) {
-            return this.parsePatternSet(node as PatternSet);
-        }
-        if (node.kind === ParserNodeKind.PatternSeq) {
-            return this.parsePatternSeq(node as PatternSeq);
-        }
-        if (CHAR_MATCH_NODE_KINDS.includes(node.kind)) {
-            return this.parseCharMatchNode(node as CharMatchNode, " ");
-        }
-        assert.fail(`Unknown node kind: ${node.kind}`);
+
+        this.active_parse_stack.pop();
+        return out;
     }
 
     /** Character matching: match according to quantifier and merge into a string, returns an ASTNode (value/raw_value is the matched string); returns null on failure */
