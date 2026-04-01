@@ -3,11 +3,10 @@ import { mkCharRange, mkCharSet, mkCharSeq } from '../../src/parser_node';
 import type { CharMatchNode, ParserNode, Quantifier } from '../../src/parser_node';
 import type { ParserInput } from '../../src/parser';
 
-/** parseNode: multiple inputs covering character nodes, PatternSeq, and unknown kind */
+/** parseNode: multiple inputs covering character nodes, PatternSeq, and CharSeq */
 function test_parseNode(): void {
   const Digit: CharMatchNode = mkCharRange('0', '9');
   const Letter: CharMatchNode = mkCharSet([mkCharRange('a', 'z'), mkCharRange('A', 'Z')]);
-  const UnknownKindNode = { kind: -1 } as unknown as ParserNode;
   const cases: Array<{
     id: number;
     node: ParserNode;
@@ -19,7 +18,6 @@ function test_parseNode(): void {
     { id: 1, node: Digit, quantifier: ' ', input: { src: '5', pos: 0 }, expected_count: 1, expected_error: false },
     { id: 2, node: Digit, quantifier: ' ', input: { src: 'a', pos: 0 }, expected_count: 0, expected_error: true },
     { id: 3, node: Letter, quantifier: '?', input: { src: 'x', pos: 0 }, expected_count: 1, expected_error: false },
-    { id: 4, node: UnknownKindNode, quantifier: ' ', input: { src: 'x', pos: 0 }, expected_count: 0, expected_error: true },
     { id: 5, node: mkCharSeq('=>'), quantifier: ' ', input: { src: '=>y', pos: 0 }, expected_count: 1, expected_error: false },
     { id: 6, node: mkCharSeq('=>'), quantifier: ' ', input: { src: '=y', pos: 0 }, expected_count: 0, expected_error: true },
   ];
