@@ -7,10 +7,12 @@ export {
   CharMatchRange,
   CharMatchSet,
   PatternSeq,
+  StringPatternSeq,
   PatternSet,
   mkCharRange,
   mkCharSet,
   mkPatternSeq,
+  mkStringPatternSeq,
   mkPatternSet,
   Quantifier,
 } from './parser_node';
