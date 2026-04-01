@@ -21,7 +21,7 @@ SingleCharString=(text:StringLiteral) \where char_cnt(text)==1;
 GeneralChar={SymbolChar;SingleCharString;};
 CharRange=(first:GeneralChar, "~", last:GeneralChar)=>[.first=first, .last=last];
 
-FieldAssignment={(".", symbol:Symbol, "=", expr:Expr \ignore Space)=>[.target=symbol, .source=expr];}
+FieldAssignment=(".", symbol:Symbol, "=", expr:Expr \ignore Space)=>[.target=symbol, .source=expr];
 Struct=(field_assignments:FieldAssignment* \sepby "," \ignore Space \enclosedby "[]")=>field_assignments;
 
 GeneralCharSet=(charsets:CharSet* \sepby ";" \ignore Space \enclosedby "{}")=>charsets;
