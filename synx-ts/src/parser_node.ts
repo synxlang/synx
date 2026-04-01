@@ -41,6 +41,13 @@ export interface CharSeq {
     literal: string;
 }
 
+/**
+ * PatternSet: ordered alternatives (try `patterns` from left to right).
+ *
+ * Conventions:
+ * - Parsing prefers the first alternative that matches.
+ * - On success, this PatternSet is only prepended into the winning AST node's `parser_nodes`.
+ */
 export interface PatternSet {
     kind: ParserNodeKind.PatternSet;
     patterns: ParserNode[];

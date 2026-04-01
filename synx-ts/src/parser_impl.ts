@@ -16,6 +16,19 @@ import type { Parser, ParserConfig, ParseResult, ParserInput } from "./parser";
 import { ParseResultKind } from "./parser";
 import type { ASTNode } from "./parser";
 
+/**
+ * ParserImpl conventions (keep these stable to avoid redundant logic):
+ *
+ * - Single vs quantified parse:
+ *   - `parseSingleNode(node)` parses exactly ONE instance of `node` (no outer quantifier).
+ *   - `parseNode(node, quantifier)` is the ONLY place that expands quantifiers for non-char nodes.
+ *
+ * - Error handling (`last_error`):
+ *   - Any parsing function MAY modify `last_error`.
+ *
+ * - Unknown kinds:
+ *   - Unknown / unhandled `ParserNodeKind` is NOT allowed and fails fast via `assert.fail(...)`.
+ */
 /** Parser implementation class, used by mkParser and tests; not exported as public API */
 export class ParserImpl implements Parser {
     /** Current parse input and read position (parse state stored on this, child functions read/write through this) */
