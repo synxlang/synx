@@ -1,3 +1,4 @@
+import assert from "assert";
 import { matchChar, matchCharRange, matchAnyChar, CharMatchSetResult } from "./parser_matcher";
 import {
     ParserNode,
@@ -101,7 +102,7 @@ export class ParserImpl implements Parser {
         if (CHAR_MATCH_NODE_KINDS.includes(node.kind)) {
             return this.parseCharMatchNode(node as CharMatchNode, " ");
         }
-        return null;
+        assert.fail(`Unknown node kind: ${node.kind}`);
     }
 
     /** Character matching: match according to quantifier and merge into a string, returns an ASTNode (value/raw_value is the matched string); returns null on failure */
@@ -140,12 +141,12 @@ export class ParserImpl implements Parser {
         if (node.literal.length === 0) {
             return null;
         }
-        const start = this.input.pos;
         const { src, pos } = this.input;
-        if (!src.startsWith(node.literal, pos)) {
+        const start = pos;
+        if (!src.startsWith(node.literal, start)) {
             return null;
         }
-        this.input.pos = pos + node.literal.length;
+        this.input.pos = start + node.literal.length;
         const end = this.input.pos;
         return {
             parser_nodes: [node],
