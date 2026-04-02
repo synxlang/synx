@@ -25,11 +25,23 @@ export interface CharMatchSet {
     sub_nodes: CharMatchNode[] | string;
 }
 
+/**
+ * Ordered sequence of `sub_nodes` with per-child quantifiers in `sub_quantifiers`.
+ *
+ * `ignore` (when non-null): extra pattern consumed for layout only; it MUST NOT apply
+ * before the first sub-node or after the last one. It applies only:
+ * - between consecutive sub-nodes, and
+ * - between successive matches of the same sub-node when its quantifier is `*` or `+`
+ *   (i.e. inter-repetition gaps for that child).
+ * Text matched solely via `ignore` is not represented in this sequence node's `raw_value`.
+ * Must be `null` when `flat` is true.
+ */
 export interface PatternSeq {
     kind: ParserNodeKind.PatternSeq;
     sub_nodes: ParserNode[];
     sub_quantifiers: string;  // one char per sub_node: ' ' | '?' | '*' | '+'
-    flat:boolean;
+    flat: boolean;
+    ignore: ParserNode | null;
 }
 
 /**
@@ -88,8 +100,13 @@ export function mkCharSet(
   return { kind: ParserNodeKind.CharMatchSet, sub_nodes: chars_or_nodes };
 }
 
-export function mkPatternSeq(sub_nodes: ParserNode[], sub_quantifiers: string, flat: boolean = false): PatternSeq {
-  return { kind: ParserNodeKind.PatternSeq, sub_nodes, sub_quantifiers, flat };
+export function mkPatternSeq(
+  sub_nodes: ParserNode[],
+  sub_quantifiers: string,
+  flat: boolean = false,
+  ignore: ParserNode | null = null,
+): PatternSeq {
+  return { kind: ParserNodeKind.PatternSeq, sub_nodes, sub_quantifiers, flat, ignore };
 }
 
 /** Builds a CharSeq; throws if `literal` is empty. */
