@@ -27,8 +27,13 @@ import type { ASTNode } from "./parser";
  *   - `parseSingleNode(node)` parses exactly ONE instance of `node` (no outer quantifier).
  *   - `parseNode(node, quantifier)` is the ONLY place that expands quantifiers for non-char nodes.
  *
- * - Error handling:
- *   - Use only `setError`, `setSuccess`, and `getError`. A successful path must end with no pending error (`getError() === null`).
+ * - Error handling and state:
+ *   - `clearError` is only for clearing error state (e.g. before a call when the slate must be clean).
+ *   - `setSuccess` is only for marking success; do not use it as a generic “reset” when you only need error cleared—use `clearError` in that case.
+ *   - `setError` / `getError` set and read the failure message.
+ *   - Success must be determined with `isSuccess()`; do not infer success from `getError() === null`.
+ *   - On success, `isSuccess()` is true (no pending error); on failure, error state must be set (non-null) and `isSuccess()` is false.
+ *   - To reliably read this call's error state after return, the caller must `clearError` before invoking.
  *
  * - Unknown kinds:
  *   - Unknown / unhandled `ParserNodeKind` is NOT allowed and fails fast via `assert.fail(...)`.
@@ -36,11 +41,6 @@ import type { ASTNode } from "./parser";
  * - Index:
  *   - On success: before returning, advance the parse index to the next unconsumed position after the matched span.
  *   - On failure: the index is not guaranteed unless the function explicitly documents otherwise.
- *
- * - Error state:
- *   - On success: error state must be clear (`getError() === null`).
- *   - On failure: error state must be set (non-null).
- *   - To reliably read this call's error state after return, the caller must clear the error before invoking.
  *
  * ============================== ZH / 中文 ==============================
  *
@@ -52,17 +52,20 @@ import type { ASTNode } from "./parser";
  *   - `parseSingleNode(node)` 只解析 `node` 的一次实例（无外层量词）。
  *   - `parseNode(node, quantifier)` 是展开非字符节点量词的唯一位置。
  *
+ * - 错误处理与状态：
+ *   - `clearError` 仅用于清理错误状态（例如调用前需要干净状态时）。
+ *   - `setSuccess` 仅用于设置/标记成功状态；若只是要清错误而非表达“本步成功”，应使用 `clearError`。
+ *   - `setError` / `getError` 设置与读取失败信息。
+ *   - 判定成功必须使用 `isSuccess()`，不得用 `getError() === null` 推断成功。
+ *   - 成功时 `isSuccess()` 为真（无待处理错误）；失败时须有错误状态且 `isSuccess()` 为假。
+ *   - 若要在返回后正确取得本次调用的错误状态，调用者须在调用前 `clearError`。
+ *
  * - 未知 kind：
  *   - 不允许未知或未处理的 `ParserNodeKind`，通过 `assert.fail(...)` 快速失败。
  *
  * - 索引：
  *   - 成功：返回前将解析索引移动到已匹配片段之后的下一未消费位置。
  *   - 失败：索引位置不做保证，除非函数另有明确约定。
- *
- * - 错误状态：
- *   - 成功：错误状态必须为空（`getError() === null`）。
- *   - 失败：必须有错误状态（非空）。
- *   - 若要在返回后正确取得本次调用的错误状态，调用者须在调用前清除错误。
  */
 export class ParserImpl implements Parser {
     /**
@@ -81,22 +84,47 @@ export class ParserImpl implements Parser {
 
     constructor(public config: ParserConfig) { }
 
+    /**
+     * Clear error state only. Does not encode success of a parse step; use `setSuccess` to mark success. See class-level Error handling and state.
+     *
+     * 仅清理错误状态，不表示解析步骤成功；标记成功请用 `setSuccess`。见类级「错误处理与状态」约定。
+     */
     clearError(): void {
         this.error = null;
     }
 
+    /**
+     * Mark success only; clears error as part of the success state.
+     *
+     * 仅用于设置成功状态；会清空错误作为成功状态的一部分。
+     */
     setSuccess(): void {
         this.clearError();
     }
 
+    /**
+     * Set failure state with an optional message.
+     *
+     * 设置失败状态，可选用消息。
+     */
     setError(message?: string): void {
         this.error = message ?? "Parse match failed";
     }
 
+    /**
+     * Read the current error message, or null if none. Prefer `isSuccess()` for success checks.
+     *
+     * 读取当前错误信息；无错误时为 null。判定成功请用 `isSuccess()`。
+     */
     getError(): string | null {
         return this.error;
     }
 
+    /**
+     * Use this for success checks; do not substitute `getError() === null`.
+     *
+     * 判定成功须使用本方法；不要用 `getError() === null` 代替。
+     */
     isSuccess(): boolean {
         return this.error === null;
     }
