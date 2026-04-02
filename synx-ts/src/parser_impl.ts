@@ -89,9 +89,9 @@ export class ParserImpl implements Parser {
         return results;
     }
 
-    parseNode(node: ParserNode, quantifier: Quantifier): ASTNode[] {
+    parseNode(node: ParserNode, quantifier: Quantifier, ignored: ParserNode | null = null): ASTNode[] {
         if (CHAR_MATCH_NODE_KINDS.includes(node.kind)) {
-            const result = this.parseCharMatchNode(node as CharMatchNode, quantifier);
+            const result = this.parseCharMatchNode(node as CharMatchNode, quantifier, ignored);
             return result === null ? [] : [result];
         }
         const first = this.parseSingleNode(node);
@@ -102,8 +102,14 @@ export class ParserImpl implements Parser {
         if (quantifier === " " || quantifier === "?") return [first];
         const out: ASTNode[] = [first];
         for (;;) {
+            const retry_pos = this.input.pos;
+            this.consumeIgnored(ignored);
             const n = this.parseSingleNode(node);
-            if (n === null) break;
+            if (n === null) {
+                this.input.pos = retry_pos;
+                this.last_error = null;
+                break;
+            }
             out.push(n);
         }
         return out;
@@ -145,7 +151,7 @@ export class ParserImpl implements Parser {
     }
 
     /** Character matching: match according to quantifier and merge into a string, returns an ASTNode (value/raw_value is the matched string); returns null on failure */
-    parseCharMatchNode(node: CharMatchNode, quantifier: Quantifier): ASTNode | null {
+    parseCharMatchNode(node: CharMatchNode, quantifier: Quantifier, ignored: ParserNode | null = null): ASTNode | null {
         const mk_char_node = (start: number, end: number): ASTNode => ({
             parser_nodes: [node],
             range: [start, end],
@@ -171,7 +177,17 @@ export class ParserImpl implements Parser {
             return null;
         }
         if (quantifier === " " || quantifier === "?") return mk_char_node(start, this.input.pos);
-        while (try_one()) {}
+        for (;;) {
+            const retry_pos = this.input.pos;
+            if (ignored !== null) {
+                this.consumeIgnored(ignored);
+            }
+            if (!try_one()) {
+                this.input.pos = retry_pos;
+                this.last_error = null;
+                break;
+            }
+        }
         return mk_char_node(start, this.input.pos);
     }
 
@@ -233,6 +249,11 @@ export class ParserImpl implements Parser {
         return res.matched;
     }
 
+    private consumeIgnored(node: ParserNode | null): void {
+        if (node === null) return;
+        this.parseNode(node, "*");
+        this.last_error = null;
+    }
     /**
      * Match a sequence once: parse each sub_node in order using the corresponding sub_quantifier.
      * `value` / `raw_value`: for sub_quantifier ` ` or `?`, child AST nodes are flattened into the list;
@@ -244,7 +265,7 @@ export class ParserImpl implements Parser {
         const children: Array<ASTNode | ASTNode[]> = [];
         for (let i = 0; i < node.sub_nodes.length; i++) {
             const q = node.sub_quantifiers[i] as Quantifier;
-            const part = this.parseNode(node.sub_nodes[i], q);
+            const part = this.parseNode(node.sub_nodes[i]!, q, node.ignore);
             if ((q === " " || q === "+") && part.length === 0) {
                 this.setError();
                 return null;
@@ -256,6 +277,10 @@ export class ParserImpl implements Parser {
                 if (part.length > 0) {
                     children.push(part);
                 }
+            }
+
+            if (i + 1 < node.sub_nodes.length) {
+                this.consumeIgnored(node.ignore);
             }
         }
 
