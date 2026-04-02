@@ -10,7 +10,7 @@ StringEscapePrefix="\\";
 Space=SpaceChar+;
 DigitLiteral=Digit+;
 Symbol=\flat (Letter,SymbolChar*);
-SymbolDotChain=(symbols:(Symbol \sepby "."))=>symbols;
+SymbolDotChain=(symbols:Symbol* \sepby ".")=>symbols;
 GeneralSymbol={Symbol;SymbolDotChain};          
 
 Comment=(CommentPrefix,comment:AnyChar*,LineDelimiter?)=>comment;
@@ -36,21 +36,21 @@ CharSet = {
 Option=(pattern:Pattern, "?")=>pattern;+
 OneOrMany=(pattern:Pattern, "*")=>pattern;
 Many=(pattern:Pattern, "+")=>pattern;
-FlatPattern=("\\flat", pattern:Pattern \sepby Space+)=>pattern;
+FlatPattern=("\\flat", pattern:Pattern \ignore Space)=>pattern;
 
-AssociateByPart=("\\associateby", pattern:Pattern \sepby Space+)=>pattern;
+AssociateByPart=("\\associateby", pattern:Pattern \ignore Space)=>pattern;
 PatternSet=((patterns:PatternSet* \sepby ";" \ignore Space), 
     associateby_part:AssociateByPart? \ignore Space \enclosedby "{}")=>[.patterns=patterns, .associateby=associateby_part];
 
-SepbyPart=("\\sepby", pattern:Pattern \sepby Space+)=>pattern;
-IgnorePart=("\\ignore", pattern:Pattern \sepby Space+)=>pattern;
-EnclosedbyPart=("\\enclosedby", pattern:Pattern \sepby Space+)=>pattern;
+SepbyPart=("\\sepby", pattern:Pattern \ignore Space)=>pattern;
+IgnorePart=("\\ignore", pattern:Pattern \ignore Space)=>pattern;
+EnclosedbyPart=("\\enclosedby", pattern:Pattern \ignore Space)=>pattern;
 PatternSeq=(
     (patterns:Pattern* \sepby "," \ignore Space), 
     sepby_part:SepbyPart?, ignore_part:IgnorePart?, enclosedby_part:EnclosedbyPart? 
     \ignore Space
 )=>[.patterns=patterns, .sepby=sepby_part, .ignore=ignore_part, .enclosedby=enclosedby_part];
-ConditionPattern=(pattern:Pattern, "\\where", condition:ConditionExpr \sepby Space+)=>[.pattern=pattern, .condition=condition];
+ConditionPattern=(pattern:Pattern, "\\where", condition:ConditionExpr \ignore Space)=>[.pattern=pattern, .condition=condition];
 
 PatternBinding=(symbol:Symbol,":",pattern:Pattern)=>[.symbol=symbol, .pattern=pattern];
 Rule=(pattern:PatternSeq,"=>",returned:Expr)=>[.pattern=pattern, .returned=returned];
@@ -88,6 +88,6 @@ Keyword={
     "\\flat";  \\ flattern all matched pieces into single string
 };
 
-Synx=(expr:({Expr} \sepby ";" \ignore Space));
+Synx=(expr:Expr* \sepby ";" \ignore Space);
 
 
