@@ -17,6 +17,10 @@ import { ParseResultKind } from "./parser";
 import type { ASTNode } from "./parser";
 
 /**
+ * ============================== EN / 英文 ==============================
+ *
+ * Parser implementation class, used by mkParser and tests; not exported as public API.
+ *
  * ParserImpl conventions (keep these stable to avoid redundant logic):
  *
  * - Single vs quantified parse:
@@ -28,28 +32,63 @@ import type { ASTNode } from "./parser";
  *
  * - Unknown kinds:
  *   - Unknown / unhandled `ParserNodeKind` is NOT allowed and fails fast via `assert.fail(...)`.
+ *
+ * ============================== ZH / 中文 ==============================
+ *
+ * 解析器实现类，供 mkParser 与测试使用；不作为对外公开 API 导出。
+ *
+ * ParserImpl 约定（保持不变，避免重复逻辑）：
+ *
+ * - 单次与带量词解析：
+ *   - `parseSingleNode(node)` 只解析 `node` 的一次实例（无外层量词）。
+ *   - `parseNode(node, quantifier)` 是展开非字符节点量词的唯一位置。
+ *
+ * - 错误处理：
+ *   - 仅使用 `setError`、`setSuccess`、`getError`。成功路径结束时不得残留错误（`getError() === null`）。
+ *
+ * - 未知 kind：
+ *   - 不允许未知或未处理的 `ParserNodeKind`，通过 `assert.fail(...)` 快速失败。
  */
-/** Parser implementation class, used by mkParser and tests; not exported as public API */
 export class ParserImpl implements Parser {
-    /** Current parse input and read position (parse state stored on this, child functions read/write through this) */
+    /**
+     * Current parse input and read position (parse state stored on this, child functions read/write through this)
+     *
+     * 当前解析输入与读位置（解析状态保存在本对象上，子函数经本对象读写）。
+     */
     input!: ParserInput;
     private last_error: string | null = null;
-    /** Active (node,pos) pairs in current call stack, for infinite recursion detection */
+    /**
+     * Active (node,pos) pairs in current call stack, for duplicate-recursion detection
+     *
+     * 当前调用栈中的 (node, pos) 对，用于检测重复递归。
+     */
     private active_parse_stack: Array<{ node: ParserNode; pos: number }> = [];
 
     constructor(public config: ParserConfig) {}
 
-    /** Current parse error message, or `null` if the last completed operation left no failure pending. */
+    /**
+     * Current parse error message, or `null` if the last completed operation left no failure pending.
+     *
+     * 当前解析错误信息；若最近一次完成的操作未留下失败则为 `null`。
+     */
     getError(): string | null {
         return this.last_error;
     }
 
-    /** Clear parse error; call when the current operation succeeded and must not leave a stale failure. */
+    /**
+     * Clear parse error; call when the current operation succeeded and must not leave a stale failure.
+     *
+     * 清除解析错误；在当前操作已成功、且不应遗留陈旧失败时调用。
+     */
     setSuccess(): void {
         this.last_error = null;
     }
 
-    /** Record match failure without throwing; caller should return null / [] etc. */
+    /**
+     * Record match failure without throwing; caller should return null / [] etc.
+     *
+     * 记录匹配失败但不抛异常；调用方应返回 null / [] 等。
+     */
     setError(message?: string): void {
         this.last_error = message ?? "Parse match failed";
     }
@@ -171,7 +210,11 @@ export class ParserImpl implements Parser {
         return out;
     }
 
-    /** Character matching: match according to quantifier and merge into a string, returns an ASTNode (value/raw_value is the matched string); returns null on failure */
+    /**
+     * Character matching: match according to quantifier and merge into a string, returns an ASTNode (value/raw_value is the matched string); returns null on failure
+     *
+     * 字符匹配：按量词匹配并合并为字符串，返回 ASTNode（value/raw_value 为被匹配的字符串）；失败返回 null。
+     */
     parseCharMatchNode(node: CharMatchNode, quantifier: Quantifier, ignored: ParserNode | null = null): ASTNode | null {
         const mk_char_node = (start: number, end: number): ASTNode => ({
             parser_nodes: [node],
@@ -218,7 +261,11 @@ export class ParserImpl implements Parser {
         return mk_char_node(start, this.input.pos);
     }
 
-    /** Match a fixed literal once (quantifiers are handled in parseNode, like parsePatternSeq). */
+    /**
+     * Match a fixed literal once (quantifiers are handled in parseNode, like parsePatternSeq).
+     *
+     * 匹配固定字面量一次（量词在 parseNode 中处理，与 parsePatternSeq 相同）。
+     */
     parseCharSeq(node: CharSeq): ASTNode | null {
         if (node.literal.length === 0) {
             return null;
@@ -240,12 +287,15 @@ export class ParserImpl implements Parser {
 
     /**
      * Match one of the alternatives in order.
+     * For each alternative, parsing always restarts from the same input position.
+     *
+     * 按顺序匹配备选之一。
+     * 每个备选都从相同的输入位置重新开始解析。
      */
     parsePatternSet(node: PatternSet): ASTNode | null {
         const start = this.input.pos;
 
         for (const alt of node.patterns) {
-            // Always restart from the same position for each alternative.
             this.input.pos = start;
 
             const child = this.parseSingleNode(alt);
@@ -286,6 +336,11 @@ export class ParserImpl implements Parser {
      * `value` / `raw_value`: for sub_quantifier ` ` or `?`, child AST nodes are flattened into the list;
      * for `*` / `+`, one slot holds `ASTNode[]` (the repetitions for that sub-node) without flattening.
      * If `flat` is true, `value` is the matched substring; otherwise `value` mirrors `raw_value`.
+     *
+     * 将序列解析一次：按顺序用对应的 sub_quantifier 解析每个 sub_node。
+     * `value` / `raw_value`：当 sub_quantifier 为 ` ` 或 `?` 时，子 AST 节点摊平进列表；
+     * 当为 `*` 或 `+` 时，占一格 `ASTNode[]`（该 sub_node 的多次匹配），不向序列子列表摊平。
+     * 若 `flat` 为 true，则 `value` 为匹配的子串；否则 `value` 与 `raw_value` 一致。
      */
     parsePatternSeq(node: PatternSeq): ASTNode | null {
         const start = this.input.pos;
@@ -310,7 +365,6 @@ export class ParserImpl implements Parser {
             if (q === " " || q === "?") {
                 children.push(...part);
             } else {
-                // `*` / `+`: keep repetitions grouped (do not flatten into the seq's child list).
                 if (part.length > 0) {
                     children.push(part);
                 }
