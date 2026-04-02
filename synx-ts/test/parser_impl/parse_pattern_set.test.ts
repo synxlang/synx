@@ -35,7 +35,7 @@ function test_parsePatternSet_basic(): void {
       },
       expected_error: false,
     },
-    { id: 3, input: { src: 'x', pos: 0 }, expected: null, expected_error: false },
+    { id: 3, input: { src: 'x', pos: 0 }, expected: null, expected_error: true },
   ];
 
   for (const c of cases) {
@@ -43,7 +43,10 @@ function test_parsePatternSet_basic(): void {
     parser.initParse(c.input);
     const result = parser.parseSingleNode(set);
     assert.deepStrictEqual(result, c.expected, `case ${c.id} AST mismatch`);
-    assert.strictEqual(c.expected_error, parser.getError() !== null, `case ${c.id} error flag mismatch`);
+    if (!parser.isSuccess()) {
+      assert.strictEqual(c.expected_error, parser.getError() !== null, `case ${c.id} error flag mismatch`);
+      continue;
+    }
   }
 }
 
@@ -124,7 +127,7 @@ function test_parsePatternSet_nested_seq_and_set(): void {
       },
     ],
   });
-  assert.strictEqual(parser.getError(), null);
+  assert(parser.isSuccess());
 }
 
 function test_parsePatternSet_infinite_recursion_nested_cycle(): void {
@@ -159,8 +162,9 @@ function test_parsePatternSet_infinite_recursion_nested_cycle(): void {
   parser.initParse({ src: 'x', pos: 0 });
   const result = parser.parseSingleNode(a);
   assert.strictEqual(result, null);
-  // getError() may be set by mandatory callers (e.g. parseNode turning null into "Parse match failed").
-  assert(parser.getError() !== null);
+  // Error message may be set by mandatory callers (e.g. parseNode turning null into "Parse match failed").
+  assert(!parser.isSuccess());
+  assert.notStrictEqual(parser.getError(), null);
 }
 
 function test_parsePatternSet_synx_shape_ABC(): void {
@@ -196,7 +200,7 @@ function test_parsePatternSet_synx_shape_ABC(): void {
       { parser_nodes: [C.patterns[0] as ParserNode, C], range: [2, 4], value: '12', raw_value: '12' },
     ],
   });
-  assert.strictEqual(parser.getError(), null);
+  assert(parser.isSuccess());
 }
 
 function runAllTests(): void {

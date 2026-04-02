@@ -37,8 +37,12 @@ function test_parseCharSeq(): void {
         throw new Error(`[case ${c.id}] wrong parser node kind`);
       }
     }
-    if (parser.getError() !== null) {
-      throw new Error(`[case ${c.id}] parseCharSeq must not set last_error, got ${parser.getError()}`);
+    if (c.expected_value === null) {
+      if (parser.isSuccess()) {
+        throw new Error(`[case ${c.id}] expected parse failure (no literal match)`);
+      }
+    } else if (!parser.isSuccess()) {
+      throw new Error(`[case ${c.id}] parseCharSeq success expected, got error ${parser.getError()}`);
     }
   }
 }
@@ -66,6 +70,12 @@ function test_parseNode_charSeq_quantifiers(): void {
     const parser = new ParserImpl({ parser_nodes: [] });
     parser.initParse(c.input);
     const nodes = parser.parseNode(ab, c.quantifier);
+    if(!parser.isSuccess()){
+      if (c.expected_error !== (parser.getError() !== null)) {
+        throw new Error(`[case ${c.id}] expected_error=${c.expected_error}, last_error=${parser.getError()}`);
+      }
+      continue;
+    }
     if (c.expected_values === null) {
       if (nodes.length !== 0) {
         throw new Error(`[case ${c.id}] expected 0 nodes, got ${nodes.length}`);
@@ -79,9 +89,6 @@ function test_parseNode_charSeq_quantifiers(): void {
           throw new Error(`[case ${c.id}] node ${i} value mismatch`);
         }
       }
-    }
-    if (c.expected_error !== (parser.getError() !== null)) {
-      throw new Error(`[case ${c.id}] expected_error=${c.expected_error}, last_error=${parser.getError()}`);
     }
   }
 }

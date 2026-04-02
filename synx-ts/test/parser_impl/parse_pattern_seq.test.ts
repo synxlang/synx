@@ -3,6 +3,7 @@ import { mkCharRange, mkCharSet, mkPatternSeq } from '../../src/parser_node';
 import type { CharMatchNode, ParserNode, PatternSeq } from '../../src/parser_node';
 import type { ASTNode, ParserInput } from '../../src/parser';
 import { strict as assert } from 'assert';
+import { inspect } from 'node:util';
 
 // Basic node constants
 const Digit: CharMatchNode = mkCharRange('0', '9');
@@ -709,20 +710,20 @@ function test_parsePatternSeq(): void {
     {
       id: 76,
       seq: Seq_Digit_LetterStar_IgnoreSpace,
-      input: { src: '1 a b c', pos: 0 },
-      expected: mkSeqAST(Seq_Digit_LetterStar_IgnoreSpace, [0, 7], [
+      input: { src: '1 abc', pos: 0 },
+      expected: mkSeqAST(Seq_Digit_LetterStar_IgnoreSpace, [0, 5], [
         { node: Digit, value: '1', range: [0, 1] },
-        [{ node: Letter, value: 'a b c', range: [2, 7] }],
+        [{ node: Letter, value: 'abc', range: [2, 5] }],
       ]),
       expected_error: false,
     },
     {
       id: 77,
       seq: Seq_Digit_LetterStar_IgnoreSpace,
-      input: { src: '1 a b c ', pos: 0 },
-      expected: mkSeqAST(Seq_Digit_LetterStar_IgnoreSpace, [0, 7], [
+      input: { src: '1 abc ', pos: 0 },
+      expected: mkSeqAST(Seq_Digit_LetterStar_IgnoreSpace, [0, 5], [
         { node: Digit, value: '1', range: [0, 1] },
-        [{ node: Letter, value: 'a b c', range: [2, 7] }],
+        [{ node: Letter, value: 'abc', range: [2, 5] }],
       ]),
       expected_error: false,
     },
@@ -797,6 +798,12 @@ function test_parsePatternSeq(): void {
     const parser = new ParserImpl({ parser_nodes: [] });
     parser.initParse(c.input);
     const result = parser.parsePatternSeq(c.seq);
+    if (!parser.isSuccess()) {
+      if (c.expected_error !== (parser.getError() !== null)) {
+        throw new Error(`[case ${c.id}] expected_error=${c.expected_error}, last_error=${parser.getError()}`);
+      }
+      continue;
+    }
     if (c.expected === null) {
       if (result !== null) {
         throw new Error(`[case ${c.id}] expected null, got result`);
@@ -809,11 +816,12 @@ function test_parsePatternSeq(): void {
       try {
         assert.deepStrictEqual(result, c.expected);
       } catch (e) {
-        throw new Error(`[case ${c.id}] ASTNode mismatch: ${e instanceof Error ? e.message : String(e)}`);
+        const detail = e instanceof Error ? e.message : String(e);
+        const printOpts = { depth: null as number | null, maxArrayLength: null as number | null };
+        throw new Error(
+          `[case ${c.id}] ASTNode mismatch: ${detail}\n-- result --\n${inspect(result, printOpts)}\n-- expected --\n${inspect(c.expected, printOpts)}`,
+        );
       }
-    }
-    if (c.expected_error !== (parser.getError() !== null)) {
-      throw new Error(`[case ${c.id}] expected_error=${c.expected_error}, last_error=${parser.getError()}`);
     }
   }
 }

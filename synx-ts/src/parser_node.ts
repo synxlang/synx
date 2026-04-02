@@ -89,14 +89,9 @@ export function mkCharRange(start: string, end: string): CharMatchRange {
   return { kind: ParserNodeKind.CharMatchRange, start, end };
 }
 
-export function mkCharSet(chars: string): CharMatchSet;
-export function mkCharSet(nodes: CharMatchNode[]): CharMatchSet;
 export function mkCharSet(
   chars_or_nodes: string | CharMatchNode[],
 ): CharMatchSet {
-  if (typeof chars_or_nodes === 'string') {
-    return { kind: ParserNodeKind.CharMatchSet, sub_nodes: chars_or_nodes };
-  }
   return { kind: ParserNodeKind.CharMatchSet, sub_nodes: chars_or_nodes };
 }
 

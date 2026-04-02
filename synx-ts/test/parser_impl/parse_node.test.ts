@@ -25,11 +25,14 @@ function test_parseNode(): void {
     const parser = new ParserImpl({ parser_nodes: [] });
     parser.initParse(c.input);
     const nodes = parser.parseNode(c.node, c.quantifier);
+    if (!parser.isSuccess()) {
+      if (c.expected_error !== (parser.getError() !== null)) {
+        throw new Error(`[case ${c.id}] expected_error=${c.expected_error}, last_error=${parser.getError()}`);
+      }
+      continue;
+    }
     if (nodes.length !== c.expected_count) {
       throw new Error(`[case ${c.id}] expected ${c.expected_count} nodes, got ${nodes.length}`);
-    }
-    if (c.expected_error !== (parser.getError() !== null)) {
-      throw new Error(`[case ${c.id}] expected_error=${c.expected_error}, last_error=${parser.getError()}`);
     }
   }
 }

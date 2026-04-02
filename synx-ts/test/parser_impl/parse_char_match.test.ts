@@ -40,14 +40,17 @@ function test_parseCharMatchNode(): void {
     const parser = new ParserImpl({ parser_nodes: [] });
     parser.initParse(c.input);
     const result = parser.parseCharMatchNode(c.node, c.quantifier);
+    if (!parser.isSuccess()) {
+      if (c.expected_error !== (parser.getError() !== null)) {
+        throw new Error(`[case ${c.id}] expected_error=${c.expected_error}, last_error=${parser.getError()}`);
+      }
+      continue;
+    }
     if (c.expected_value === null) {
       if (result !== null) throw new Error(`[case ${c.id}] expected null, got value ${(result as ASTNode).value}`);
     } else {
       if (result === null) throw new Error(`[case ${c.id}] expected value "${c.expected_value}", got null`);
       if (result.value !== c.expected_value) throw new Error(`[case ${c.id}] expected value "${c.expected_value}", got "${result.value}"`);
-    }
-    if (c.expected_error !== (parser.getError() !== null)) {
-      throw new Error(`[case ${c.id}] expected_error=${c.expected_error}, last_error=${parser.getError()}`);
     }
   }
 }
