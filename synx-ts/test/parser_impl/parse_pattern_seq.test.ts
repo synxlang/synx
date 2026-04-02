@@ -1,6 +1,6 @@
 import { ParserImpl } from '../../src/parser_impl';
 import { mkCharRange, mkCharSet, mkPatternSeq } from '../../src/parser_node';
-import type { CharMatchNode, PatternSeq } from '../../src/parser_node';
+import type { CharMatchNode, ParserNode, PatternSeq } from '../../src/parser_node';
 import type { ASTNode, ParserInput } from '../../src/parser';
 import { strict as assert } from 'assert';
 
@@ -9,6 +9,8 @@ const Digit: CharMatchNode = mkCharRange('0', '9');
 const Letter: CharMatchNode = mkCharSet([mkCharRange('a', 'z')]);
 const Emoji: CharMatchNode = mkCharSet('😀'); // emoji is a multi-code-unit character
 const Chinese: CharMatchNode = mkCharSet('中'); // Chinese character
+/** Layout-only gap between sub-nodes / between `*`/`+` repeats (synx `\ignore Space`). */
+const Space: CharMatchNode = mkCharSet(' ');
 
 // Sequence node constants
 const Seq_Digit_Letter_Mandatory = mkPatternSeq([Digit, Letter], '  ');
@@ -37,6 +39,15 @@ const Seq_Emoji_Letter = mkPatternSeq([Emoji, Letter], '  ');
 // Longer sequences (4+ sub-nodes)
 const Seq_Quad = mkPatternSeq([Digit, Letter, Digit, Letter], '    ');
 const Seq_Quad_Mixed = mkPatternSeq([Digit, Letter, Digit, Letter], '? * ');
+
+const Seq_Digit_Letter_Mandatory_IgnoreSpace = mkPatternSeq([Digit, Letter], '  ', false, Space as ParserNode);
+const Seq_Digit_LetterStar_IgnoreSpace = mkPatternSeq([Digit, Letter], ' *', false, Space as ParserNode);
+const Seq_Digit_Optional_Letter_Mandatory_IgnoreSpace = mkPatternSeq(
+  [Digit, Letter],
+  '? ',
+  false,
+  Space as ParserNode,
+);
 
 /** Helper function: construct child node ASTNode */
 function mkChildAST(node: CharMatchNode, value: string, range: [number, number]): ASTNode {
@@ -642,6 +653,96 @@ function test_parsePatternSeq(): void {
     { id: 60, seq: Seq_Letter_Plus_Digit_Mandatory, input: { src: '', pos: 0 }, expected: null, expected_error: true },
   ];
 
+  // PatternSeq.ignore: gaps between sub-nodes and between `*`/`+` repeats (not in raw_value)
+  const cases_ignore: TestCase[] = [
+    {
+      id: 71,
+      seq: Seq_Digit_Letter_Mandatory_IgnoreSpace,
+      input: { src: '5a', pos: 0 },
+      expected: mkSeqAST(Seq_Digit_Letter_Mandatory_IgnoreSpace, [0, 2], [
+        { node: Digit, value: '5', range: [0, 1] },
+        { node: Letter, value: 'a', range: [1, 2] },
+      ]),
+      expected_error: false,
+    },
+    {
+      id: 72,
+      seq: Seq_Digit_Letter_Mandatory_IgnoreSpace,
+      input: { src: '5 a', pos: 0 },
+      expected: mkSeqAST(Seq_Digit_Letter_Mandatory_IgnoreSpace, [0, 3], [
+        { node: Digit, value: '5', range: [0, 1] },
+        { node: Letter, value: 'a', range: [2, 3] },
+      ]),
+      expected_error: false,
+    },
+    {
+      id: 73,
+      seq: Seq_Digit_Letter_Mandatory_IgnoreSpace,
+      input: { src: '5   a', pos: 0 },
+      expected: mkSeqAST(Seq_Digit_Letter_Mandatory_IgnoreSpace, [0, 5], [
+        { node: Digit, value: '5', range: [0, 1] },
+        { node: Letter, value: 'a', range: [4, 5] },
+      ]),
+      expected_error: false,
+    },
+    {
+      id: 74,
+      seq: Seq_Digit_Letter_Mandatory_IgnoreSpace,
+      input: { src: '5 ', pos: 0 },
+      expected: null,
+      expected_error: true,
+    },
+    {
+      id: 75,
+      seq: Seq_Digit_LetterStar_IgnoreSpace,
+      input: { src: '1abc', pos: 0 },
+      expected: mkSeqAST(Seq_Digit_LetterStar_IgnoreSpace, [0, 4], [
+        { node: Digit, value: '1', range: [0, 1] },
+        [{ node: Letter, value: 'abc', range: [1, 4] }],
+      ]),
+      expected_error: false,
+    },
+    {
+      id: 76,
+      seq: Seq_Digit_LetterStar_IgnoreSpace,
+      input: { src: '1 a b c', pos: 0 },
+      expected: mkSeqAST(Seq_Digit_LetterStar_IgnoreSpace, [0, 7], [
+        { node: Digit, value: '1', range: [0, 1] },
+        [{ node: Letter, value: 'a b c', range: [2, 7] }],
+      ]),
+      expected_error: false,
+    },
+    {
+      id: 77,
+      seq: Seq_Digit_LetterStar_IgnoreSpace,
+      input: { src: '1 a b c ', pos: 0 },
+      expected: mkSeqAST(Seq_Digit_LetterStar_IgnoreSpace, [0, 7], [
+        { node: Digit, value: '1', range: [0, 1] },
+        [{ node: Letter, value: 'a b c', range: [2, 7] }],
+      ]),
+      expected_error: false,
+    },
+    {
+      id: 78,
+      seq: Seq_Digit_Optional_Letter_Mandatory_IgnoreSpace,
+      input: { src: 'a', pos: 0 },
+      expected: mkSeqAST(Seq_Digit_Optional_Letter_Mandatory_IgnoreSpace, [0, 1], [
+        { node: Letter, value: 'a', range: [0, 1] },
+      ]),
+      expected_error: false,
+    },
+    {
+      id: 79,
+      seq: Seq_Digit_Optional_Letter_Mandatory_IgnoreSpace,
+      input: { src: '5 a', pos: 0 },
+      expected: mkSeqAST(Seq_Digit_Optional_Letter_Mandatory_IgnoreSpace, [0, 3], [
+        { node: Digit, value: '5', range: [0, 1] },
+        { node: Letter, value: 'a', range: [2, 3] },
+      ]),
+      expected_error: false,
+    },
+  ];
+
   // Merge all test cases
   const cases: TestCase[] = [
     ...cases_basic,
@@ -666,6 +767,7 @@ function test_parsePatternSeq(): void {
     ...cases_optional_optional,
     ...cases_star_star,
     ...cases_optional_star,
+    ...cases_ignore,
   ];
   for (const c of cases) {
     const parser = new ParserImpl({ parser_nodes: [] });
