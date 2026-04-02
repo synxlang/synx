@@ -17,7 +17,7 @@ import { ParseResultKind } from "./parser";
 import type { ASTNode } from "./parser";
 
 /**
- * ============================== EN / 英文 ==============================
+ * ============================== EN ==============================
  *
  * Parser implementation class, used by mkParser and tests; not exported as public API.
  *
@@ -33,7 +33,7 @@ import type { ASTNode } from "./parser";
  *   - `setError` / `getError` set and read the failure message.
  *   - Success must be determined with `isSuccess()`; do not infer success from `getError() === null`.
  *   - On success, `isSuccess()` is true (no pending error); on failure, error state must be set (non-null) and `isSuccess()` is false.
- *   - To reliably read this call's error state after return, the caller must `clearError` before invoking.
+ *   - To reliably read this call's error state after return, the caller must `clearError` before invoking. If you only check `isSuccess()` and do not need `getError()`, `clearError` beforehand is not required.
  *
  * - Unknown kinds:
  *   - Unknown / unhandled `ParserNodeKind` is NOT allowed and fails fast via `assert.fail(...)`.
@@ -42,7 +42,7 @@ import type { ASTNode } from "./parser";
  *   - On success: before returning, advance the parse index to the next unconsumed position after the matched span.
  *   - On failure: the index is not guaranteed unless the function explicitly documents otherwise.
  *
- * ============================== ZH / 中文 ==============================
+ * ============================== 中文 ==============================
  *
  * 解析器实现类，供 mkParser 与测试使用；不作为对外公开 API 导出。
  *
@@ -58,7 +58,7 @@ import type { ASTNode } from "./parser";
  *   - `setError` / `getError` 设置与读取失败信息。
  *   - 判定成功必须使用 `isSuccess()`，不得用 `getError() === null` 推断成功。
  *   - 成功时 `isSuccess()` 为真（无待处理错误）；失败时须有错误状态且 `isSuccess()` 为假。
- *   - 若要在返回后正确取得本次调用的错误状态，调用者须在调用前 `clearError`。
+ *   - 若要在返回后正确取得本次调用的错误状态，调用者须在调用前 `clearError`。但如果不需要`getError`而是只检查`isSuccess`，则不需要`clearError`。
  *
  * - 未知 kind：
  *   - 不允许未知或未处理的 `ParserNodeKind`，通过 `assert.fail(...)` 快速失败。
