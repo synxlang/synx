@@ -48,17 +48,28 @@ function mkChildAST(node: CharMatchNode, value: string, range: [number, number])
   };
 }
 
-/** Helper function: construct sequence ASTNode */
-function mkSeqAST(
-  seq: PatternSeq,
-  range: [number, number],
-  children: Array<{ node: CharMatchNode; value: string; range: [number, number] }>
-): ASTNode {
+type LeafDesc = { node: CharMatchNode; value: string; range: [number, number] };
+/** `*` / `+` sub-node: one slot is `LeafDesc[]` (not flattened into the seq). */
+type SeqPart = ASTNode | LeafDesc | LeafDesc[];
+
+function normalizeSeqPart(p: SeqPart): ASTNode | ASTNode[] {
+  if (Array.isArray(p)) {
+    return p.map((x) => mkChildAST(x.node, x.value, x.range));
+  }
+  if (p && typeof p === "object" && "parser_nodes" in p) {
+    return p as ASTNode;
+  }
+  return mkChildAST((p as LeafDesc).node, (p as LeafDesc).value, (p as LeafDesc).range);
+}
+
+/** Helper: construct sequence ASTNode (`value` / `raw_value` mirror parser output). */
+function mkSeqAST(seq: PatternSeq, range: [number, number], parts: SeqPart[]): ASTNode {
+  const normalized = parts.map(normalizeSeqPart);
   return {
     parser_nodes: [seq],
     range,
-    value: children.map(c => mkChildAST(c.node, c.value, c.range)),
-    raw_value: children.map(c => mkChildAST(c.node, c.value, c.range)),
+    value: normalized,
+    raw_value: normalized,
   };
 }
 
@@ -139,7 +150,7 @@ function test_parsePatternSeq(): void {
       input: { src: '5a', pos: 0 },
       expected: mkSeqAST(Seq_Digit_Letter_Star, [0, 2], [
         { node: Digit, value: '5', range: [0, 1] },
-        { node: Letter, value: 'a', range: [1, 2] },
+        [{ node: Letter, value: 'a', range: [1, 2] }],
       ]),
       expected_error: false,
     },
@@ -149,7 +160,7 @@ function test_parsePatternSeq(): void {
       input: { src: '5abc', pos: 0 },
       expected: mkSeqAST(Seq_Digit_Letter_Star, [0, 4], [
         { node: Digit, value: '5', range: [0, 1] },
-        { node: Letter, value: 'abc', range: [1, 4] },
+        [{ node: Letter, value: 'abc', range: [1, 4] }],
       ]),
       expected_error: false,
     },
@@ -164,7 +175,7 @@ function test_parsePatternSeq(): void {
       input: { src: '5a', pos: 0 },
       expected: mkSeqAST(Seq_Digit_Letter_Plus, [0, 2], [
         { node: Digit, value: '5', range: [0, 1] },
-        { node: Letter, value: 'a', range: [1, 2] },
+        [{ node: Letter, value: 'a', range: [1, 2] }],
       ]),
       expected_error: false,
     },
@@ -174,7 +185,7 @@ function test_parsePatternSeq(): void {
       input: { src: '5abc', pos: 0 },
       expected: mkSeqAST(Seq_Digit_Letter_Plus, [0, 4], [
         { node: Digit, value: '5', range: [0, 1] },
-        { node: Letter, value: 'abc', range: [1, 4] },
+        [{ node: Letter, value: 'abc', range: [1, 4] }],
       ]),
       expected_error: false,
     },
@@ -225,7 +236,7 @@ function test_parsePatternSeq(): void {
       expected: mkSeqAST(Seq_Digit_Letter_Digit_Mixed, [0, 5], [
         { node: Digit, value: '5', range: [0, 1] },
         { node: Letter, value: 'a', range: [1, 2] },
-        { node: Digit, value: '123', range: [2, 5] },
+        [{ node: Digit, value: '123', range: [2, 5] }],
       ]),
       expected_error: false,
     },
@@ -265,7 +276,7 @@ function test_parsePatternSeq(): void {
       seq: Seq_Letter_Star_Digit_Mandatory,
       input: { src: 'a5', pos: 0 },
       expected: mkSeqAST(Seq_Letter_Star_Digit_Mandatory, [0, 2], [
-        { node: Letter, value: 'a', range: [0, 1] },
+        [{ node: Letter, value: 'a', range: [0, 1] }],
         { node: Digit, value: '5', range: [1, 2] },
       ]),
       expected_error: false,
@@ -275,7 +286,7 @@ function test_parsePatternSeq(): void {
       seq: Seq_Letter_Star_Digit_Mandatory,
       input: { src: 'abc5', pos: 0 },
       expected: mkSeqAST(Seq_Letter_Star_Digit_Mandatory, [0, 4], [
-        { node: Letter, value: 'abc', range: [0, 3] },
+        [{ node: Letter, value: 'abc', range: [0, 3] }],
         { node: Digit, value: '5', range: [3, 4] },
       ]),
       expected_error: false,
@@ -290,7 +301,7 @@ function test_parsePatternSeq(): void {
       seq: Seq_Letter_Plus_Digit_Mandatory,
       input: { src: 'a5', pos: 0 },
       expected: mkSeqAST(Seq_Letter_Plus_Digit_Mandatory, [0, 2], [
-        { node: Letter, value: 'a', range: [0, 1] },
+        [{ node: Letter, value: 'a', range: [0, 1] }],
         { node: Digit, value: '5', range: [1, 2] },
       ]),
       expected_error: false,
@@ -300,7 +311,7 @@ function test_parsePatternSeq(): void {
       seq: Seq_Letter_Plus_Digit_Mandatory,
       input: { src: 'abc5', pos: 0 },
       expected: mkSeqAST(Seq_Letter_Plus_Digit_Mandatory, [0, 4], [
-        { node: Letter, value: 'abc', range: [0, 3] },
+        [{ node: Letter, value: 'abc', range: [0, 3] }],
         { node: Digit, value: '5', range: [3, 4] },
       ]),
       expected_error: false,
@@ -315,7 +326,7 @@ function test_parsePatternSeq(): void {
       seq: Seq_Digit_Optional_Letter_Plus,
       input: { src: 'a', pos: 0 },
       expected: mkSeqAST(Seq_Digit_Optional_Letter_Plus, [0, 1], [
-        { node: Letter, value: 'a', range: [0, 1] },
+        [{ node: Letter, value: 'a', range: [0, 1] }],
       ]),
       expected_error: false,
     },
@@ -325,7 +336,7 @@ function test_parsePatternSeq(): void {
       input: { src: '5a', pos: 0 },
       expected: mkSeqAST(Seq_Digit_Optional_Letter_Plus, [0, 2], [
         { node: Digit, value: '5', range: [0, 1] },
-        { node: Letter, value: 'a', range: [1, 2] },
+        [{ node: Letter, value: 'a', range: [1, 2] }],
       ]),
       expected_error: false,
     },
@@ -335,7 +346,7 @@ function test_parsePatternSeq(): void {
       input: { src: '5abc', pos: 0 },
       expected: mkSeqAST(Seq_Digit_Optional_Letter_Plus, [0, 4], [
         { node: Digit, value: '5', range: [0, 1] },
-        { node: Letter, value: 'abc', range: [1, 4] },
+        [{ node: Letter, value: 'abc', range: [1, 4] }],
       ]),
       expected_error: false,
     },
@@ -349,7 +360,7 @@ function test_parsePatternSeq(): void {
       seq: Seq_Digit_Star_Letter_Plus,
       input: { src: 'a', pos: 0 },
       expected: mkSeqAST(Seq_Digit_Star_Letter_Plus, [0, 1], [
-        { node: Letter, value: 'a', range: [0, 1] },
+        [{ node: Letter, value: 'a', range: [0, 1] }],
       ]),
       expected_error: false,
     },
@@ -358,8 +369,8 @@ function test_parsePatternSeq(): void {
       seq: Seq_Digit_Star_Letter_Plus,
       input: { src: '5a', pos: 0 },
       expected: mkSeqAST(Seq_Digit_Star_Letter_Plus, [0, 2], [
-        { node: Digit, value: '5', range: [0, 1] },
-        { node: Letter, value: 'a', range: [1, 2] },
+        [{ node: Digit, value: '5', range: [0, 1] }],
+        [{ node: Letter, value: 'a', range: [1, 2] }],
       ]),
       expected_error: false,
     },
@@ -368,8 +379,8 @@ function test_parsePatternSeq(): void {
       seq: Seq_Digit_Star_Letter_Plus,
       input: { src: '123abc', pos: 0 },
       expected: mkSeqAST(Seq_Digit_Star_Letter_Plus, [0, 6], [
-        { node: Digit, value: '123', range: [0, 3] },
-        { node: Letter, value: 'abc', range: [3, 6] },
+        [{ node: Digit, value: '123', range: [0, 3] }],
+        [{ node: Letter, value: 'abc', range: [3, 6] }],
       ]),
       expected_error: false,
     },
@@ -431,7 +442,7 @@ function test_parsePatternSeq(): void {
       seq: Seq_Letter_Star_Star,
       input: { src: 'a', pos: 0 },
       expected: mkSeqAST(Seq_Letter_Star_Star, [0, 1], [
-        { node: Letter, value: 'a', range: [0, 1] },
+        [{ node: Letter, value: 'a', range: [0, 1] }],
       ]),
       expected_error: false,
     },
@@ -440,7 +451,7 @@ function test_parsePatternSeq(): void {
       seq: Seq_Letter_Star_Star,
       input: { src: 'ab', pos: 0 },
       expected: mkSeqAST(Seq_Letter_Star_Star, [0, 2], [
-        { node: Letter, value: 'ab', range: [0, 2] },
+        [{ node: Letter, value: 'ab', range: [0, 2] }],
       ]),
       expected_error: false,
     },
@@ -469,7 +480,7 @@ function test_parsePatternSeq(): void {
       seq: Seq_Digit_Optional_Star,
       input: { src: 'abc', pos: 0 },
       expected: mkSeqAST(Seq_Digit_Optional_Star, [0, 3], [
-        { node: Letter, value: 'abc', range: [0, 3] },
+        [{ node: Letter, value: 'abc', range: [0, 3] }],
       ]),
       expected_error: false,
     },
@@ -479,7 +490,7 @@ function test_parsePatternSeq(): void {
       input: { src: '5abc', pos: 0 },
       expected: mkSeqAST(Seq_Digit_Optional_Star, [0, 4], [
         { node: Digit, value: '5', range: [0, 1] },
-        { node: Letter, value: 'abc', range: [1, 4] },
+        [{ node: Letter, value: 'abc', range: [1, 4] }],
       ]),
       expected_error: false,
     },
@@ -549,7 +560,7 @@ function test_parsePatternSeq(): void {
       input: { src: 'x5abc', pos: 1 },
       expected: mkSeqAST(Seq_Digit_Letter_Star, [1, 5], [
         { node: Digit, value: '5', range: [1, 2] },
-        { node: Letter, value: 'abc', range: [2, 5] },
+        [{ node: Letter, value: 'abc', range: [2, 5] }],
       ]),
       expected_error: false,
     },
@@ -587,7 +598,7 @@ function test_parsePatternSeq(): void {
       input: { src: 'a3b', pos: 0 },
       expected: mkSeqAST(Seq_Quad_Mixed, [0, 3], [
         { node: Letter, value: 'a', range: [0, 1] },
-        { node: Digit, value: '3', range: [1, 2] },
+        [{ node: Digit, value: '3', range: [1, 2] }],
         { node: Letter, value: 'b', range: [2, 3] },
       ]),
       expected_error: false,
@@ -599,7 +610,7 @@ function test_parsePatternSeq(): void {
       expected: mkSeqAST(Seq_Quad_Mixed, [0, 6], [
         { node: Digit, value: '5', range: [0, 1] },
         { node: Letter, value: 'a', range: [1, 2] },
-        { node: Digit, value: '123', range: [2, 5] },
+        [{ node: Digit, value: '123', range: [2, 5] }],
         { node: Letter, value: 'b', range: [5, 6] },
       ]),
       expected_error: false,

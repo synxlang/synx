@@ -10,7 +10,7 @@ export interface ASTNode {
      * For PatternSeq nodes with no custom rule: if node.flat=true, value is the matched substring; otherwise value is the array of child AST nodes.
      */
     value: any;
-    /** Raw AST value; always an array of child AST nodes for PatternSeq, never merged */
+    /** Raw AST value; for PatternSeq, each `*`/`+` sub-node is one `ASTNode[]` slot; ` ` / `?` slots are single `ASTNode`s (flattened). */
     raw_value: any;
 }
 

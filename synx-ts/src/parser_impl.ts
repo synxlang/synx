@@ -233,10 +233,15 @@ export class ParserImpl implements Parser {
         return res.matched;
     }
 
-    /** Match a sequence once: parse each sub_node in order using the corresponding sub_quantifier; raw_value is an array of child AST nodes, value is flat string if flat=true, otherwise same as raw_value */
+    /**
+     * Match a sequence once: parse each sub_node in order using the corresponding sub_quantifier.
+     * `value` / `raw_value`: for sub_quantifier ` ` or `?`, child AST nodes are flattened into the list;
+     * for `*` / `+`, one slot holds `ASTNode[]` (the repetitions for that sub-node) without flattening.
+     * If `flat` is true, `value` is the matched substring; otherwise `value` mirrors `raw_value`.
+     */
     parsePatternSeq(node: PatternSeq): ASTNode | null {
         const start = this.input.pos;
-        const children: ASTNode[] = [];
+        const children: Array<ASTNode | ASTNode[]> = [];
         for (let i = 0; i < node.sub_nodes.length; i++) {
             const q = node.sub_quantifiers[i] as Quantifier;
             const part = this.parseNode(node.sub_nodes[i], q);
@@ -244,7 +249,14 @@ export class ParserImpl implements Parser {
                 this.setError();
                 return null;
             }
-            children.push(...part);
+            if (q === " " || q === "?") {
+                children.push(...part);
+            } else {
+                // `*` / `+`: keep repetitions grouped (do not flatten into the seq's child list).
+                if (part.length > 0) {
+                    children.push(part);
+                }
+            }
         }
 
         const value = node.flat 
