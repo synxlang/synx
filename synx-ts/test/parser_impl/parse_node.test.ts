@@ -28,8 +28,8 @@ function test_parseNode(): void {
     if (nodes.length !== c.expected_count) {
       throw new Error(`[case ${c.id}] expected ${c.expected_count} nodes, got ${nodes.length}`);
     }
-    if (c.expected_error !== (parser.last_error !== null)) {
-      throw new Error(`[case ${c.id}] expected_error=${c.expected_error}, last_error=${parser.last_error}`);
+    if (c.expected_error !== (parser.getError() !== null)) {
+      throw new Error(`[case ${c.id}] expected_error=${c.expected_error}, last_error=${parser.getError()}`);
     }
   }
 }

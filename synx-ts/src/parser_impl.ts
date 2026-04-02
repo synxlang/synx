@@ -23,8 +23,8 @@ import type { ASTNode } from "./parser";
  *   - `parseSingleNode(node)` parses exactly ONE instance of `node` (no outer quantifier).
  *   - `parseNode(node, quantifier)` is the ONLY place that expands quantifiers for non-char nodes.
  *
- * - Error handling (`last_error`):
- *   - Any parsing function MAY modify `last_error`.
+ * - Error handling:
+ *   - Use only `setError`, `setSuccess`, and `getError`. A successful path must end with no pending error (`getError() === null`).
  *
  * - Unknown kinds:
  *   - Unknown / unhandled `ParserNodeKind` is NOT allowed and fails fast via `assert.fail(...)`.
@@ -33,21 +33,30 @@ import type { ASTNode } from "./parser";
 export class ParserImpl implements Parser {
     /** Current parse input and read position (parse state stored on this, child functions read/write through this) */
     input!: ParserInput;
-    /** Error message recorded on the last match failure, used by parse() to return Failure, etc. */
-    last_error: string | null = null;
+    private last_error: string | null = null;
     /** Active (node,pos) pairs in current call stack, for infinite recursion detection */
     private active_parse_stack: Array<{ node: ParserNode; pos: number }> = [];
 
     constructor(public config: ParserConfig) {}
 
-    /** Record match failure error without throwing exception; caller should return null / [] etc. */
+    /** Current parse error message, or `null` if the last completed operation left no failure pending. */
+    getError(): string | null {
+        return this.last_error;
+    }
+
+    /** Clear parse error; call when the current operation succeeded and must not leave a stale failure. */
+    setSuccess(): void {
+        this.last_error = null;
+    }
+
+    /** Record match failure without throwing; caller should return null / [] etc. */
     setError(message?: string): void {
         this.last_error = message ?? "Parse match failed";
     }
 
     initParse(input: ParserInput): void {
         this.input = input;
-        this.last_error = null;
+        this.setSuccess();
         this.active_parse_stack.length = 0;
     }
 
@@ -55,7 +64,7 @@ export class ParserImpl implements Parser {
         this.initParse(input);
         const ast_nodes = this.parseNode(root, " ");
         
-        if (this.last_error !== null) {
+        if (this.getError() !== null) {
             return {
                 kind: ParseResultKind.Failure,
                 ast_nodes: [],
@@ -76,10 +85,10 @@ export class ParserImpl implements Parser {
         
         while (this.input.pos < this.input.src.length) {
             const start = this.input.pos;
-            this.last_error = null;
+            this.setSuccess();
             const ast_nodes = this.parseNode(node, " ");
             
-            if (this.last_error === null) {
+            if (this.getError() === null) {
                 results.push(...ast_nodes);
             } else {
                 this.input.pos = start + 1;
@@ -107,7 +116,7 @@ export class ParserImpl implements Parser {
             const n = this.parseSingleNode(node);
             if (n === null) {
                 this.input.pos = retry_pos;
-                this.last_error = null;
+                this.setSuccess();
                 break;
             }
             out.push(n);
@@ -184,7 +193,7 @@ export class ParserImpl implements Parser {
             }
             if (!try_one()) {
                 this.input.pos = retry_pos;
-                this.last_error = null;
+                this.setSuccess();
                 break;
             }
         }
@@ -252,7 +261,7 @@ export class ParserImpl implements Parser {
     private consumeIgnored(node: ParserNode | null): void {
         if (node === null) return;
         this.parseNode(node, "*");
-        this.last_error = null;
+        this.setSuccess();
     }
     /**
      * Match a sequence once: parse each sub_node in order using the corresponding sub_quantifier.

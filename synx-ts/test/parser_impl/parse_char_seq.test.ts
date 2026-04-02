@@ -37,8 +37,8 @@ function test_parseCharSeq(): void {
         throw new Error(`[case ${c.id}] wrong parser node kind`);
       }
     }
-    if (parser.last_error !== null) {
-      throw new Error(`[case ${c.id}] parseCharSeq must not set last_error, got ${parser.last_error}`);
+    if (parser.getError() !== null) {
+      throw new Error(`[case ${c.id}] parseCharSeq must not set last_error, got ${parser.getError()}`);
     }
   }
 }
@@ -80,8 +80,8 @@ function test_parseNode_charSeq_quantifiers(): void {
         }
       }
     }
-    if (c.expected_error !== (parser.last_error !== null)) {
-      throw new Error(`[case ${c.id}] expected_error=${c.expected_error}, last_error=${parser.last_error}`);
+    if (c.expected_error !== (parser.getError() !== null)) {
+      throw new Error(`[case ${c.id}] expected_error=${c.expected_error}, last_error=${parser.getError()}`);
     }
   }
 }
@@ -127,7 +127,7 @@ function test_parsePatternSeq_embedsCharSeq(): void {
       },
     ],
   });
-  assert.strictEqual(parser.last_error, null);
+  assert.strictEqual(parser.getError(), null);
 }
 
 function runAllTests(): void {

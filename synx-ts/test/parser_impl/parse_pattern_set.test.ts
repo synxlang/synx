@@ -43,7 +43,7 @@ function test_parsePatternSet_basic(): void {
     parser.initParse(c.input);
     const result = parser.parseSingleNode(set);
     assert.deepStrictEqual(result, c.expected, `case ${c.id} AST mismatch`);
-    assert.strictEqual(c.expected_error, parser.last_error !== null, `case ${c.id} error flag mismatch`);
+    assert.strictEqual(c.expected_error, parser.getError() !== null, `case ${c.id} error flag mismatch`);
   }
 }
 
@@ -56,7 +56,7 @@ function test_parsePatternSet_infinite_recursion_self(): void {
   parser.initParse({ src: 'x', pos: 0 });
   const result = parser.parseSingleNode(set);
   assert.strictEqual(result, null);
-  assert.strictEqual(parser.last_error, 'Infinite recursion detected');
+  assert.strictEqual(parser.getError(), 'Infinite recursion detected');
 }
 
 function test_parsePatternSet_infinite_recursion_cycle(): void {
@@ -69,7 +69,7 @@ function test_parsePatternSet_infinite_recursion_cycle(): void {
   parser.initParse({ src: 'x', pos: 0 });
   const result = parser.parseSingleNode(a);
   assert.strictEqual(result, null);
-  assert.strictEqual(parser.last_error, 'Infinite recursion detected');
+  assert.strictEqual(parser.getError(), 'Infinite recursion detected');
 }
 
 function test_parsePatternSet_nested_seq_and_set(): void {
@@ -124,7 +124,7 @@ function test_parsePatternSet_nested_seq_and_set(): void {
       },
     ],
   });
-  assert.strictEqual(parser.last_error, null);
+  assert.strictEqual(parser.getError(), null);
 }
 
 function test_parsePatternSet_infinite_recursion_nested_cycle(): void {
@@ -159,8 +159,8 @@ function test_parsePatternSet_infinite_recursion_nested_cycle(): void {
   parser.initParse({ src: 'x', pos: 0 });
   const result = parser.parseSingleNode(a);
   assert.strictEqual(result, null);
-  // last_error may be overwritten by mandatory callers (e.g. parseNode turning null into "Parse match failed").
-  assert(parser.last_error !== null);
+  // getError() may be set by mandatory callers (e.g. parseNode turning null into "Parse match failed").
+  assert(parser.getError() !== null);
 }
 
 function test_parsePatternSet_synx_shape_ABC(): void {
@@ -196,7 +196,7 @@ function test_parsePatternSet_synx_shape_ABC(): void {
       { parser_nodes: [C.patterns[0] as ParserNode, C], range: [2, 4], value: '12', raw_value: '12' },
     ],
   });
-  assert.strictEqual(parser.last_error, null);
+  assert.strictEqual(parser.getError(), null);
 }
 
 function runAllTests(): void {

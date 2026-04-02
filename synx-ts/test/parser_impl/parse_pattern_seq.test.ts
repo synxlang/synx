@@ -686,8 +686,8 @@ function test_parsePatternSeq(): void {
         throw new Error(`[case ${c.id}] ASTNode mismatch: ${e instanceof Error ? e.message : String(e)}`);
       }
     }
-    if (c.expected_error !== (parser.last_error !== null)) {
-      throw new Error(`[case ${c.id}] expected_error=${c.expected_error}, last_error=${parser.last_error}`);
+    if (c.expected_error !== (parser.getError() !== null)) {
+      throw new Error(`[case ${c.id}] expected_error=${c.expected_error}, last_error=${parser.getError()}`);
     }
   }
 }

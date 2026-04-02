@@ -46,8 +46,8 @@ function test_parseCharMatchNode(): void {
       if (result === null) throw new Error(`[case ${c.id}] expected value "${c.expected_value}", got null`);
       if (result.value !== c.expected_value) throw new Error(`[case ${c.id}] expected value "${c.expected_value}", got "${result.value}"`);
     }
-    if (c.expected_error !== (parser.last_error !== null)) {
-      throw new Error(`[case ${c.id}] expected_error=${c.expected_error}, last_error=${parser.last_error}`);
+    if (c.expected_error !== (parser.getError() !== null)) {
+      throw new Error(`[case ${c.id}] expected_error=${c.expected_error}, last_error=${parser.getError()}`);
     }
   }
 }
