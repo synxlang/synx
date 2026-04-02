@@ -33,6 +33,15 @@ import type { ASTNode } from "./parser";
  * - Unknown kinds:
  *   - Unknown / unhandled `ParserNodeKind` is NOT allowed and fails fast via `assert.fail(...)`.
  *
+ * - Index:
+ *   - On success: before returning, advance the parse index to the next unconsumed position after the matched span.
+ *   - On failure: the index is not guaranteed unless the function explicitly documents otherwise.
+ *
+ * - Error state:
+ *   - On success: error state must be clear (`getError() === null`).
+ *   - On failure: error state must be set (non-null).
+ *   - To reliably read this call's error state after return, the caller must clear the error before invoking.
+ *
  * ============================== ZH / 中文 ==============================
  *
  * 解析器实现类，供 mkParser 与测试使用；不作为对外公开 API 导出。
@@ -43,11 +52,17 @@ import type { ASTNode } from "./parser";
  *   - `parseSingleNode(node)` 只解析 `node` 的一次实例（无外层量词）。
  *   - `parseNode(node, quantifier)` 是展开非字符节点量词的唯一位置。
  *
- * - 错误处理：
- *   - 仅使用 `setError`、`setSuccess`、`getError`。成功路径结束时不得残留错误（`getError() === null`）。
- *
  * - 未知 kind：
  *   - 不允许未知或未处理的 `ParserNodeKind`，通过 `assert.fail(...)` 快速失败。
+ *
+ * - 索引：
+ *   - 成功：返回前将解析索引移动到已匹配片段之后的下一未消费位置。
+ *   - 失败：索引位置不做保证，除非函数另有明确约定。
+ *
+ * - 错误状态：
+ *   - 成功：错误状态必须为空（`getError() === null`）。
+ *   - 失败：必须有错误状态（非空）。
+ *   - 若要在返回后正确取得本次调用的错误状态，调用者须在调用前清除错误。
  */
 export class ParserImpl implements Parser {
     /**
@@ -66,29 +81,14 @@ export class ParserImpl implements Parser {
 
     constructor(public config: ParserConfig) {}
 
-    /**
-     * Current parse error message, or `null` if the last completed operation left no failure pending.
-     *
-     * 当前解析错误信息；若最近一次完成的操作未留下失败则为 `null`。
-     */
     getError(): string | null {
         return this.last_error;
     }
 
-    /**
-     * Clear parse error; call when the current operation succeeded and must not leave a stale failure.
-     *
-     * 清除解析错误；在当前操作已成功、且不应遗留陈旧失败时调用。
-     */
     setSuccess(): void {
         this.last_error = null;
     }
 
-    /**
-     * Record match failure without throwing; caller should return null / [] etc.
-     *
-     * 记录匹配失败但不抛异常；调用方应返回 null / [] 等。
-     */
     setError(message?: string): void {
         this.last_error = message ?? "Parse match failed";
     }
