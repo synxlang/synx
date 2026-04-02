@@ -112,15 +112,24 @@ export class ParserImpl implements Parser {
         const out: ASTNode[] = [first];
         for (;;) {
             const retry_pos = this.input.pos;
+            let n = this.parseSingleNode(node);
+            if (n !== null) {
+                out.push(n);
+                continue;
+            }
+            if (ignored === null) {
+                break;
+            }
+            this.input.pos = retry_pos;
             this.consumeIgnored(ignored);
-            const n = this.parseSingleNode(node);
+            n = this.parseSingleNode(node);
             if (n === null) {
                 this.input.pos = retry_pos;
-                this.setSuccess();
                 break;
             }
             out.push(n);
         }
+        this.setSuccess();
         return out;
     }
 
@@ -191,15 +200,21 @@ export class ParserImpl implements Parser {
         if (quantifier === " " || quantifier === "?") return mk_char_node(start, this.input.pos);
         for (;;) {
             const retry_pos = this.input.pos;
-            if (ignored !== null) {
-                this.consumeIgnored(ignored);
+            if (try_one()) {
+                continue;
             }
+            this.input.pos = retry_pos;
+            if (ignored === null) {
+                break;
+            }
+            this.consumeIgnored(ignored);
             if (!try_one()) {
                 this.input.pos = retry_pos;
                 this.setSuccess();
                 break;
             }
         }
+        this.setSuccess();
         return mk_char_node(start, this.input.pos);
     }
 
@@ -277,7 +292,17 @@ export class ParserImpl implements Parser {
         const children: Array<ASTNode | ASTNode[]> = [];
         for (let i = 0; i < node.sub_nodes.length; i++) {
             const q = node.sub_quantifiers[i] as Quantifier;
-            const part = this.parseNode(node.sub_nodes[i]!, q, node.ignore);
+            const sub_node = node.sub_nodes[i]!;
+            const retry_pos = this.input.pos;
+            let part = this.parseNode(sub_node, q, node.ignore);
+            if (i > 0 && part.length === 0 && node.ignore !== null) {
+                this.input.pos = retry_pos;
+                this.consumeIgnored(node.ignore);
+                part = this.parseNode(sub_node, q, node.ignore);
+                if (part.length === 0) {
+                    this.input.pos = retry_pos;
+                }
+            }
             if ((q === " " || q === "+") && part.length === 0) {
                 this.setError();
                 return null;
@@ -290,16 +315,13 @@ export class ParserImpl implements Parser {
                     children.push(part);
                 }
             }
-
-            if (i + 1 < node.sub_nodes.length) {
-                this.consumeIgnored(node.ignore);
-            }
         }
 
         const value = node.flat 
             ? this.input.src.slice(start, this.input.pos)
             : children;
 
+        this.setSuccess();
         return {
             parser_nodes: [node],
             range: [start, this.input.pos],

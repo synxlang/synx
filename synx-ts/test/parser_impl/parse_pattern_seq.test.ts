@@ -11,6 +11,8 @@ const Emoji: CharMatchNode = mkCharSet('😀'); // emoji is a multi-code-unit ch
 const Chinese: CharMatchNode = mkCharSet('中'); // Chinese character
 /** Layout-only gap between sub-nodes / between `*`/`+` repeats (synx `\ignore Space`). */
 const Space: CharMatchNode = mkCharSet(' ');
+/** Used to verify ignore has lower priority than the real child match. */
+const IgnoreLetter: CharMatchNode = Letter;
 
 // Sequence node constants
 const Seq_Digit_Letter_Mandatory = mkPatternSeq([Digit, Letter], '  ');
@@ -48,6 +50,8 @@ const Seq_Digit_Optional_Letter_Mandatory_IgnoreSpace = mkPatternSeq(
   false,
   Space as ParserNode,
 );
+const Seq_Digit_Letter_Mandatory_IgnoreLetter = mkPatternSeq([Digit, Letter], '  ', false, IgnoreLetter as ParserNode);
+const Seq_Digit_LetterStar_IgnoreLetter = mkPatternSeq([Digit, Letter], ' *', false, IgnoreLetter as ParserNode);
 
 /** Helper function: construct child node ASTNode */
 function mkChildAST(node: CharMatchNode, value: string, range: [number, number]): ASTNode {
@@ -738,6 +742,26 @@ function test_parsePatternSeq(): void {
       expected: mkSeqAST(Seq_Digit_Optional_Letter_Mandatory_IgnoreSpace, [0, 3], [
         { node: Digit, value: '5', range: [0, 1] },
         { node: Letter, value: 'a', range: [2, 3] },
+      ]),
+      expected_error: false,
+    },
+    {
+      id: 80,
+      seq: Seq_Digit_Letter_Mandatory_IgnoreLetter,
+      input: { src: '1a', pos: 0 },
+      expected: mkSeqAST(Seq_Digit_Letter_Mandatory_IgnoreLetter, [0, 2], [
+        { node: Digit, value: '1', range: [0, 1] },
+        { node: Letter, value: 'a', range: [1, 2] },
+      ]),
+      expected_error: false,
+    },
+    {
+      id: 81,
+      seq: Seq_Digit_LetterStar_IgnoreLetter,
+      input: { src: '1abc', pos: 0 },
+      expected: mkSeqAST(Seq_Digit_LetterStar_IgnoreLetter, [0, 4], [
+        { node: Digit, value: '1', range: [0, 1] },
+        [{ node: Letter, value: 'abc', range: [1, 4] }],
       ]),
       expected_error: false,
     },
