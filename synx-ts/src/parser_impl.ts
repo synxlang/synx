@@ -124,10 +124,13 @@ export class ParserImpl implements Parser {
         return out;
     }
 
-    private isRecursiveCall(node: ParserNode, pos: number): boolean {
+    private checkDuplicateRecursion(node: ParserNode, pos: number): boolean {
         for (let i = this.active_parse_stack.length - 1; i >= 0; i--) {
             const frame = this.active_parse_stack[i]!;
-            if (frame.node === node && frame.pos === pos) {
+            if (frame.pos !== pos) {
+                return false;
+            }
+            if (frame.node === node) {
                 return true;
             }
         }
@@ -136,7 +139,7 @@ export class ParserImpl implements Parser {
 
     parseSingleNode(node: ParserNode): ASTNode | null {
         const pos = this.input.pos;
-        if (this.isRecursiveCall(node, pos)) {
+        if (this.checkDuplicateRecursion(node, pos)) {
             this.setError("Infinite recursion detected");
             return null;
         }
