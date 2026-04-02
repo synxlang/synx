@@ -71,7 +71,7 @@ export class ParserImpl implements Parser {
      * 当前解析输入与读位置（解析状态保存在本对象上，子函数经本对象读写）。
      */
     input!: ParserInput;
-    private last_error: string | null = null;
+    private error: string | null = null;
     /**
      * Active (node,pos) pairs in current call stack, for duplicate-recursion detection
      *
@@ -79,18 +79,26 @@ export class ParserImpl implements Parser {
      */
     private active_parse_stack: Array<{ node: ParserNode; pos: number }> = [];
 
-    constructor(public config: ParserConfig) {}
+    constructor(public config: ParserConfig) { }
 
-    getError(): string | null {
-        return this.last_error;
+    clearError(): void {
+        this.error = null;
     }
 
     setSuccess(): void {
-        this.last_error = null;
+        this.clearError();
     }
 
     setError(message?: string): void {
-        this.last_error = message ?? "Parse match failed";
+        this.error = message ?? "Parse match failed";
+    }
+
+    getError(): string | null {
+        return this.error;
+    }
+
+    isSuccess(): boolean {
+        return this.error === null;
     }
 
     initParse(input: ParserInput): void {
@@ -102,7 +110,7 @@ export class ParserImpl implements Parser {
     parse(input: ParserInput, root: ParserNode): ParseResult {
         this.initParse(input);
         const ast_nodes = this.parseNode(root, " ");
-        
+
         if (this.getError() !== null) {
             return {
                 kind: ParseResultKind.Failure,
@@ -110,7 +118,7 @@ export class ParserImpl implements Parser {
                 end_pos: this.input.pos,
             };
         }
-        
+
         return {
             kind: ParseResultKind.Success,
             ast_nodes,
@@ -121,19 +129,19 @@ export class ParserImpl implements Parser {
     parseAll(input: ParserInput, node: ParserNode): ASTNode[] {
         this.initParse(input);
         const results: ASTNode[] = [];
-        
+
         while (this.input.pos < this.input.src.length) {
             const start = this.input.pos;
             this.setSuccess();
             const ast_nodes = this.parseNode(node, " ");
-            
+
             if (this.getError() === null) {
                 results.push(...ast_nodes);
             } else {
                 this.input.pos = start + 1;
             }
         }
-        
+
         return results;
     }
 
@@ -149,7 +157,7 @@ export class ParserImpl implements Parser {
         }
         if (quantifier === " " || quantifier === "?") return [first];
         const out: ASTNode[] = [first];
-        for (;;) {
+        for (; ;) {
             const retry_pos = this.input.pos;
             let n = this.parseSingleNode(node);
             if (n !== null) {
@@ -227,7 +235,7 @@ export class ParserImpl implements Parser {
             if (node.kind === ParserNodeKind.AnyChar) {
                 return this.matchAnyChar();
             }
-            if (node.kind === ParserNodeKind.CharMatchRange) 
+            if (node.kind === ParserNodeKind.CharMatchRange)
                 return this.matchCharMatchRange(node as CharMatchRange);
             const res = this.matchCharMatchSet(node as CharMatchSet);
             if (res.nodes.length === 0) return false;
@@ -241,7 +249,7 @@ export class ParserImpl implements Parser {
             return null;
         }
         if (quantifier === " " || quantifier === "?") return mk_char_node(start, this.input.pos);
-        for (;;) {
+        for (; ;) {
             const retry_pos = this.input.pos;
             if (try_one()) {
                 continue;
@@ -371,7 +379,7 @@ export class ParserImpl implements Parser {
             }
         }
 
-        const value = node.flat 
+        const value = node.flat
             ? this.input.src.slice(start, this.input.pos)
             : children;
 
