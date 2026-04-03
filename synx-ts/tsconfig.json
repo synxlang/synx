@@ -8,5 +8,5 @@
     "rootDir": ".",
     "strict": true
   },
-  "include": ["src/**/*", "unit_test/**/*"]
+  "include": ["src/**/*", "test/unit_test/**/*", "test/manual_test/**/*"]
 }
