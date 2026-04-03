@@ -3,7 +3,10 @@
  */
 import { inspect } from "node:util";
 import { type ASTNode, mkParser, ParseResultKind } from "../../../src/parser";
-import { mkCharRange, mkCharSet, mkPatternSeq } from "../../../src/parser_node";
+import { mkCharRange, mkCharSet, mkPatternSeq, mkCharSeq} from "../../../src/parser_node";
+import { AnyChar } from "../../../src/parser_node";
+import { exit } from "node:process";
+import { ParserImpl } from "../../../src/parser_impl";
 
 
 function isAstNode(x: unknown): x is ASTNode {
@@ -17,8 +20,9 @@ function isAstNode(x: unknown): x is ASTNode {
     );
 }
 
-function extractAstValue(node: ASTNode): any {
-    const peel = (v: unknown): any => {
+function extractAstValue(node: ASTNode | null): any {
+    if (node === null) return null;
+    const peel = (v: any): any => {
         if (v === null || typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
             return v;
         }
@@ -34,23 +38,34 @@ function extractAstValue(node: ASTNode): any {
 }
 
 const inspectOpts = { depth: null, colors: true } as const;
-const root = mkPatternSeq([mkCharRange("0", "9"), mkCharSet([mkCharRange("a", "z")])], "  ");
-const input = { src: "5a", pos: 0 };
-const parser = mkParser({ parser_nodes: [root] });
-const result = parser.parse({ ...input }, root);
+const ignore_pattern = AnyChar;
 
-console.log("input:", input);
-console.log("kind:", ParseResultKind[result.kind], "| end_pos:", result.end_pos);
+
+const input = { src: "  22  00fda20023dfs00 2", pos: 0 };
+const parser = new ParserImpl({ parser_nodes: [] });
+parser.initParse(input);
+const result = parser.parseSingleNodeWithIgnored(mkCharSeq("00"), AnyChar);
 
 console.log("---raw result---");
 console.log(inspect(result, inspectOpts));
-
 console.log("--- extractAstValue ---");
-console.log(
-    inspect(
-        result.ast_nodes.length === 1
-            ? extractAstValue(result.ast_nodes[0]!)
-            : result.ast_nodes.map(extractAstValue),
-        inspectOpts,
-    ),
-);
+console.log(inspect(extractAstValue(result), inspectOpts));
+
+
+
+// const result = parser.parse({ ...input }, root);
+// console.log("input:", input);
+// console.log("kind:", ParseResultKind[result.kind], "| end_pos:", result.end_pos);
+
+// console.log("---raw result---");
+// console.log(inspect(result, inspectOpts));
+
+// console.log("--- extractAstValue ---");
+// console.log(
+//     inspect(
+//         result.ast_nodes.length === 1
+//             ? extractAstValue(result.ast_nodes[0]!)
+//             : result.ast_nodes.map(extractAstValue),
+//         inspectOpts,
+//     ),
+// );

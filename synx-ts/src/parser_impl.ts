@@ -265,6 +265,35 @@ export class ParserImpl implements Parser {
     }
 
     /**
+     * On each failed match, try consuming `ignored` once, and repeat until either the match succeeds or matching cannot succeed even after ignoring.
+     *
+     * 每次匹配失败时，尝试忽略一次 `ignored` 节点，直到匹配成功或即使忽略也不可能匹配成功
+     */
+    parseSingleNodeWithIgnored(node: ParserNode, ignored: ParserNode | null = null): ASTNode | null {
+        if (ignored === null) {
+            return this.parseSingleNode(node);
+        }
+
+        for (; ;) {
+            const retry_pos = this.input.pos;
+            const ret = this.parseSingleNode(node);
+            if (this.isSuccess()) {
+                return ret;
+            }
+
+            this.input.pos = retry_pos;
+            this.parseNode(ignored, " ");
+            if (!this.isSuccess()) {
+                return ret;
+            }
+            if(this.input.pos === retry_pos){
+                this.setError();
+                return ret;
+            }
+        }
+    }
+
+    /**
      * Character matching: match according to quantifier and merge into a string, returns an ASTNode (value/raw_value is the matched string); 
      *
      * 字符匹配：按量词匹配并合并为字符串，返回 ASTNode（value/raw_value 为被匹配的字符串）；
