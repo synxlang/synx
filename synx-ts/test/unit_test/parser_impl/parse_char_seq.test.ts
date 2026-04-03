@@ -1,8 +1,8 @@
-import { ParserImpl } from '../../src/parser_impl';
-import { mkCharRange, mkCharSet, mkPatternSeq, mkCharSeq } from '../../src/parser_node';
-import type { Quantifier } from '../../src/parser_node';
-import type { ASTNode, ParserInput } from '../../src/parser';
-import { ParserNodeKind } from '../../src/parser_node';
+import { ParserImpl } from '../../../src/parser_impl';
+import { mkCharRange, mkCharSet, mkPatternSeq, mkCharSeq } from '../../../src/parser_node';
+import type { Quantifier } from '../../../src/parser_node';
+import type { ASTNode, ParserInput } from '../../../src/parser';
+import { ParserNodeKind } from '../../../src/parser_node';
 import { strict as assert } from 'assert';
 
 /** parseCharSeq: single match only; no setError, no quantifier */

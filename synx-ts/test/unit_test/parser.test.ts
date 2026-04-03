@@ -1,6 +1,6 @@
-import { mkParser, ParserConfig, ParserInput, ParseResult, ASTNode } from '../src/parser';
-import type { ParserNode } from '../src/parser_node';
-import { Symbol, Letter, SymbolChar } from '../src/synx_parser_node';
+import { mkParser, ParserConfig, ParserInput, ParseResult, ASTNode } from '../../src/parser';
+import type { ParserNode } from '../../src/parser_node';
+import { Symbol, Letter, SymbolChar } from '../../src/synx_parser_node';
 import assert from 'assert';
 
 /** parse (Symbol and other entry points): multiple (config, input, root, expected) cases, iterate through test cases and assert within function */

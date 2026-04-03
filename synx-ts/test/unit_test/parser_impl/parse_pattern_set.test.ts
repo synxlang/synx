@@ -1,8 +1,8 @@
 import { strict as assert } from 'assert';
-import { ParserImpl } from '../../src/parser_impl';
-import { mkCharSeq, mkPatternSeq, mkPatternSet } from '../../src/parser_node';
-import type { PatternSet, ParserNode } from '../../src/parser_node';
-import type { ASTNode, ParserInput } from '../../src/parser';
+import { ParserImpl } from '../../../src/parser_impl';
+import { mkCharSeq, mkPatternSeq, mkPatternSet } from '../../../src/parser_node';
+import type { PatternSet, ParserNode } from '../../../src/parser_node';
+import type { ASTNode, ParserInput } from '../../../src/parser';
 
 function test_parsePatternSet_basic(): void {
   const set: PatternSet = mkPatternSet([mkCharSeq('ab'), mkCharSeq('a')]);

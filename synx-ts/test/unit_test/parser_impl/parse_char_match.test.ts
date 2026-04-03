@@ -1,7 +1,7 @@
-import { ParserImpl } from '../../src/parser_impl';
-import { mkCharRange, mkCharSet, AnyChar } from '../../src/parser_node';
-import type { CharMatchNode, Quantifier } from '../../src/parser_node';
-import type { ASTNode, ParserInput } from '../../src/parser';
+import { ParserImpl } from '../../../src/parser_impl';
+import { mkCharRange, mkCharSet, AnyChar } from '../../../src/parser_node';
+import type { CharMatchNode, Quantifier } from '../../../src/parser_node';
+import type { ASTNode, ParserInput } from '../../../src/parser';
 
 /** parseCharMatchNode: multiple inputs covering quantifiers ' ' / '?' / '*' / '+' and match/no-match scenarios */
 function test_parseCharMatchNode(): void {

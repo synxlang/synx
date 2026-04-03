@@ -1,7 +1,7 @@
-import { ParserImpl } from '../../src/parser_impl';
-import { mkCharRange, mkCharSet, mkCharSeq } from '../../src/parser_node';
-import type { CharMatchNode, ParserNode, Quantifier } from '../../src/parser_node';
-import type { ParserInput } from '../../src/parser';
+import { ParserImpl } from '../../../src/parser_impl';
+import { mkCharRange, mkCharSet, mkCharSeq } from '../../../src/parser_node';
+import type { CharMatchNode, ParserNode, Quantifier } from '../../../src/parser_node';
+import type { ParserInput } from '../../../src/parser';
 
 /** parseNode: multiple inputs covering character nodes, PatternSeq, and CharSeq */
 function test_parseNode(): void {

@@ -1,7 +1,7 @@
-import { ParserImpl } from '../../src/parser_impl';
-import { mkCharRange, mkCharSet, mkPatternSeq } from '../../src/parser_node';
-import type { CharMatchNode, ParserNode, PatternSeq } from '../../src/parser_node';
-import type { ASTNode, ParserInput } from '../../src/parser';
+import { ParserImpl } from '../../../src/parser_impl';
+import { mkCharRange, mkCharSet, mkPatternSeq } from '../../../src/parser_node';
+import type { CharMatchNode, ParserNode, PatternSeq } from '../../../src/parser_node';
+import type { ASTNode, ParserInput } from '../../../src/parser';
 import { strict as assert } from 'assert';
 import { inspect } from 'node:util';
 

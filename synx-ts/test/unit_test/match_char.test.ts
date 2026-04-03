@@ -1,6 +1,6 @@
-import { matchChar, mkCharRange, mkCharSet } from '../src/parser_matcher';
-import { AnyChar } from '../src/parser_node';
-import type { CharMatchNode, CharMatchSet } from '../src/parser_node';
+import { matchChar, mkCharRange, mkCharSet } from '../../src/parser_matcher';
+import { AnyChar } from '../../src/parser_node';
+import type { CharMatchNode, CharMatchSet } from '../../src/parser_node';
 import assert from 'assert';
 
 type Case = { id: number; src: string; match_set: CharMatchSet; expected: { nodes: CharMatchNode[]; new_pos: number }; pos?: number };
