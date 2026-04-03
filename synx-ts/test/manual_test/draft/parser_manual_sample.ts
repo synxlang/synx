@@ -44,7 +44,7 @@ const ignore_pattern = AnyChar;
 const input = { src: "  22  00fda20023dfs00 2", pos: 0 };
 const parser = new ParserImpl({ parser_nodes: [] });
 parser.initParse(input);
-const result = parser.parseSingleNodeWithIgnored(mkCharSeq("00"), AnyChar);
+const result = parser.parseSingleNode(mkCharSeq("00"), AnyChar);
 
 console.log("---raw result---");
 console.log(inspect(result, inspectOpts));
