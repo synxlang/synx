@@ -26,15 +26,25 @@ export interface CharMatchSet {
 }
 
 /**
- * Ordered sequence of `sub_nodes` with per-child quantifiers in `sub_quantifiers`.
+ * `sub_nodes` — ordered child sequence; `sub_quantifiers` — quantifier sequence, one entry per child in order.
  *
- * `ignore` (when non-null): extra pattern consumed for layout only; it MUST NOT apply
- * before the first sub-node or after the last one. It applies only:
- * - between consecutive sub-nodes, and
- * - between successive matches of the same sub-node when its quantifier is `*` or `+`
- *   (i.e. inter-repetition gaps for that child).
- * Text matched solely via `ignore` is not represented in this sequence node's `raw_value`.
- * Must be `null` when `flat` is true.
+ * `ignore` (when non-null): ignore rules:
+ * - Ignore is attempted only when a child match fails, or when the match succeeds but the quantified result is empty because of `?`, `*`, or `+`.
+ * - Before the first sub-node;
+ * - Between consecutive sub-nodes;
+ * - Between successive matches of a sub-node whose quantifier is `*` or `+` (i.e. gaps between repetitions of that child);
+ * Text matched solely through `ignore` is not represented in this sequence node's `raw_value`.
+ * When `flat` is true, `ignore` still participates in matching, but does not affect the sequence node's `value`.
+ *
+ * `sub_nodes` 子节点序列，`sub_quantifiers` 量词序列依次对应子节点序列
+ *
+ * `ignore`（非 null 时）：忽略规则如下：
+ * - 只有当子节点匹配失败或者匹配成功但结果因量词（`?`、`*`、`+`）为空时，才会尝试忽略。
+ * - 第一个子节点之前；
+ * - 相邻子节点之间；
+ * - 当某子节点量词为 `*` 或 `+` 时，该子节点连续两次匹配之间（即该子重复的间隔）;
+ * 仅通过 `ignore` 匹配到的文本不会出现在本序列节点的 `raw_value` 中。
+ * `flat` 为 true 时 `ignore` 还是会起匹配上的作用，但是不会影响 `value` 的值。
  */
 export interface PatternSeq {
     kind: ParserNodeKind.PatternSeq;
