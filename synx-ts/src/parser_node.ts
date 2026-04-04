@@ -26,31 +26,46 @@ export interface CharMatchSet {
 }
 
 /**
- * `sub_nodes` — ordered child sequence; `sub_quantifiers` — quantifier sequence, one entry per child in order.
+ * ============================== EN ==============================
+ * `sub_nodes` — child sequence; `sub_quantifiers` — quantifier sequence, one entry per child in order.
  *
- * `ignore` (when non-null): ignore rules:
+ * `sep` (when non-null):
+ * - Separator node used to delimit the sub-node sequence; when `accept_trailing_sep` is true, a trailing separator at the end of the sequence is allowed.
+ * - The separator applies between sub-nodes and in the gaps between successive matches of a sub-node whose quantifier is `*` or `+` (the repetition interval).
+ * - Separator nodes appear in this sequence node's `seps` array; they do not appear in `value` or `raw_value`.
+ *
+ * `ignore` (when non-null): lowest priority. Ignore rules:
  * - Ignore is attempted only when a child match fails, or when the match succeeds but the quantified result is empty because of `?`, `*`, or `+`.
  * - Before the first sub-node;
- * - Between consecutive sub-nodes;
- * - Between successive matches of a sub-node whose quantifier is `*` or `+` (i.e. gaps between repetitions of that child);
- * Text matched solely through `ignore` is not represented in this sequence node's `raw_value`.
- * When `flat` is true, `ignore` still participates in matching, but does not affect the sequence node's `value`.
+ * - Between adjacent sub-nodes;
+ * - Between two successive matches of a sub-node whose quantifier is `*` or `+` (i.e. the gap between repetitions of that child);
+ * Text matched solely through `ignore` does not appear in this sequence node's `raw_value`.
+ * When `flat` is true, `ignore` still participates in matching, but does not affect `value`.
  *
+ * ============================== 中文 ==============================
  * `sub_nodes` 子节点序列，`sub_quantifiers` 量词序列依次对应子节点序列
+ * 
+ * `sep` （非 null 时）：
+ * - 分隔符节点，用于分隔子节点序列，`accept_trailing_sep` 为 true 时，允许序列末尾出现分隔符。
+ * - 分隔符会作用于子节点间以及量词为 `*` 或 `+` 的子节点重复的间隔。
+ * - sep 节点会出现在本序列节点的 `seps` 数组中，不会出现在 `value` 或 `raw_value` 中。
  *
- * `ignore`（非 null 时）：忽略规则如下：
+ * `ignore`（非 null 时）：优先级最低，忽略规则如下：
  * - 只有当子节点匹配失败或者匹配成功但结果因量词（`?`、`*`、`+`）为空时，才会尝试忽略。
  * - 第一个子节点之前；
  * - 相邻子节点之间；
  * - 当某子节点量词为 `*` 或 `+` 时，该子节点连续两次匹配之间（即该子重复的间隔）;
  * 仅通过 `ignore` 匹配到的文本不会出现在本序列节点的 `raw_value` 中。
  * `flat` 为 true 时 `ignore` 还是会起匹配上的作用，但是不会影响 `value` 的值。
+ * 
  */
 export interface PatternSeq {
     kind: ParserNodeKind.PatternSeq;
     sub_nodes: ParserNode[];
-    sub_quantifiers: string;  // one char per sub_node: ' ' | '?' | '*' | '+'
+    sub_quantifiers: string;
     flat: boolean;
+    sep: ParserNode | null;
+    accept_trailing_sep: boolean;
     ignore: ParserNode | null;
 }
 
