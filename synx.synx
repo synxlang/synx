@@ -15,8 +15,7 @@ GeneralSymbol={Symbol;SymbolDotChain};
 
 Comment=(CommentPrefix,comment:AnyChar*,LineDelimiter?)=>comment;
 
-EscapeChar=("\\",char:AnyChar)=>char;
-StringLiteral=(text:{AnyChar;EscapeChar}* \enclosedby "\"")=>text;
+StringLiteral=(text:AnyChar* \enclosedby ("\"", {-"\\\"", "\""} ))=>text;
 SingleCharString=(text:StringLiteral) \where char_cnt(text)==1;
 GeneralChar={SymbolChar;SingleCharString;};
 CharRange=(first:GeneralChar, "~", last:GeneralChar)=>[.first=first, .last=last];
@@ -39,7 +38,8 @@ Many=(pattern:Pattern, "+")=>pattern;
 FlatPattern=("\\flat", pattern:Pattern \ignore Space)=>pattern;
 
 AssociateByPart=("\\associateby", pattern:Pattern \ignore Space)=>pattern;
-PatternSet=((patterns:PatternSet* \sep ";" \ignore Space), 
+NegPattern=("-", pattern:Pattern \ignore Space)=>[.pattern=pattern]; \\ reject if match, only can be used in PatternSet
+PatternSet=((patterns:Pattern* \sep ";" \ignore Space), 
     associateby_part:AssociateByPart? \ignore Space \enclosedby "{}")=>[.patterns=patterns, .associateby=associateby_part];
 
 sepPart=("\\sep", pattern:Pattern \ignore Space)=>pattern;
@@ -55,7 +55,7 @@ ConditionPattern=(pattern:Pattern, "\\where", condition:ConditionExpr \ignore Sp
 PatternBinding=(symbol:Symbol,":",pattern:Pattern)=>[.symbol=symbol, .pattern=pattern];
 Rule=(pattern:PatternSeq,"=>",returned:Expr)=>[.pattern=pattern, .returned=returned];
 
-Pattern={CharSet;StringLiteral;Option;OneOrMany;Many;FlatPattern;PatternSeq;PatternSet;PatternBinding;ConditionPattern;Rule;GeneralSymbol \associateby "()"};
+Pattern={NegPattern;CharSet;StringLiteral;Option;OneOrMany;Many;FlatPattern;PatternSeq;PatternSet;PatternBinding;ConditionPattern;Rule;GeneralSymbol \associateby "()"};
 
 List=(exprs:Expr* \sep "," \ignore Space \enclosedby "[]")=>exprs;
 
