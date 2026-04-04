@@ -186,40 +186,21 @@ export class ParserImpl implements Parser {
             append_returned(result);
             return ret;
         }
-        let retry_pos = this.input.pos;
-        const first = this.parseSingleNode(node);
+
+        const first = this.parseSingleNode(node, ignored);
         append_returned(first);
         if (!this.isSuccess()) {
-            if (quantifier === " " || quantifier === "+") {
-                this.setError();
-            } else {
+            if (quantifier === "?" || quantifier === "*") {
                 this.setSuccess();
-                this.input.pos = retry_pos;
             }
             return ret;
         }
-
         if (quantifier === " " || quantifier === "?") {
             return ret;
         }
 
-        for (; ;) {
-            retry_pos = this.input.pos;
-            let n = this.parseSingleNode(node);
-            if (this.isSuccess()) {
-                append_returned(n);
-                continue;
-            }
-            this.input.pos = retry_pos;
-            if (ignored === null) {
-                break;
-            }
-            this.consumeIgnored(ignored);
-            n = this.parseSingleNode(node);
-            if (!this.isSuccess()) {
-                this.input.pos = retry_pos;
-                break;
-            }
+        while (this.isSuccess()) {
+            let n = this.parseSingleNode(node, ignored);
             append_returned(n);
         }
         this.setSuccess();
@@ -306,34 +287,13 @@ export class ParserImpl implements Parser {
         return null;
     }
 
-    /**
-     * Match a sequence once: parse each sub_node in order using the corresponding sub_quantifier.
-     * `value` / `raw_value`: for sub_quantifier ` ` or `?`, child AST nodes are flattened into the list;
-     * for `*` / `+`, one slot holds `ASTNode[]` (the repetitions for that sub-node) without flattening.
-     * If `flat` is true, `value` is the matched substring; otherwise `value` mirrors `raw_value`.
-     *
-     * 将序列解析一次：按顺序用对应的 sub_quantifier 解析每个 sub_node。
-     * `value` / `raw_value`：当 sub_quantifier 为 ` ` 或 `?` 时，子 AST 节点摊平进列表；
-     * 当为 `*` 或 `+` 时，占一格 `ASTNode[]`（该 sub_node 的多次匹配），不向序列子列表摊平。
-     * 若 `flat` 为 true，则 `value` 为匹配的子串；否则 `value` 与 `raw_value` 一致。
-     */
     parsePatternSeq(node: PatternSeq): ASTNode | null {
         const start = this.input.pos;
         const children: Array<ASTNode | ASTNode[]> = [];
         for (let i = 0; i < node.sub_nodes.length; i++) {
             const q = node.sub_quantifiers[i] as Quantifier;
-            const sub_node = node.sub_nodes[i]!;
-            const retry_pos = this.input.pos;
+            const sub_node = node.sub_nodes[i];
             let part = this.parseNode(sub_node, q, node.ignore);
-            let ignore_and_retry: boolean = false;
-            if (node.ignore !== null && i > 0) {
-                ignore_and_retry = !this.isSuccess() || (part.length === 0 && "?*".includes(q));
-            }
-            if (ignore_and_retry) {
-                this.input.pos = retry_pos;
-                this.consumeIgnored(node.ignore);
-                part = this.parseNode(sub_node, q, node.ignore);
-            }
             if (!this.isSuccess()) {
                 return null;
             }
@@ -360,6 +320,56 @@ export class ParserImpl implements Parser {
         };
     }
 
+    trySingleCharMatchNode(node: CharMatchNode): boolean {
+        if (node.kind === ParserNodeKind.AnyChar) {
+            return this.matchAnyChar();
+        }
+        if (node.kind === ParserNodeKind.CharMatchRange) {
+            return this.matchCharMatchRange(node as CharMatchRange);
+        }
+        const res = this.matchCharMatchSet(node as CharMatchSet);
+        if (res.nodes.length === 0) return false;
+        this.input.pos = res.new_pos;
+        return true;
+    }
+
+    /**
+     * On each failed match, try consuming `ignored` once, and repeat until either the match succeeds or matching cannot succeed even after ignoring.
+     *
+     * 每次匹配失败时，尝试忽略一次 `ignored` 节点，直到匹配成功或即使忽略也不可能匹配成功
+     * 返回匹配node的起始匹配位置，失败时返回值为总匹配初始位置
+     */
+    parseSingleCharMatchNode(node: CharMatchNode, ignored: ParserNode | null): number {
+        const start = this.input.pos;
+        if (ignored === null) {
+            if (!this.trySingleCharMatchNode(node)) {
+                this.setError();
+            }else{
+                this.setSuccess();
+            }
+            return start;
+        }
+
+        for (; ;) {
+            const retry_pos = this.input.pos;
+            if (this.trySingleCharMatchNode(node)) {
+                this.setSuccess();
+                return retry_pos;
+            }
+
+            this.input.pos = retry_pos;
+            this.parseSingleNodeSimple(ignored);
+            if (!this.isSuccess()) {
+                this.input.pos = start;
+                return start;
+            }
+            if (this.input.pos === retry_pos) {
+                this.setError();
+                return start;
+            }
+        }
+    }
+
     /**
      * Character matching: match according to quantifier and merge into a string, returns an ASTNode (value/raw_value is the matched string); 
      *
@@ -373,48 +383,46 @@ export class ParserImpl implements Parser {
             raw_value: this.input.src.slice(start, end),
         });
 
-        const try_one = (): boolean => {
-            if (node.kind === ParserNodeKind.AnyChar) {
-                return this.matchAnyChar();
-            }
-            if (node.kind === ParserNodeKind.CharMatchRange)
-                return this.matchCharMatchRange(node as CharMatchRange);
-            const res = this.matchCharMatchSet(node as CharMatchSet);
-            if (res.nodes.length === 0) return false;
-            this.input.pos = res.new_pos;
-            return true;
-        };
-
-        const start = this.input.pos;
-        if (!try_one()) {
-            if (quantifier === " " || quantifier === "+") {
-                this.setError();
-            } else {
+        let match_start = this.parseSingleCharMatchNode(node, ignored);
+        if (!this.isSuccess()) {
+            if("?*".includes(quantifier)) {
                 this.setSuccess();
             }
             return null;
         }
+
+        const { src, pos} = this.input;
+        let merged = src.slice(match_start, pos);
+
         if (quantifier === " " || quantifier === "?") {
             this.setSuccess();
-            return mk_char_node(start, this.input.pos);
+            return {
+                parser_nodes: [node],
+                range: [match_start, this.input.pos],
+                value: merged,
+                raw_value: merged,
+            };
         }
-        for (; ;) {
-            const retry_pos = this.input.pos;
-            if (try_one()) {
-                continue;
-            }
-            this.input.pos = retry_pos;
-            if (ignored === null) {
+
+        for (;;) {
+            const matched_start = this.parseSingleCharMatchNode(node, ignored);
+            if (!this.isSuccess()) {
                 break;
             }
-            this.consumeIgnored(ignored);
-            if (!try_one()) {
-                this.input.pos = retry_pos;
-                break;
-            }
+            merged += src.slice(matched_start, this.input.pos);
         }
         this.setSuccess();
-        return mk_char_node(start, this.input.pos);
+
+        const end = this.input.pos;
+        if (ignored === null) {
+            return mk_char_node(match_start, end);
+        }
+        return {
+            parser_nodes: [node],
+            range: [match_start, end],
+            value: merged,
+            raw_value: merged,
+        };
     }
 
     /**

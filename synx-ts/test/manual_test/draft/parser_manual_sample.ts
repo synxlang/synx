@@ -44,12 +44,17 @@ const ignore_pattern = AnyChar;
 const input = { src: "  22  00fda20023dfs00 2", pos: 0 };
 const parser = new ParserImpl({ parser_nodes: [] });
 parser.initParse(input);
-const result = parser.parseSingleNode(mkCharSeq("00"), AnyChar);
+const res1 = parser.parseSingleNode(mkPatternSeq([mkCharSeq("0")], "?"), AnyChar);
+input.pos = 0;
+parser.initParse(input);
+const res2 = parser.parseSingleNode(mkPatternSeq([mkCharSeq("0")], "*"), AnyChar);
 
 console.log("---raw result---");
-console.log(inspect(result, inspectOpts));
+console.log(inspect(res1, inspectOpts));
+console.log(inspect(res2, inspectOpts));
 console.log("--- extractAstValue ---");
-console.log(inspect(extractAstValue(result), inspectOpts));
+console.log(inspect(extractAstValue(res1), inspectOpts));
+console.log(inspect(extractAstValue(res2), inspectOpts));
 
 
 
