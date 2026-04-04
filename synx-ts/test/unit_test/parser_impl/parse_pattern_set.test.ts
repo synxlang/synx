@@ -174,6 +174,173 @@ function test_parsePatternSet_infinite_recursion_nested_cycle(): void {
   assert.notStrictEqual(parser.getError(), null);
 }
 
+/**
+ * Left recursion: Expr ::= Expr '+' '1' | '1'
+ * First alternative is left-recursive; re-entry at the same `pos` skips to the next index (base case).
+ */
+function test_parsePatternSet_left_recursive_plus_chain(): void {
+  const one = mkCharSeq('1');
+  const plus = mkCharSeq('+');
+  const expr = mkPatternSet([]);
+  const seq = mkPatternSeq([expr, plus, one], '   ');
+  expr.patterns.push(seq as unknown as ParserNode, one as unknown as ParserNode);
+
+  const parser1 = new ParserImpl({ parser_nodes: [] });
+  parser1.initParse({ src: '1', pos: 0 });
+  const r1 = parser1.parseSingleNode(expr);
+  assert(parser1.isSuccess());
+  assert.deepStrictEqual(r1, {
+    parser_nodes: [one, expr],
+    range: [0, 1],
+    value: '1',
+    raw_value: '1',
+    seps: [],
+  });
+
+  const parser2 = new ParserImpl({ parser_nodes: [] });
+  parser2.initParse({ src: '1+1', pos: 0 });
+  const r2 = parser2.parseSingleNode(expr);
+  assert(parser2.isSuccess());
+  assert.deepStrictEqual(r2, {
+    parser_nodes: [seq, expr],
+    range: [0, 3],
+    value: [
+      { parser_nodes: [one, expr], range: [0, 1], value: '1', raw_value: '1', seps: [] },
+      { parser_nodes: [plus], range: [1, 2], value: '+', raw_value: '+', seps: [] },
+      { parser_nodes: [one], range: [2, 3], value: '1', raw_value: '1', seps: [] },
+    ],
+    raw_value: [
+      { parser_nodes: [one, expr], range: [0, 1], value: '1', raw_value: '1', seps: [] },
+      { parser_nodes: [plus], range: [1, 2], value: '+', raw_value: '+', seps: [] },
+      { parser_nodes: [one], range: [2, 3], value: '1', raw_value: '1', seps: [] },
+    ],
+    seps: [],
+  });
+
+  // One binary op per `PatternSet` expansion: longer input matches a prefix (same span as "1+1").
+  const parser3 = new ParserImpl({ parser_nodes: [] });
+  parser3.initParse({ src: '1+1+1', pos: 0 });
+  const r3 = parser3.parseSingleNode(expr);
+  assert(parser3.isSuccess());
+  assert.deepStrictEqual(r3, r2);
+
+  const parser4 = new ParserImpl({ parser_nodes: [] });
+  parser4.initParse({ src: '+', pos: 0 });
+  assert.strictEqual(parser4.parseSingleNode(expr), null);
+  assert.ok(!parser4.isSuccess());
+}
+
+/**
+ * Left recursion with binary shape: Expr ::= Expr '+' Expr | '1'
+ * Unlike `Expr '+' '1'`, the right operand is `Expr`, so longer chains (e.g. `1+1+1`) extend the parse
+ * in one top-level match (`range` covers the full string).
+ */
+function test_parsePatternSet_left_recursive_expr_plus_expr(): void {
+  const one = mkCharSeq('1');
+  const plus = mkCharSeq('+');
+  const expr = mkPatternSet([]);
+  const seq = mkPatternSeq([expr, plus, expr], '   ');
+  expr.patterns.push(seq as unknown as ParserNode, one as unknown as ParserNode);
+
+  const leafAt = (lo: number, hi: number): ASTNode => ({
+    parser_nodes: [one, expr],
+    range: [lo, hi],
+    value: '1',
+    raw_value: '1',
+    seps: [],
+  });
+
+  const p1 = new ParserImpl({ parser_nodes: [] });
+  p1.initParse({ src: '1', pos: 0 });
+  const r1 = p1.parseSingleNode(expr);
+  assert(p1.isSuccess());
+  assert.deepStrictEqual(r1, {
+    parser_nodes: [one, expr],
+    range: [0, 1],
+    value: '1',
+    raw_value: '1',
+    seps: [],
+  });
+
+  const p2 = new ParserImpl({ parser_nodes: [] });
+  p2.initParse({ src: '1+1', pos: 0 });
+  const r2 = p2.parseSingleNode(expr);
+  assert(p2.isSuccess());
+  assert.deepStrictEqual(r2, {
+    parser_nodes: [seq, expr],
+    range: [0, 3],
+    value: [leafAt(0, 1), { parser_nodes: [plus], range: [1, 2], value: '+', raw_value: '+', seps: [] }, leafAt(2, 3)],
+    raw_value: [leafAt(0, 1), { parser_nodes: [plus], range: [1, 2], value: '+', raw_value: '+', seps: [] }, leafAt(2, 3)],
+    seps: [],
+  });
+
+  const p3 = new ParserImpl({ parser_nodes: [] });
+  p3.initParse({ src: '1+1+1', pos: 0 });
+  const r3 = p3.parseSingleNode(expr);
+  assert(p3.isSuccess());
+  assert.deepStrictEqual(r3?.range, [0, 5]);
+  assert.ok(Array.isArray(r3?.value) && r3!.value.length === 3);
+  const right = r3!.value[2] as ASTNode;
+  assert.deepStrictEqual(right.range, [2, 5]);
+  assert.ok(Array.isArray(right.value) && right.value.length === 3);
+  const inner = right.value as ASTNode[];
+  assert.deepStrictEqual(inner[0], leafAt(2, 3));
+  assert.deepStrictEqual(inner[1], { parser_nodes: [plus], range: [3, 4], value: '+', raw_value: '+', seps: [] });
+  assert.deepStrictEqual(inner[2], leafAt(4, 5));
+
+  const pBad = new ParserImpl({ parser_nodes: [] });
+  pBad.initParse({ src: '+', pos: 0 });
+  assert.strictEqual(pBad.parseSingleNode(expr), null);
+  assert.ok(!pBad.isSuccess());
+}
+
+/**
+ * Left recursion: List ::= List 'b' | 'a'
+ */
+function test_parsePatternSet_left_recursive_list_ab(): void {
+  const a = mkCharSeq('a');
+  const b = mkCharSeq('b');
+  const list = mkPatternSet([]);
+  const pair = mkPatternSeq([list, b], '  ');
+  list.patterns.push(pair as unknown as ParserNode, a as unknown as ParserNode);
+
+  const pA = new ParserImpl({ parser_nodes: [] });
+  pA.initParse({ src: 'a', pos: 0 });
+  const ra = pA.parseSingleNode(list);
+  assert(pA.isSuccess());
+  assert.deepStrictEqual(ra, {
+    parser_nodes: [a, list],
+    range: [0, 1],
+    value: 'a',
+    raw_value: 'a',
+    seps: [],
+  });
+
+  const pAB = new ParserImpl({ parser_nodes: [] });
+  pAB.initParse({ src: 'ab', pos: 0 });
+  const rab = pAB.parseSingleNode(list);
+  assert(pAB.isSuccess());
+  assert.deepStrictEqual(rab, {
+    parser_nodes: [pair, list],
+    range: [0, 2],
+    value: [
+      { parser_nodes: [a, list], range: [0, 1], value: 'a', raw_value: 'a', seps: [] },
+      { parser_nodes: [b], range: [1, 2], value: 'b', raw_value: 'b', seps: [] },
+    ],
+    raw_value: [
+      { parser_nodes: [a, list], range: [0, 1], value: 'a', raw_value: 'a', seps: [] },
+      { parser_nodes: [b], range: [1, 2], value: 'b', raw_value: 'b', seps: [] },
+    ],
+    seps: [],
+  });
+
+  const pABB = new ParserImpl({ parser_nodes: [] });
+  pABB.initParse({ src: 'abb', pos: 0 });
+  const rabb = pABB.parseSingleNode(list);
+  assert(pABB.isSuccess());
+  assert.deepStrictEqual(rabb, rab);
+}
+
 function test_parsePatternSet_synx_shape_ABC(): void {
   // Synx (as requested):
   // C={"12";A};
@@ -218,6 +385,9 @@ function runAllTests(): void {
   test_parsePatternSet_infinite_recursion_cycle();
   test_parsePatternSet_nested_seq_and_set();
   test_parsePatternSet_infinite_recursion_nested_cycle();
+  test_parsePatternSet_left_recursive_plus_chain();
+  test_parsePatternSet_left_recursive_expr_plus_expr();
+  test_parsePatternSet_left_recursive_list_ab();
   test_parsePatternSet_synx_shape_ABC();
   console.log('\nAll parsePatternSet tests passed!');
 }
