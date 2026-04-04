@@ -75,9 +75,9 @@ export class ParserImpl implements Parser {
     private error_pos: number = 0;
 
     /**
-     * Active (node,pos) pairs in current call stack, for duplicate-recursion detection
+     * Frames pushed only while entering a `PatternSet`, for `(node, pos)` duplicate detection on alternation graphs.
      *
-     * 当前调用栈中的 (node, pos) 对，用于检测重复递归。
+     * 仅在进入 `PatternSet` 时压栈，用于在分支图上检测「同一节点、同一输入位置」的重复进入。
      */
     private active_parse_stack: Array<{ node: ParserNode; pos: number }> = [];
 
@@ -210,7 +210,7 @@ export class ParserImpl implements Parser {
 
             let n = this.parseSingleNode(node, ignored);
             if (!this.isSuccess()) {
-                if(sep !== null){
+                if (sep !== null) {
                     this.input.pos = sep_retry_pos;
                 }
                 break;
@@ -254,53 +254,53 @@ export class ParserImpl implements Parser {
     }
 
     parseSingleNodeSimple(node: ParserNode): ASTNode | null {
-        const pos = this.input.pos;
-        if (this.checkDuplicateRecursion(node, pos)) {
-            this.setError(this.input.pos, "Infinite recursion detected");
-            return null;
-        }
-        this.active_parse_stack.push({ node, pos });
-
-        let ret: ASTNode | null;
         if (node.kind === ParserNodeKind.CharSeq) {
-            ret = this.parseCharSeq(node as CharSeq);
-        } else if (node.kind === ParserNodeKind.PatternSet) {
-            ret = this.parsePatternSet(node as PatternSet);
-        } else if (node.kind === ParserNodeKind.PatternSeq) {
-            ret = this.parsePatternSeq(node as PatternSeq);
-        } else if (CHAR_MATCH_NODE_KINDS.includes(node.kind)) {
-            ret = this.parseCharMatchNode(node as CharMatchNode, " ");
-        } else {
-            assert.fail(`unimplemented node kind: ${node.kind}`);
+            return this.parseCharSeq(node as CharSeq);
         }
-
-        this.active_parse_stack.pop();
-        return ret;
+        if (node.kind === ParserNodeKind.PatternSet) {
+            return this.parsePatternSet(node as PatternSet);
+        }
+        if (node.kind === ParserNodeKind.PatternSeq) {
+            return this.parsePatternSeq(node as PatternSeq);
+        }
+        if (CHAR_MATCH_NODE_KINDS.includes(node.kind)) {
+            return this.parseCharMatchNode(node as CharMatchNode, " ");
+        }
+        assert.fail(`unimplemented node kind: ${node.kind}`);
     }
 
     parsePatternSet(node: PatternSet): ASTNode | null {
         const start = this.input.pos;
-
-        for (const alt of node.patterns) {
-            const child = this.parseSingleNode(alt);
-            if (this.isSuccess()) {
-                if (child === null) {
-                    return null;
-                }
-                child.parser_nodes.push(node);
-                return child;
-            }
-            this.input.pos = start;
+        if (this.checkDuplicateRecursion(node, start)) {
+            this.setError(this.input.pos, "Infinite recursion detected");
+            return null;
         }
-        assert.ok(!this.isSuccess());
-        return null;
+        this.active_parse_stack.push({ node, pos: start });
+
+        try {
+            for (const alt of node.patterns) {
+                const child = this.parseSingleNode(alt);
+                if (this.isSuccess()) {
+                    if (child === null) {
+                        return null;
+                    }
+                    child.parser_nodes.push(node);
+                    return child;
+                }
+                this.input.pos = start;
+            }
+            assert.ok(!this.isSuccess());
+            return null;
+        } finally {
+            this.active_parse_stack.pop();
+        }
     }
 
     parsePatternSeq(node: PatternSeq): ASTNode | null {
         const start = this.input.pos;
         const children: Array<ASTNode | ASTNode[]> = [];
         const seps: ASTNode[] = [];
-        let last_sep_end:number = start;
+        let last_sep_end: number = start;
         for (let i = 0; i < node.sub_nodes.length; i++) {
             const q = node.sub_quantifiers[i] as Quantifier;
             const sub_node = node.sub_nodes[i];
