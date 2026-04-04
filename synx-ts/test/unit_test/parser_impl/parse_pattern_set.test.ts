@@ -61,7 +61,7 @@ function test_parsePatternSet_infinite_recursion_self(): void {
   parser.initParse({ src: 'x', pos: 0 });
   const result = parser.parseSingleNode(set);
   assert.strictEqual(result, null);
-  assert.strictEqual(parser.getError(), 'Infinite recursion detected');
+  assert.ok(!parser.isSuccess());
 }
 
 function test_parsePatternSet_infinite_recursion_cycle(): void {
@@ -74,7 +74,7 @@ function test_parsePatternSet_infinite_recursion_cycle(): void {
   parser.initParse({ src: 'x', pos: 0 });
   const result = parser.parseSingleNode(a);
   assert.strictEqual(result, null);
-  assert.strictEqual(parser.getError(), 'Infinite recursion detected');
+  assert.ok(!parser.isSuccess());
 }
 
 function test_parsePatternSet_nested_seq_and_set(): void {
