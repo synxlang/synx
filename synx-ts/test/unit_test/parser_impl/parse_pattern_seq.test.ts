@@ -1,6 +1,6 @@
 import { ParserImpl } from '../../../src/parser_impl';
-import { mkCharRange, mkCharSet, mkPatternSeq } from '../../../src/parser_node';
-import type { CharMatchNode, ParserNode, PatternSeq } from '../../../src/parser_node';
+import { mkCharRange, mkCharSet, mkCharSeq, mkPatternSeq } from '../../../src/parser_node';
+import type { CharMatchNode, CharSeq, ParserNode, PatternSeq } from '../../../src/parser_node';
 import type { ASTNode, ParserInput } from '../../../src/parser';
 import { strict as assert } from 'assert';
 import { inspect } from 'node:util';
@@ -43,16 +43,60 @@ const Seq_Emoji_Letter = mkPatternSeq([Emoji, Letter], '  ');
 const Seq_Quad = mkPatternSeq([Digit, Letter, Digit, Letter], '    ');
 const Seq_Quad_Mixed = mkPatternSeq([Digit, Letter, Digit, Letter], '? * ');
 
-const Seq_Digit_Letter_Mandatory_IgnoreSpace = mkPatternSeq([Digit, Letter], '  ', false, Space as ParserNode);
-const Seq_Digit_LetterStar_IgnoreSpace = mkPatternSeq([Digit, Letter], ' *', false, Space as ParserNode);
+const Seq_Digit_Letter_Mandatory_IgnoreSpace = mkPatternSeq([Digit, Letter], '  ', false, null, false, Space as ParserNode);
+const Seq_Digit_LetterStar_IgnoreSpace = mkPatternSeq([Digit, Letter], ' *', false, null, false, Space as ParserNode);
 const Seq_Digit_Optional_Letter_Mandatory_IgnoreSpace = mkPatternSeq(
   [Digit, Letter],
   '? ',
   false,
+  null,
+  false,
   Space as ParserNode,
 );
-const Seq_Digit_Letter_Mandatory_IgnoreLetter = mkPatternSeq([Digit, Letter], '  ', false, IgnoreLetter as ParserNode);
-const Seq_Digit_LetterStar_IgnoreLetter = mkPatternSeq([Digit, Letter], ' *', false, IgnoreLetter as ParserNode);
+const Seq_Digit_Letter_Mandatory_IgnoreLetter = mkPatternSeq([Digit, Letter], '  ', false, null, false, IgnoreLetter as ParserNode);
+const Seq_Digit_LetterStar_IgnoreLetter = mkPatternSeq([Digit, Letter], ' *', false, null, false, IgnoreLetter as ParserNode);
+
+const CommaSep = mkCharSeq(',');
+const Seq_DigitCommaLetter = mkPatternSeq([Digit, Letter], '  ', false, CommaSep);
+const Seq_LetterPlusComma = mkPatternSeq([Letter], '+', false, CommaSep);
+const Seq_LetterPlusComma_Digit = mkPatternSeq([Letter, Digit], '+ ', false, CommaSep);
+const Seq_DigitCommaLetter_Trailing = mkPatternSeq([Digit, Letter], '  ', false, CommaSep, true);
+
+/** `last_sep_end`: comma only when `pos` advanced — skip sep between consecutive empty `?`/`*` children. */
+const Seq_DigitOptionalOptionalLetter_Comma = mkPatternSeq([Digit, Digit, Letter], '?? ', false, CommaSep);
+const Seq_DigitStarLetterMandatory_Comma = mkPatternSeq([Digit, Letter], '* ', false, CommaSep);
+const Seq_LetterOptionalLetterOptionalDigit_Comma = mkPatternSeq([Letter, Letter, Digit], '?? ', false, CommaSep);
+const Seq_DigitOptionalOptionalLetter_CommaTrailing = mkPatternSeq([Digit, Digit, Letter], '?? ', false, CommaSep, true);
+const Seq_DigitStarLetterStar_Comma = mkPatternSeq([Digit, Letter], '**', false, CommaSep);
+
+/** `sep` + `PatternSeq.ignore` (spaces / junk before comma or around matches). */
+const Seq_DigitCommaLetter_IgnoreSpace = mkPatternSeq([Digit, Letter], '  ', false, CommaSep, false, Space as ParserNode);
+const Seq_DigitCommaLetter_IgnoreLetter = mkPatternSeq([Digit, Letter], '  ', false, CommaSep, false, IgnoreLetter as ParserNode);
+const Seq_DigitOptionalOptionalLetter_Comma_IgnoreSpace = mkPatternSeq(
+  [Digit, Digit, Letter],
+  '?? ',
+  false,
+  CommaSep,
+  false,
+  Space as ParserNode,
+);
+const Seq_DigitStarLetterMandatory_Comma_IgnoreSpace = mkPatternSeq(
+  [Digit, Letter],
+  '* ',
+  false,
+  CommaSep,
+  false,
+  Space as ParserNode,
+);
+const Seq_DigitCommaLetter_Trailing_IgnoreSpace = mkPatternSeq(
+  [Digit, Letter],
+  '  ',
+  false,
+  CommaSep,
+  true,
+  Space as ParserNode,
+);
+const Seq_DigitStarLetterStar_Comma_IgnoreSpace = mkPatternSeq([Digit, Letter], '**', false, CommaSep, false, Space as ParserNode);
 
 /** Helper function: construct child node ASTNode */
 function mkChildAST(node: CharMatchNode, value: string, range: [number, number]): ASTNode {
@@ -61,6 +105,17 @@ function mkChildAST(node: CharMatchNode, value: string, range: [number, number])
     range,
     value,
     raw_value: value,
+    seps: [],
+  };
+}
+
+function mkCharSeqAST(n: CharSeq, value: string, range: [number, number]): ASTNode {
+  return {
+    parser_nodes: [n],
+    range,
+    value,
+    raw_value: value,
+    seps: [],
   };
 }
 
@@ -79,13 +134,19 @@ function normalizeSeqPart(p: SeqPart): ASTNode | ASTNode[] {
 }
 
 /** Helper: construct sequence ASTNode (`value` / `raw_value` mirror parser output). */
-function mkSeqAST(seq: PatternSeq, range: [number, number], parts: SeqPart[]): ASTNode {
+function mkSeqAST(
+  seq: PatternSeq,
+  range: [number, number],
+  parts: SeqPart[],
+  seps: ASTNode[] = [],
+): ASTNode {
   const normalized = parts.map(normalizeSeqPart);
   return {
     parser_nodes: [seq],
     range,
     value: normalized,
     raw_value: normalized,
+    seps,
   };
 }
 
@@ -768,6 +829,340 @@ function test_parsePatternSeq(): void {
     },
   ];
 
+  const cases_sep: TestCase[] = [
+    {
+      id: 90,
+      seq: Seq_DigitCommaLetter,
+      input: { src: '5,a', pos: 0 },
+      expected: mkSeqAST(
+        Seq_DigitCommaLetter,
+        [0, 3],
+        [
+          { node: Digit, value: '5', range: [0, 1] },
+          { node: Letter, value: 'a', range: [2, 3] },
+        ],
+        [mkCharSeqAST(CommaSep, ',', [1, 2])],
+      ),
+      expected_error: false,
+    },
+    {
+      id: 91,
+      seq: Seq_DigitCommaLetter,
+      input: { src: '5a', pos: 0 },
+      expected: null,
+      expected_error: true,
+    },
+    {
+      id: 92,
+      seq: Seq_LetterPlusComma,
+      input: { src: 'a,a', pos: 0 },
+      expected: mkSeqAST(
+        Seq_LetterPlusComma,
+        [0, 3],
+        [[
+          { node: Letter, value: 'a', range: [0, 1] },
+          { node: Letter, value: 'a', range: [2, 3] },
+        ]],
+        [mkCharSeqAST(CommaSep, ',', [1, 2])],
+      ),
+      expected_error: false,
+    },
+    {
+      id: 93,
+      seq: Seq_LetterPlusComma_Digit,
+      input: { src: 'a,a,5', pos: 0 },
+      expected: mkSeqAST(
+        Seq_LetterPlusComma_Digit,
+        [0, 5],
+        [[
+          { node: Letter, value: 'a', range: [0, 1] },
+          { node: Letter, value: 'a', range: [2, 3] },
+        ],
+          { node: Digit, value: '5', range: [4, 5] },
+        ],
+        [mkCharSeqAST(CommaSep, ',', [1, 2]), mkCharSeqAST(CommaSep, ',', [3, 4])],
+      ),
+      expected_error: false,
+    },
+    {
+      id: 94,
+      seq: Seq_DigitCommaLetter_Trailing,
+      input: { src: '5,a,', pos: 0 },
+      expected: mkSeqAST(
+        Seq_DigitCommaLetter_Trailing,
+        [0, 4],
+        [
+          { node: Digit, value: '5', range: [0, 1] },
+          { node: Letter, value: 'a', range: [2, 3] },
+        ],
+        [mkCharSeqAST(CommaSep, ',', [1, 2]), mkCharSeqAST(CommaSep, ',', [3, 4])],
+      ),
+      expected_error: false,
+    },
+    {
+      id: 95,
+      seq: Seq_DigitCommaLetter_Trailing,
+      input: { src: '5,a', pos: 0 },
+      expected: mkSeqAST(
+        Seq_DigitCommaLetter_Trailing,
+        [0, 3],
+        [
+          { node: Digit, value: '5', range: [0, 1] },
+          { node: Letter, value: 'a', range: [2, 3] },
+        ],
+        [mkCharSeqAST(CommaSep, ',', [1, 2])],
+      ),
+      expected_error: false,
+    },
+  ];
+
+  // `last_sep_end` in parsePatternSeq: require `sep` only after `pos` moved past its previous end (no false comma between all-empty `?`/`*` slots).
+  const cases_sep_last_sep_end: TestCase[] = [
+    {
+      id: 96,
+      seq: Seq_DigitOptionalOptionalLetter_Comma,
+      input: { src: 'a', pos: 0 },
+      expected: mkSeqAST(Seq_DigitOptionalOptionalLetter_Comma, [0, 1], [{ node: Letter, value: 'a', range: [0, 1] }], []),
+      expected_error: false,
+    },
+    {
+      id: 97,
+      seq: Seq_DigitOptionalOptionalLetter_Comma,
+      input: { src: '5,a', pos: 0 },
+      expected: mkSeqAST(
+        Seq_DigitOptionalOptionalLetter_Comma,
+        [0, 3],
+        [
+          { node: Digit, value: '5', range: [0, 1] },
+          { node: Letter, value: 'a', range: [2, 3] },
+        ],
+        [mkCharSeqAST(CommaSep, ',', [1, 2])],
+      ),
+      expected_error: false,
+    },
+    {
+      id: 98,
+      seq: Seq_DigitOptionalOptionalLetter_Comma,
+      input: { src: '5,6,a', pos: 0 },
+      expected: mkSeqAST(
+        Seq_DigitOptionalOptionalLetter_Comma,
+        [0, 5],
+        [
+          { node: Digit, value: '5', range: [0, 1] },
+          { node: Digit, value: '6', range: [2, 3] },
+          { node: Letter, value: 'a', range: [4, 5] },
+        ],
+        [mkCharSeqAST(CommaSep, ',', [1, 2]), mkCharSeqAST(CommaSep, ',', [3, 4])],
+      ),
+      expected_error: false,
+    },
+    {
+      id: 99,
+      seq: Seq_DigitOptionalOptionalLetter_Comma,
+      input: { src: '5,6a', pos: 0 },
+      expected: null,
+      expected_error: true,
+    },
+    {
+      id: 100,
+      seq: Seq_DigitStarLetterMandatory_Comma,
+      input: { src: 'a', pos: 0 },
+      expected: mkSeqAST(Seq_DigitStarLetterMandatory_Comma, [0, 1], [{ node: Letter, value: 'a', range: [0, 1] }], []),
+      expected_error: false,
+    },
+    {
+      id: 101,
+      seq: Seq_DigitStarLetterMandatory_Comma,
+      input: { src: '5,a', pos: 0 },
+      expected: mkSeqAST(
+        Seq_DigitStarLetterMandatory_Comma,
+        [0, 3],
+        [[{ node: Digit, value: '5', range: [0, 1] }], { node: Letter, value: 'a', range: [2, 3] }],
+        [mkCharSeqAST(CommaSep, ',', [1, 2])],
+      ),
+      expected_error: false,
+    },
+    {
+      id: 102,
+      seq: Seq_LetterOptionalLetterOptionalDigit_Comma,
+      input: { src: '0', pos: 0 },
+      expected: mkSeqAST(
+        Seq_LetterOptionalLetterOptionalDigit_Comma,
+        [0, 1],
+        [{ node: Digit, value: '0', range: [0, 1] }],
+        [],
+      ),
+      expected_error: false,
+    },
+    {
+      id: 103,
+      seq: Seq_DigitOptionalOptionalLetter_CommaTrailing,
+      input: { src: 'a,', pos: 0 },
+      expected: mkSeqAST(
+        Seq_DigitOptionalOptionalLetter_CommaTrailing,
+        [0, 2],
+        [{ node: Letter, value: 'a', range: [0, 1] }],
+        [mkCharSeqAST(CommaSep, ',', [1, 2])],
+      ),
+      expected_error: false,
+    },
+    {
+      id: 104,
+      seq: Seq_DigitStarLetterStar_Comma,
+      input: { src: '', pos: 0 },
+      expected: mkSeqAST(Seq_DigitStarLetterStar_Comma, [0, 0], [], []),
+      expected_error: false,
+    },
+    {
+      id: 105,
+      seq: Seq_DigitStarLetterStar_Comma,
+      input: { src: 'a', pos: 0 },
+      expected: mkSeqAST(
+        Seq_DigitStarLetterStar_Comma,
+        [0, 1],
+        [[{ node: Letter, value: 'a', range: [0, 1] }]],
+        [],
+      ),
+      expected_error: false,
+    },
+    {
+      id: 106,
+      seq: Seq_DigitOptionalOptionalLetter_Comma,
+      input: { src: 'xxa', pos: 2 },
+      expected: mkSeqAST(Seq_DigitOptionalOptionalLetter_Comma, [2, 3], [{ node: Letter, value: 'a', range: [2, 3] }], []),
+      expected_error: false,
+    },
+  ];
+
+  // `sep` combined with `ignore`: flexible whitespace / ignored chars around commas; still respects `last_sep_end` (no comma between all-empty `?`/`*` slots).
+  const cases_sep_with_ignore: TestCase[] = [
+    {
+      id: 107,
+      seq: Seq_DigitCommaLetter_IgnoreSpace,
+      input: { src: '5 ,a', pos: 0 },
+      expected: mkSeqAST(
+        Seq_DigitCommaLetter_IgnoreSpace,
+        [0, 4],
+        [
+          { node: Digit, value: '5', range: [0, 1] },
+          { node: Letter, value: 'a', range: [3, 4] },
+        ],
+        [mkCharSeqAST(CommaSep, ',', [2, 3])],
+      ),
+      expected_error: false,
+    },
+    {
+      id: 108,
+      seq: Seq_DigitCommaLetter_IgnoreSpace,
+      input: { src: '5, a', pos: 0 },
+      expected: mkSeqAST(
+        Seq_DigitCommaLetter_IgnoreSpace,
+        [0, 4],
+        [
+          { node: Digit, value: '5', range: [0, 1] },
+          { node: Letter, value: 'a', range: [3, 4] },
+        ],
+        [mkCharSeqAST(CommaSep, ',', [1, 2])],
+      ),
+      expected_error: false,
+    },
+    {
+      id: 109,
+      seq: Seq_DigitOptionalOptionalLetter_Comma_IgnoreSpace,
+      input: { src: '  a', pos: 0 },
+      expected: mkSeqAST(
+        Seq_DigitOptionalOptionalLetter_Comma_IgnoreSpace,
+        [0, 3],
+        [{ node: Letter, value: 'a', range: [2, 3] }],
+        [],
+      ),
+      expected_error: false,
+    },
+    {
+      id: 110,
+      seq: Seq_DigitOptionalOptionalLetter_Comma_IgnoreSpace,
+      input: { src: '5 ,a', pos: 0 },
+      expected: mkSeqAST(
+        Seq_DigitOptionalOptionalLetter_Comma_IgnoreSpace,
+        [0, 4],
+        [
+          { node: Digit, value: '5', range: [0, 1] },
+          { node: Letter, value: 'a', range: [3, 4] },
+        ],
+        [mkCharSeqAST(CommaSep, ',', [2, 3])],
+      ),
+      expected_error: false,
+    },
+    {
+      id: 111,
+      seq: Seq_DigitStarLetterMandatory_Comma_IgnoreSpace,
+      input: { src: '1 ,a', pos: 0 },
+      expected: mkSeqAST(
+        Seq_DigitStarLetterMandatory_Comma_IgnoreSpace,
+        [0, 4],
+        [[{ node: Digit, value: '1', range: [0, 1] }], { node: Letter, value: 'a', range: [3, 4] }],
+        [mkCharSeqAST(CommaSep, ',', [2, 3])],
+      ),
+      expected_error: false,
+    },
+    {
+      id: 112,
+      seq: Seq_DigitCommaLetter_Trailing_IgnoreSpace,
+      input: { src: '5,a ,', pos: 0 },
+      expected: mkSeqAST(
+        Seq_DigitCommaLetter_Trailing_IgnoreSpace,
+        [0, 5],
+        [
+          { node: Digit, value: '5', range: [0, 1] },
+          { node: Letter, value: 'a', range: [2, 3] },
+        ],
+        [mkCharSeqAST(CommaSep, ',', [1, 2]), mkCharSeqAST(CommaSep, ',', [4, 5])],
+      ),
+      expected_error: false,
+    },
+    {
+      id: 113,
+      seq: Seq_DigitCommaLetter_IgnoreLetter,
+      input: { src: '5x,a', pos: 0 },
+      expected: mkSeqAST(
+        Seq_DigitCommaLetter_IgnoreLetter,
+        [0, 4],
+        [
+          { node: Digit, value: '5', range: [0, 1] },
+          { node: Letter, value: 'a', range: [3, 4] },
+        ],
+        [mkCharSeqAST(CommaSep, ',', [2, 3])],
+      ),
+      expected_error: false,
+    },
+    {
+      id: 114,
+      seq: Seq_DigitStarLetterStar_Comma_IgnoreSpace,
+      input: { src: '', pos: 0 },
+      expected: mkSeqAST(Seq_DigitStarLetterStar_Comma_IgnoreSpace, [0, 0], [], []),
+      expected_error: false,
+    },
+    {
+      id: 115,
+      seq: Seq_DigitStarLetterStar_Comma_IgnoreSpace,
+      input: { src: ' a', pos: 0 },
+      expected: mkSeqAST(
+        Seq_DigitStarLetterStar_Comma_IgnoreSpace,
+        [0, 2],
+        [[{ node: Letter, value: 'a', range: [1, 2] }]],
+        [],
+      ),
+      expected_error: false,
+    },
+    {
+      id: 116,
+      seq: Seq_DigitCommaLetter_IgnoreSpace,
+      input: { src: '5 ', pos: 0 },
+      expected: null,
+      expected_error: true,
+    },
+  ];
+
   // Merge all test cases
   const cases: TestCase[] = [
     ...cases_basic,
@@ -793,6 +1188,9 @@ function test_parsePatternSeq(): void {
     ...cases_star_star,
     ...cases_optional_star,
     ...cases_ignore,
+    ...cases_sep,
+    ...cases_sep_last_sep_end,
+    ...cases_sep_with_ignore,
   ];
   for (const c of cases) {
     const parser = new ParserImpl({ parser_nodes: [] });

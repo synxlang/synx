@@ -16,6 +16,11 @@ import type { Parser, ParserConfig, ParseResult, ParserInput } from "./parser";
 import { ParseResultKind } from "./parser";
 import type { ASTNode } from "./parser";
 
+interface ParseNodeExResult {
+    nodes: ASTNode[];
+    seps: ASTNode[];
+}
+
 /**
  * ============================== EN ==============================
  *
@@ -144,21 +149,43 @@ export class ParserImpl implements Parser {
     }
 
     parseNode(node: ParserNode, quantifier: Quantifier, ignored: ParserNode | null = null): ASTNode[] {
-        const ret: ASTNode[] = [];
-        let append_returned = (node: ASTNode | null) => {
-            if (node !== null) {
-                ret.push(node);
+        return this.parseNodeEx(node, quantifier, ignored, null).nodes;
+    }
+
+    /**
+     * When `sep` is non-null, it is parsed only between successive matches of the same `node` while expanding `*` / `+` (the loop below).
+     *
+     * 当 `sep` 非 null 时，仅在本函数展开 `*` / `+` 的循环中、于同一 `node` 的相邻两次匹配之间解析分隔符。
+     */
+    parseNodeEx(
+        node: ParserNode,
+        quantifier: Quantifier,
+        ignored: ParserNode | null = null,
+        sep: ParserNode | null = null
+    ): ParseNodeExResult {
+        const ret: ParseNodeExResult = {
+            nodes: [],
+            seps: [],
+        };
+        let push_node = (ast_node: ASTNode | null) => {
+            if (ast_node !== null) {
+                ret.nodes.push(ast_node);
+            }
+        };
+        let push_sep_node = (sep_node: ASTNode | null) => {
+            if (sep_node !== null) {
+                ret.seps.push(sep_node);
             }
         };
 
-        if (CHAR_MATCH_NODE_KINDS.includes(node.kind)) {
+        if (sep === null && CHAR_MATCH_NODE_KINDS.includes(node.kind)) {
             const result = this.parseCharMatchNode(node as CharMatchNode, quantifier, ignored);
-            append_returned(result);
+            push_node(result);
             return ret;
         }
 
         const first = this.parseSingleNode(node, ignored);
-        append_returned(first);
+        push_node(first);
         if (!this.isSuccess()) {
             if (quantifier === "?" || quantifier === "*") {
                 this.setSuccess();
@@ -169,12 +196,27 @@ export class ParserImpl implements Parser {
             return ret;
         }
 
+
         for (; ;) {
+            const sep_retry_pos = this.input.pos;
+            let sep_node: ASTNode | null = null;
+            if (sep !== null) {
+                sep_node = this.parseSingleNode(sep, ignored);
+                if (!this.isSuccess()) {
+                    this.input.pos = sep_retry_pos;
+                    break;
+                }
+            }
+
             let n = this.parseSingleNode(node, ignored);
             if (!this.isSuccess()) {
+                if(sep !== null){
+                    this.input.pos = sep_retry_pos;
+                }
                 break;
             }
-            append_returned(n);
+            push_sep_node(sep_node);
+            push_node(n);
         }
         this.setSuccess();
         return ret;
@@ -257,21 +299,44 @@ export class ParserImpl implements Parser {
     parsePatternSeq(node: PatternSeq): ASTNode | null {
         const start = this.input.pos;
         const children: Array<ASTNode | ASTNode[]> = [];
+        const seps: ASTNode[] = [];
+        let last_sep_end:number = start;
         for (let i = 0; i < node.sub_nodes.length; i++) {
             const q = node.sub_quantifiers[i] as Quantifier;
             const sub_node = node.sub_nodes[i];
-            let part = this.parseNode(sub_node, q, node.ignore);
+            let res = this.parseNodeEx(sub_node, q, node.ignore, node.sep);
+            let child = res.nodes;
             if (!this.isSuccess()) {
                 this.input.pos = start;
                 return null;
             }
 
+            seps.push(...res.seps);
             if (q === " " || q === "?") {
-                children.push(...part);
+                children.push(...child);
             } else {
-                if (part.length > 0) {
-                    children.push(part);
+                if (child.length > 0) {
+                    children.push(child);
                 }
+            }
+
+            if (node.sep !== null && this.input.pos > last_sep_end) {   // check last_sep_end for consecutive empty child nodes case
+                if (i < node.sub_nodes.length - 1) {
+                    const sep = this.parseSingleNode(node.sep, node.ignore);
+                    if (!this.isSuccess()) {
+                        this.input.pos = start;
+                        return null;
+                    }
+                    if (sep !== null) {
+                        seps.push(sep);
+                    }
+                } else if (node.accept_trailing_sep) {
+                    const sep = this.parseSingleNode(node.sep, node.ignore);
+                    if (sep !== null) {
+                        seps.push(sep);
+                    }
+                }
+                last_sep_end = this.input.pos;
             }
         }
 
@@ -285,6 +350,7 @@ export class ParserImpl implements Parser {
             range: [start, this.input.pos],
             value,
             raw_value: children,
+            seps,
         };
     }
 
@@ -300,6 +366,7 @@ export class ParserImpl implements Parser {
             range: [match_start, end],
             value: value,
             raw_value: value,
+            seps: [],
         });
 
         if (!this.isSuccess()) {
@@ -401,6 +468,7 @@ export class ParserImpl implements Parser {
             range: [start, end],
             value: this.input.src.slice(start, end),
             raw_value: this.input.src.slice(start, end),
+            seps: [],
         };
     }
 

@@ -16,7 +16,8 @@ function isAstNode(x: unknown): x is ASTNode {
         "parser_nodes" in x &&
         "range" in x &&
         "value" in x &&
-        "raw_value" in x
+        "raw_value" in x &&
+        "seps" in x
     );
 }
 

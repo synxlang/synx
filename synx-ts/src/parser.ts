@@ -12,6 +12,7 @@ export interface ASTNode {
     value: any;
     /** Raw AST value; for PatternSeq, each `*`/`+` sub-node is one `ASTNode[]` slot; ` ` / `?` slots are single `ASTNode`s (flattened). */
     raw_value: any;
+    /** Separator matches for PatternSeq (see `PatternSeq.sep`); empty for other node kinds. */
     seps: ASTNode[];
 }
 

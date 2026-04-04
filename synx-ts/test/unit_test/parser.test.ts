@@ -34,24 +34,24 @@ function test_parseAll(): void {
     { id: 1, input: { src: '', pos: 0 }, node: Symbol, expected: [] },
     { id: 2, input: { src: 'abc', pos: 0 }, node: Symbol, expected: [
       { parser_nodes: [Symbol], range: [0, 3], value: 'abc', raw_value: [
-        { parser_nodes: [Letter], range: [0, 1], value: 'a', raw_value: 'a' },
-        [ { parser_nodes: [SymbolChar], range: [1, 3], value: 'bc', raw_value: 'bc' } ],
-      ] },
+        { parser_nodes: [Letter], range: [0, 1], value: 'a', raw_value: 'a', seps: [] },
+        [ { parser_nodes: [SymbolChar], range: [1, 3], value: 'bc', raw_value: 'bc', seps: [] } ],
+      ], seps: [] },
     ] },
     { id: 3, input: { src: 'a', pos: 0 }, node: Symbol, expected: [
       { parser_nodes: [Symbol], range: [0, 1], value: 'a', raw_value: [
-        { parser_nodes: [Letter], range: [0, 1], value: 'a', raw_value: 'a' },
-      ] },
+        { parser_nodes: [Letter], range: [0, 1], value: 'a', raw_value: 'a', seps: [] },
+      ], seps: [] },
     ] },
     { id: 4, input: { src: 'abc def', pos: 0 }, node: Symbol, expected: [
       { parser_nodes: [Symbol], range: [0, 3], value: 'abc', raw_value: [
-        { parser_nodes: [Letter], range: [0, 1], value: 'a', raw_value: 'a' },
-        [ { parser_nodes: [SymbolChar], range: [1, 3], value: 'bc', raw_value: 'bc' } ],
-      ] },
+        { parser_nodes: [Letter], range: [0, 1], value: 'a', raw_value: 'a', seps: [] },
+        [ { parser_nodes: [SymbolChar], range: [1, 3], value: 'bc', raw_value: 'bc', seps: [] } ],
+      ], seps: [] },
       { parser_nodes: [Symbol], range: [4, 7], value: 'def', raw_value: [
-        { parser_nodes: [Letter], range: [4, 5], value: 'd', raw_value: 'd' },
-        [ { parser_nodes: [SymbolChar], range: [5, 7], value: 'ef', raw_value: 'ef' } ],
-      ] },
+        { parser_nodes: [Letter], range: [4, 5], value: 'd', raw_value: 'd', seps: [] },
+        [ { parser_nodes: [SymbolChar], range: [5, 7], value: 'ef', raw_value: 'ef', seps: [] } ],
+      ], seps: [] },
     ] },
   ];
 

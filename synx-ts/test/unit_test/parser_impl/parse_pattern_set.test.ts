@@ -21,6 +21,7 @@ function test_parsePatternSet_basic(): void {
         range: [0, 2],
         value: 'ab',
         raw_value: 'ab',
+        seps: [],
       },
       expected_error: false,
     },
@@ -32,6 +33,7 @@ function test_parsePatternSet_basic(): void {
         range: [0, 1],
         value: 'a',
         raw_value: 'a',
+        seps: [],
       },
       expected_error: false,
     },
@@ -104,12 +106,14 @@ function test_parsePatternSet_nested_seq_and_set(): void {
         range: [0, 2],
         value: 'ab',
         raw_value: 'ab',
+        seps: [],
       },
       {
         parser_nodes: [bang],
         range: [2, 3],
         value: '!',
         raw_value: '!',
+        seps: [],
       },
     ],
     raw_value: [
@@ -118,14 +122,17 @@ function test_parsePatternSet_nested_seq_and_set(): void {
         range: [0, 2],
         value: 'ab',
         raw_value: 'ab',
+        seps: [],
       },
       {
         parser_nodes: [bang],
         range: [2, 3],
         value: '!',
         raw_value: '!',
+        seps: [],
       },
     ],
+    seps: [],
   });
   assert(parser.isSuccess());
 }
@@ -192,13 +199,14 @@ function test_parsePatternSet_synx_shape_ABC(): void {
     parser_nodes: [B, A],
     range: [0, 4],
     value: [
-      { parser_nodes: [B.sub_nodes[0] as ParserNode], range: [0, 2], value: 'ab', raw_value: 'ab' },
-      { parser_nodes: [C.patterns[0] as ParserNode, C], range: [2, 4], value: '12', raw_value: '12' },
+      { parser_nodes: [B.sub_nodes[0] as ParserNode], range: [0, 2], value: 'ab', raw_value: 'ab', seps: [] },
+      { parser_nodes: [C.patterns[0] as ParserNode, C], range: [2, 4], value: '12', raw_value: '12', seps: [] },
     ],
     raw_value: [
-      { parser_nodes: [B.sub_nodes[0] as ParserNode], range: [0, 2], value: 'ab', raw_value: 'ab' },
-      { parser_nodes: [C.patterns[0] as ParserNode, C], range: [2, 4], value: '12', raw_value: '12' },
+      { parser_nodes: [B.sub_nodes[0] as ParserNode], range: [0, 2], value: 'ab', raw_value: 'ab', seps: [] },
+      { parser_nodes: [C.patterns[0] as ParserNode, C], range: [2, 4], value: '12', raw_value: '12', seps: [] },
     ],
+    seps: [],
   });
   assert(parser.isSuccess());
 }

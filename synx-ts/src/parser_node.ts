@@ -124,9 +124,19 @@ export function mkPatternSeq(
   sub_nodes: ParserNode[],
   sub_quantifiers: string,
   flat: boolean = false,
+  sep: ParserNode | null = null,
+  accept_trailing_sep: boolean = false,
   ignore: ParserNode | null = null,
 ): PatternSeq {
-  return { kind: ParserNodeKind.PatternSeq, sub_nodes, sub_quantifiers, flat, ignore };
+  return {
+    kind: ParserNodeKind.PatternSeq,
+    sub_nodes,
+    sub_quantifiers,
+    flat,
+    sep,
+    accept_trailing_sep,
+    ignore,
+  };
 }
 
 /** Builds a CharSeq; throws if `literal` is empty. */
