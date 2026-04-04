@@ -21,48 +21,42 @@ import type { ASTNode } from "./parser";
  *
  * Parser implementation class, used by mkParser and tests; not exported as public API.
  *
- * ParserImpl conventions (keep these stable to avoid redundant logic):
- *
- * - Single vs quantified parse:
- *   - `parseSingleNode(node)` parses exactly ONE instance of `node` (no outer quantifier).
- *   - `parseNode(node, quantifier)` is the ONLY place that expands quantifiers for non-char nodes.
+ * Parse call conventions:
+ * - Index:
+ *   - On success: before returning, move the parse index to the next unconsumed position after the matched span.
+ *   - On failure: restore the index to the initial position.
  *
  * - Error handling and state:
  *   - `clearError` is only for clearing error state (e.g. when a clean slate is required before a call).
  *   - `setSuccess` is only for marking success; if you only need errors cleared without meaning “this step succeeded”, use `clearError`.
  *   - `setError(error_pos, …)` / `getError` set and read failure state; `error_pos` must be `input.pos` at the moment the failure is determined.
  *   - Success must be determined only with `isSuccess()`; do not use any other rule.
- *   - On success, `isSuccess()` is true (no pending error); on failure, error state must be set and `isSuccess()` is false.
+ *   - On success, `isSuccess()` is true; on failure, `isSuccess()` is false.
  *
- * - Unknown kinds:
- *   - Unknown `ParserNodeKind` is not allowed.
- * - Index:
- *   - On success: before returning, move the parse index to the next unconsumed position after the matched span.
- *   - On failure: restore the index to the initial position.
+ * - Single parse vs quantified parse:
+ *   - `parseSingleNode(node)` parses exactly ONE instance of `node` (no outer quantifier).
+ *   - `parseNode(node, quantifier)` is the ONLY place that expands quantifiers for non-char nodes.
  *
  * ============================== 中文 ==============================
  *
  * 解析器实现类，供 mkParser 与测试使用；不作为对外公开 API 导出。
  *
- * ParserImpl 约定（保持不变，避免重复逻辑）：
- *
- * - 单次与带量词解析：
- *   - `parseSingleNode(node)` 只解析 `node` 的一次实例（无外层量词）。
- *   - `parseNode(node, quantifier)` 是展开非字符节点量词的唯一位置。
+ * 解析调用约定：
+ * - 索引：
+ *   - 成功：返回前将解析索引移动到已匹配片段之后的下一未消费位置。
+ *   - 失败：要求还原索引到初始位置。
  *
  * - 错误处理与状态：
  *   - `clearError` 仅用于清理错误状态（例如调用前需要干净状态时）。
  *   - `setSuccess` 仅用于设置/标记成功状态；若只是要清错误而非表达“本步成功”，应使用 `clearError`。
  *   - `setError(error_pos, …)` / `getError` 设置与读取失败状态；`error_pos` 须为判定出错时的 `input.pos`。
  *   - 是否成功只能用 `isSuccess()` 判定，不得以其他方式。
- *   - 成功时 `isSuccess()` 为真（无待处理错误）；失败时须有错误状态且 `isSuccess()` 为假。
+ *   - 成功时 `isSuccess()` 为真；失败时 `isSuccess()` 为假。
  *
- * - 未知 kind：
- *   - 禁止未知的 `ParserNodeKind`
+ * - 单次与带量词解析：
+ *   - `parseSingleNode(node)` 只解析 `node` 的一次实例（无外层量词）。
+ *   - `parseNode(node, quantifier)` 是展开非字符节点量词的唯一位置。
  *
- * - 索引：
- *   - 成功：返回前将解析索引移动到已匹配片段之后的下一未消费位置。
- *   - 失败：要求还原索引到初始位置。
  */
 export class ParserImpl implements Parser {
     /**
@@ -260,7 +254,7 @@ export class ParserImpl implements Parser {
         } else if (CHAR_MATCH_NODE_KINDS.includes(node.kind)) {
             ret = this.parseCharMatchNode(node as CharMatchNode, " ");
         } else {
-            assert.fail(`Unknown node kind: ${node.kind}`);
+            assert.fail(`unimplemented node kind: ${node.kind}`);
         }
 
         this.active_parse_stack.pop();
