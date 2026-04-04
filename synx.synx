@@ -10,7 +10,7 @@ StringEscapePrefix="\\";
 Space=SpaceChar+;
 DigitLiteral=Digit+;
 Symbol=\flat (Letter,SymbolChar*);
-SymbolDotChain=(symbols:Symbol* \sepby ".")=>symbols;
+SymbolDotChain=(symbols:Symbol* \sep ".")=>symbols;
 GeneralSymbol={Symbol;SymbolDotChain};          
 
 Comment=(CommentPrefix,comment:AnyChar*,LineDelimiter?)=>comment;
@@ -22,9 +22,9 @@ GeneralChar={SymbolChar;SingleCharString;};
 CharRange=(first:GeneralChar, "~", last:GeneralChar)=>[.first=first, .last=last];
 
 FieldAssignment=(".", symbol:Symbol, "=", expr:Expr \ignore Space)=>[.target=symbol, .source=expr];
-Struct=(field_assignments:FieldAssignment* \sepby "," \ignore Space \enclosedby "[]")=>field_assignments;
+Struct=(field_assignments:FieldAssignment* \sep "," \ignore Space \enclosedby "[]")=>field_assignments;
 
-GeneralCharSet=(charsets:CharSet* \sepby ";" \ignore Space \enclosedby "{}")=>charsets;
+GeneralCharSet=(charsets:CharSet* \sep ";" \ignore Space \enclosedby "{}")=>charsets;
 CharSet = {
     CharRange;
     ("\\oneof", string:StringLiteral)=>string;
@@ -39,17 +39,17 @@ Many=(pattern:Pattern, "+")=>pattern;
 FlatPattern=("\\flat", pattern:Pattern \ignore Space)=>pattern;
 
 AssociateByPart=("\\associateby", pattern:Pattern \ignore Space)=>pattern;
-PatternSet=((patterns:PatternSet* \sepby ";" \ignore Space), 
+PatternSet=((patterns:PatternSet* \sep ";" \ignore Space), 
     associateby_part:AssociateByPart? \ignore Space \enclosedby "{}")=>[.patterns=patterns, .associateby=associateby_part];
 
-SepbyPart=("\\sepby", pattern:Pattern \ignore Space)=>pattern;
+sepPart=("\\sep", pattern:Pattern \ignore Space)=>pattern;
 IgnorePart=("\\ignore", pattern:Pattern \ignore Space)=>pattern;
 EnclosedbyPart=("\\enclosedby", pattern:Pattern \ignore Space)=>pattern;
 PatternSeq=(
-    (patterns:Pattern* \sepby "," \ignore Space), 
-    sepby_part:SepbyPart?, ignore_part:IgnorePart?, enclosedby_part:EnclosedbyPart? 
+    (patterns:Pattern* \sep "," \ignore Space), 
+    sep_part:sepPart?, ignore_part:IgnorePart?, enclosedby_part:EnclosedbyPart? 
     \ignore Space
-)=>[.patterns=patterns, .sepby=sepby_part, .ignore=ignore_part, .enclosedby=enclosedby_part];
+)=>[.patterns=patterns, .sep=sep_part, .ignore=ignore_part, .enclosedby=enclosedby_part];
 ConditionPattern=(pattern:Pattern, "\\where", condition:ConditionExpr \ignore Space)=>[.pattern=pattern, .condition=condition];
 
 PatternBinding=(symbol:Symbol,":",pattern:Pattern)=>[.symbol=symbol, .pattern=pattern];
@@ -57,13 +57,13 @@ Rule=(pattern:PatternSeq,"=>",returned:Expr)=>[.pattern=pattern, .returned=retur
 
 Pattern={CharSet;StringLiteral;Option;OneOrMany;Many;FlatPattern;PatternSeq;PatternSet;PatternBinding;ConditionPattern;Rule;GeneralSymbol \associateby "()"};
 
-List=(exprs:Expr* \sepby "," \ignore Space \enclosedby "[]")=>exprs;
+List=(exprs:Expr* \sep "," \ignore Space \enclosedby "[]")=>exprs;
 
 Assignment = {
     (symbol:Symbol, "=", expr:Expr \ignore Space)=>[.target=symbol, .source=expr];
 };
 
-FuncCallArgsList=(args:Expr* \sepby "," \ignore Space \enclosedby "()")=>args;
+FuncCallArgsList=(args:Expr* \sep "," \ignore Space \enclosedby "()")=>args;
 FuncCallExpr=(func:GeneralSymbol, args_list:FuncCallArgsList \ignore Space)=>[.func=func, .args_list=args_list];
 EqExpr=(left:Expr, "==", right:Expr)=>[.left=left, .right=right];
 ConditionExpr={EqExpr;FuncCallExpr};
@@ -82,12 +82,12 @@ Expr={
 
 Keyword={
     "\\oneof"; 
-    "\\sepby"; "\\ignore"; "\\enclosedby";
+    "\\sep"; "\\ignore"; "\\enclosedby";
     "\\where";
     "\\associateby";
     "\\flat";  \\ flattern all matched pieces into single string
 };
 
-Synx=(expr:Expr* \sepby ";" \ignore Space);
+Synx=(expr:Expr* \sep ";" \ignore Space);
 
 
