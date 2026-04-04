@@ -28,19 +28,17 @@ import type { ASTNode } from "./parser";
  *   - `parseNode(node, quantifier)` is the ONLY place that expands quantifiers for non-char nodes.
  *
  * - Error handling and state:
- *   - `clearError` is only for clearing error state (e.g. before a call when the slate must be clean).
- *   - `setSuccess` is only for marking success; do not use it as a generic “reset” when you only need error cleared—use `clearError` in that case.
- *   - `setError` / `getError` set and read the failure message.
- *   - Determine success only with `isSuccess()`; do not use any other means.
- *   - On success, `isSuccess()` is true (no pending error); on failure, error state must be set (non-null) and `isSuccess()` is false.
- *   - To reliably read this call's error state after return, the caller must `clearError` before invoking. If you only check `isSuccess()` and do not need `getError()`, `clearError` beforehand is not required.
+ *   - `clearError` is only for clearing error state (e.g. when a clean slate is required before a call).
+ *   - `setSuccess` is only for marking success; if you only need errors cleared without meaning “this step succeeded”, use `clearError`.
+ *   - `setError(error_pos, …)` / `getError` set and read failure state; `error_pos` must be `input.pos` at the moment the failure is determined.
+ *   - Success must be determined only with `isSuccess()`; do not use any other rule.
+ *   - On success, `isSuccess()` is true (no pending error); on failure, error state must be set and `isSuccess()` is false.
  *
  * - Unknown kinds:
- *   - Unknown / unhandled `ParserNodeKind` is NOT allowed and fails fast via `assert.fail(...)`.
- *
+ *   - Unknown `ParserNodeKind` is not allowed.
  * - Index:
- *   - On success: before returning, advance the parse index to the next unconsumed position after the matched span.
- *   - On failure: the index is not guaranteed unless the function explicitly documents otherwise.
+ *   - On success: before returning, move the parse index to the next unconsumed position after the matched span.
+ *   - On failure: restore the index to the initial position.
  *
  * ============================== 中文 ==============================
  *
@@ -55,17 +53,16 @@ import type { ASTNode } from "./parser";
  * - 错误处理与状态：
  *   - `clearError` 仅用于清理错误状态（例如调用前需要干净状态时）。
  *   - `setSuccess` 仅用于设置/标记成功状态；若只是要清错误而非表达“本步成功”，应使用 `clearError`。
- *   - `setError` / `getError` 设置与读取失败信息。
+ *   - `setError(error_pos, …)` / `getError` 设置与读取失败状态；`error_pos` 须为判定出错时的 `input.pos`。
  *   - 是否成功只能用 `isSuccess()` 判定，不得以其他方式。
  *   - 成功时 `isSuccess()` 为真（无待处理错误）；失败时须有错误状态且 `isSuccess()` 为假。
- *   - 若要在返回后正确取得本次调用的错误状态，调用者须在调用前 `clearError`。但如果不需要`getError`而是只检查`isSuccess`，则不需要`clearError`。
  *
  * - 未知 kind：
- *   - 不允许未知或未处理的 `ParserNodeKind`，通过 `assert.fail(...)` 快速失败。
+ *   - 禁止未知的 `ParserNodeKind`
  *
  * - 索引：
  *   - 成功：返回前将解析索引移动到已匹配片段之后的下一未消费位置。
- *   - 失败：索引位置不做保证，除非函数另有明确约定。
+ *   - 失败：要求还原索引到初始位置。
  */
 export class ParserImpl implements Parser {
     /**
@@ -74,7 +71,10 @@ export class ParserImpl implements Parser {
      * 当前解析输入与读位置（解析状态保存在本对象上，子函数经本对象读写）。
      */
     input!: ParserInput;
+
     private error: string | null = null;
+    private error_pos: number = 0;
+
     /**
      * Active (node,pos) pairs in current call stack, for duplicate-recursion detection
      *
@@ -103,11 +103,12 @@ export class ParserImpl implements Parser {
     }
 
     /**
-     * Set failure state with an optional message.
+     * Set failure state. `error_pos` must be `this.input.pos` at the moment the failure is determined (callers pass it explicitly).
      *
-     * 设置失败状态，可选用消息。
+     * 设置失败状态。`error_pos` 必须为判定出错时当时的 `this.input.pos`（由调用方显式传入）。
      */
-    setError(message?: string): void {
+    setError(error_pos: number, message?: string): void {
+        this.error_pos = error_pos;
         this.error = message ?? "Parse match failed";
     }
 
@@ -199,8 +200,11 @@ export class ParserImpl implements Parser {
             return ret;
         }
 
-        while (this.isSuccess()) {
+        for (;;) {
             let n = this.parseSingleNode(node, ignored);
+            if (!this.isSuccess()) {
+                break;
+            }
             append_returned(n);
         }
         this.setSuccess();
@@ -216,7 +220,7 @@ export class ParserImpl implements Parser {
         if (ignored === null) {
             return this.parseSingleNodeSimple(node);
         }
-
+        const start = this.input.pos;
         for (; ;) {
             const retry_pos = this.input.pos;
             const ret = this.parseSingleNodeSimple(node);
@@ -227,10 +231,12 @@ export class ParserImpl implements Parser {
             this.input.pos = retry_pos;
             this.parseSingleNodeSimple(ignored);
             if (!this.isSuccess()) {
+                this.input.pos = start;
                 return ret;
             }
             if (this.input.pos === retry_pos) {
-                this.setError();
+                this.setError(this.input.pos);
+                this.input.pos = start;
                 return ret;
             }
         }
@@ -239,7 +245,7 @@ export class ParserImpl implements Parser {
     parseSingleNodeSimple(node: ParserNode): ASTNode | null {
         const pos = this.input.pos;
         if (this.checkDuplicateRecursion(node, pos)) {
-            this.setError("Infinite recursion detected");
+            this.setError(this.input.pos, "Infinite recursion detected");
             return null;
         }
         this.active_parse_stack.push({ node, pos });
@@ -272,8 +278,6 @@ export class ParserImpl implements Parser {
         const start = this.input.pos;
 
         for (const alt of node.patterns) {
-            this.input.pos = start;
-
             const child = this.parseSingleNode(alt);
             if (this.isSuccess()) {
                 if (child === null) {
@@ -282,6 +286,7 @@ export class ParserImpl implements Parser {
                 child.parser_nodes.push(node);
                 return child;
             }
+            this.input.pos = start;
         }
         assert.ok(!this.isSuccess());
         return null;
@@ -295,6 +300,7 @@ export class ParserImpl implements Parser {
             const sub_node = node.sub_nodes[i];
             let part = this.parseNode(sub_node, q, node.ignore);
             if (!this.isSuccess()) {
+                this.input.pos = start;
                 return null;
             }
 
@@ -320,17 +326,22 @@ export class ParserImpl implements Parser {
         };
     }
 
-    trySingleCharMatchNode(node: CharMatchNode): boolean {
+    parseSingleCharMatchNodeSimple(node: CharMatchNode): CharMatchNode[] {
+        if(node.kind === ParserNodeKind.CharMatchSet){
+            return this.parseCharMatchSet(node as CharMatchSet);
+        }
+
         if (node.kind === ParserNodeKind.AnyChar) {
-            return this.matchAnyChar();
+            this.parseAnyChar();
+        } else if (node.kind === ParserNodeKind.CharMatchRange) {
+            this.parseCharMatchRange(node as CharMatchRange);
         }
-        if (node.kind === ParserNodeKind.CharMatchRange) {
-            return this.matchCharMatchRange(node as CharMatchRange);
+
+        if(this.isSuccess()){
+            return [node];
+        }else{
+            return [];
         }
-        const res = this.matchCharMatchSet(node as CharMatchSet);
-        if (res.nodes.length === 0) return false;
-        this.input.pos = res.new_pos;
-        return true;
     }
 
     /**
@@ -342,18 +353,14 @@ export class ParserImpl implements Parser {
     parseSingleCharMatchNode(node: CharMatchNode, ignored: ParserNode | null): number {
         const start = this.input.pos;
         if (ignored === null) {
-            if (!this.trySingleCharMatchNode(node)) {
-                this.setError();
-            }else{
-                this.setSuccess();
-            }
+            this.parseSingleCharMatchNodeSimple(node);
             return start;
         }
 
         for (; ;) {
             const retry_pos = this.input.pos;
-            if (this.trySingleCharMatchNode(node)) {
-                this.setSuccess();
+            this.parseSingleCharMatchNodeSimple(node);
+            if (this.isSuccess()) {
                 return retry_pos;
             }
 
@@ -364,7 +371,8 @@ export class ParserImpl implements Parser {
                 return start;
             }
             if (this.input.pos === retry_pos) {
-                this.setError();
+                this.setError(this.input.pos);
+                this.input.pos = start;
                 return start;
             }
         }
@@ -382,7 +390,7 @@ export class ParserImpl implements Parser {
             value: this.input.src.slice(start, end),
             raw_value: this.input.src.slice(start, end),
         });
-
+        
         let match_start = this.parseSingleCharMatchNode(node, ignored);
         if (!this.isSuccess()) {
             if("?*".includes(quantifier)) {
@@ -434,7 +442,7 @@ export class ParserImpl implements Parser {
         const { src, pos } = this.input;
         const start = pos;
         if (!src.startsWith(node.literal, start)) {
-            this.setError();
+            this.setError(this.input.pos);
             return null;
         }
         const end = start + node.literal.length;
@@ -448,29 +456,38 @@ export class ParserImpl implements Parser {
         };
     }
 
-    matchCharMatchRange(node: CharMatchRange): boolean {
+    parseCharMatchSet(node: CharMatchSet): CharMatchNode[] {
+        const { src, pos } = this.input;
+        const ret = matchChar(src, pos, node);
+        if (ret.nodes.length > 0) {
+            this.input.pos = ret.new_pos;
+            this.setSuccess();
+        }else{
+            this.setError(this.input.pos);
+        }
+        return ret.nodes;
+    }
+
+    parseCharMatchRange(node: CharMatchRange): void {
         const { src, pos } = this.input;
         const res = matchCharRange(src, pos, node.start, node.end);
-        if (res.matched) this.input.pos = res.new_pos;
-        return res.matched;
+        if(res.matched){
+            this.input.pos = res.new_pos;
+            this.setSuccess();
+        }else{
+            this.setError(this.input.pos);
+        }
     }
 
-    matchCharMatchSet(node: CharMatchSet): CharMatchSetResult {
-        const { src, pos } = this.input;
-        return matchChar(src, pos, node);
-    }
-
-    matchAnyChar(): boolean {
+    parseAnyChar(): void {
         const { src, pos } = this.input;
         const res = matchAnyChar(src, pos);
-        if (res.matched) this.input.pos = res.new_pos;
-        return res.matched;
-    }
-
-    private consumeIgnored(node: ParserNode | null): void {
-        if (node === null) return;
-        this.parseNode(node, "*");
-        this.setSuccess();
+        if(res.matched){
+            this.input.pos = res.new_pos;
+            this.setSuccess();
+        }else{
+            this.setError(this.input.pos);
+        }
     }
 
     private checkDuplicateRecursion(node: ParserNode, pos: number): boolean {
