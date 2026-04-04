@@ -79,11 +79,26 @@ export interface CharSeq {
 }
 
 /**
- * PatternSet: ordered alternatives (try `patterns` from left to right).
+ * ============================== EN ==============================
+ * `PatternSet`: ordered alternatives (try `patterns` from left to right).
  *
  * Conventions:
  * - Parsing prefers the first alternative that matches.
  * - On success, this PatternSet is only appended into the winning AST node's `parser_nodes`.
+ *
+ * Long infix chains: prefer `\sep` lists in synx, then resolve associativity in a later pass;
+ * left-recursion limits and other authoring shapes: see `ParserImpl`'s JSDoc on
+ * `pattern_set_node_parse_stack`.
+ *
+ * ============================== 中文 ==============================
+ * `PatternSet`：有序分支（从左到右尝试 `patterns`）。
+ *
+ * 约定：
+ * - 解析时优先采用第一个匹配成功的分支。
+ * - 成功时，本 `PatternSet` 只会被追加到胜出 AST 节点的 `parser_nodes` 中。
+ *
+ * 长中缀链：在 synx 中优先用 `\sep` 收列表，再结合性在后续阶段处理；左递归能力边界及其它写法见
+ * `ParserImpl` 中 `pattern_set_node_parse_stack` 的 JSDoc。
  */
 export interface PatternSet {
     kind: ParserNodeKind.PatternSet;

@@ -75,9 +75,42 @@ export class ParserImpl implements Parser {
     private error_pos: number = 0;
 
     /**
-     * Supports `PatternSet` left recursion and avoids infinite expansion of the parse.
+     * Supports `PatternSet` left recursion and avoids infinite expansion.
+     *
+     * Note: left recursion is limited to a single depth level.
+     *
+     * Authoring longer infix chains (synx-style; `{…}` alternative order still matters where used):
+     *
+     * - **Preferred — list with `\sep`, associativity later** — parse a flat list of operands separated by
+     *   the operator, then fold (left / right / precedence) in a separate semantic pass:
+     *   `Sum=(terms:Term* \sep "+")=>terms;`
+     *   Same idea as `SymbolDotChain=(symbols:Symbol* \sep ".")=>symbols;` in the synx grammar.
+     *
+     * - **Binary `Expr '+' Expr`** — nested tree, workable for chains when both operands are `Expr`:
+     *   `Expr={ (Expr,"+",Expr); Term; };`
+     *
+     * - **Right recursion** — `Expr={ (Term,"+",Expr); Term; };`
+     *
+     * - **Weak shape** (right side not a full `Expr`) — e.g. `Expr={ (Expr,"+","1"); "1"; };`
+     *
+     * ---
      *
      * 用于支持 PatternSet 左递归，以及避免无限展开。
+     *
+     * 注：左递归仅支持单层深度。
+     *
+     * 若要写「任意长的中缀链」，优先用 synx 式列表 + `\sep`，结合性放到后续分析：
+     *
+     * - **推荐 — `\sep` 得到列表，再结合性** — 先把被运算符隔开的各项收成列表（或等价结构），再在语义阶段按左结合、右结合或优先级折叠：
+     *   `Sum=(terms:Term* \sep "+")=>terms;`
+     *   与同文件中 `SymbolDotChain=(symbols:Symbol* \sep ".")=>symbols;` 同一思路。
+     *
+     * - **二元 `Expr '+' Expr`** — 嵌套树形，两侧都是 `Expr` 时可接长链：
+     *   `Expr={ (Expr,"+",Expr); Term; };`
+     *
+     * - **右递归** — `Expr={ (Term,"+",Expr); Term; };`
+     *
+     * - **弱形状** — 右侧不是完整 `Expr` 时，例如 `Expr={ (Expr,"+","1"); "1"; };`
      */
     private pattern_set_node_parse_stack: Array<{ node: ParserNode; pos: number; alt_idx:number }> = [];
 
