@@ -75,11 +75,11 @@ export class ParserImpl implements Parser {
     private error_pos: number = 0;
 
     /**
-     * Active (node,pos) pairs in current call stack, for duplicate-recursion detection
+     * Supports `PatternSet` left recursion and avoids infinite expansion of the parse.
      *
-     * 当前调用栈中的 (node, pos) 对，用于检测重复递归。
+     * 用于支持 PatternSet 左递归，以及避免无限展开。
      */
-    private active_parse_stack: Array<{ node: ParserNode; pos: number }> = [];
+    private pattern_set_node_parse_stack: Array<{ node: ParserNode; pos: number; alt_idx:number }> = [];
 
     constructor(public config: ParserConfig) { }
 
@@ -107,7 +107,7 @@ export class ParserImpl implements Parser {
     initParse(input: ParserInput): void {
         this.input = input;
         this.clearError();
-        this.active_parse_stack.length = 0;
+        this.pattern_set_node_parse_stack.length = 0;
     }
 
     parse(input: ParserInput, root: ParserNode): ParseResult {
@@ -210,7 +210,7 @@ export class ParserImpl implements Parser {
 
             let n = this.parseSingleNode(node, ignored);
             if (!this.isSuccess()) {
-                if(sep !== null){
+                if (sep !== null) {
                     this.input.pos = sep_retry_pos;
                 }
                 break;
@@ -254,53 +254,55 @@ export class ParserImpl implements Parser {
     }
 
     parseSingleNodeSimple(node: ParserNode): ASTNode | null {
-        const pos = this.input.pos;
-        if (this.checkDuplicateRecursion(node, pos)) {
-            this.setError(this.input.pos, "Infinite recursion detected");
-            return null;
-        }
-        this.active_parse_stack.push({ node, pos });
-
-        let ret: ASTNode | null;
         if (node.kind === ParserNodeKind.CharSeq) {
-            ret = this.parseCharSeq(node as CharSeq);
-        } else if (node.kind === ParserNodeKind.PatternSet) {
-            ret = this.parsePatternSet(node as PatternSet);
-        } else if (node.kind === ParserNodeKind.PatternSeq) {
-            ret = this.parsePatternSeq(node as PatternSeq);
-        } else if (CHAR_MATCH_NODE_KINDS.includes(node.kind)) {
-            ret = this.parseCharMatchNode(node as CharMatchNode, " ");
-        } else {
-            assert.fail(`unimplemented node kind: ${node.kind}`);
+            return this.parseCharSeq(node as CharSeq);
         }
-
-        this.active_parse_stack.pop();
-        return ret;
+        if (node.kind === ParserNodeKind.PatternSet) {
+            return this.parsePatternSet(node as PatternSet);
+        }
+        if (node.kind === ParserNodeKind.PatternSeq) {
+            return this.parsePatternSeq(node as PatternSeq);
+        }
+        if (CHAR_MATCH_NODE_KINDS.includes(node.kind)) {
+            return this.parseCharMatchNode(node as CharMatchNode, " ");
+        }
+        assert.fail(`unimplemented node kind: ${node.kind}`);
     }
 
     parsePatternSet(node: PatternSet): ASTNode | null {
         const start = this.input.pos;
+        let alt_idx = this.getPatternSetNextAltIdx(node, start);
+        this.pattern_set_node_parse_stack.push({ node, pos: start, alt_idx });
 
-        for (const alt of node.patterns) {
-            const child = this.parseSingleNode(alt);
-            if (this.isSuccess()) {
-                if (child === null) {
-                    return null;
-                }
-                child.parser_nodes.push(node);
-                return child;
+        try {
+            if(alt_idx >= node.patterns.length) {
+                this.setError(this.input.pos, "pattern set has no more alternatives");
+                return null;
             }
-            this.input.pos = start;
+
+            for (let i = alt_idx; i < node.patterns.length; i++) {
+                const child = this.parseSingleNode(node.patterns[i]);
+                if (this.isSuccess()) {
+                    if (child === null) {
+                        return null;
+                    }
+                    child.parser_nodes.push(node);
+                    return child;
+                }
+                this.input.pos = start;
+            }
+            assert.ok(!this.isSuccess());
+            return null;
+        } finally {
+            this.pattern_set_node_parse_stack.pop();
         }
-        assert.ok(!this.isSuccess());
-        return null;
     }
 
     parsePatternSeq(node: PatternSeq): ASTNode | null {
         const start = this.input.pos;
         const children: Array<ASTNode | ASTNode[]> = [];
         const seps: ASTNode[] = [];
-        let last_sep_end:number = start;
+        let last_sep_end: number = start;
         for (let i = 0; i < node.sub_nodes.length; i++) {
             const q = node.sub_quantifiers[i] as Quantifier;
             const sub_node = node.sub_nodes[i];
@@ -506,16 +508,16 @@ export class ParserImpl implements Parser {
         }
     }
 
-    private checkDuplicateRecursion(node: ParserNode, pos: number): boolean {
-        for (let i = this.active_parse_stack.length - 1; i >= 0; i--) {
-            const frame = this.active_parse_stack[i]!;
+    private getPatternSetNextAltIdx(node: PatternSet, pos: number): number {
+        for (let i = this.pattern_set_node_parse_stack.length - 1; i >= 0; i--) {
+            const frame = this.pattern_set_node_parse_stack[i]!;
             if (frame.pos !== pos) {
-                return false;
+                return 0;
             }
             if (frame.node === node) {
-                return true;
+                return frame.alt_idx + 1;
             }
         }
-        return false;
+        return 0;
     }
 }
