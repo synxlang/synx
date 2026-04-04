@@ -16,6 +16,13 @@ import type { Parser, ParserConfig, ParseResult, ParserInput } from "./parser";
 import { ParseResultKind } from "./parser";
 import type { ASTNode } from "./parser";
 
+interface ParseSingleCharMatchNodeResult {
+    // 返回匹配node的起始匹配位置，失败时返回值为总匹配初始位置
+    start: number;
+    // 所有被忽略的节点
+    ignored_nodes: ASTNode[];
+}
+
 /**
  * ============================== EN ==============================
  *
@@ -333,9 +340,9 @@ export class ParserImpl implements Parser {
      * On each failed match, try consuming `ignored` once, and repeat until either the match succeeds or matching cannot succeed even after ignoring.
      *
      * 每次匹配失败时，尝试忽略一次 `ignored` 节点，直到匹配成功或即使忽略也不可能匹配成功
-     * 返回匹配node的起始匹配位置，失败时返回值为总匹配初始位置
+     * 返回值约定见接口 ParseSingleCharMatchNodeResult
      */
-    parseSingleCharMatchNode(node: CharMatchNode, ignored: ParserNode | null): number {
+    parseSingleCharMatchNode(node: CharMatchNode, ignored: ParserNode | null): ParseSingleCharMatchNodeResult {
         const start = this.input.pos;
         if (ignored === null) {
             this.parseSingleCharMatchNodeSimple(node);
