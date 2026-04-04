@@ -3,8 +3,8 @@ export enum ParserNodeKind {
     CharMatchRange,
     CharMatchSet,
     PatternSeq,
-    /** Fixed UTF-16 substring to match (e.g. quoted strings in synx). */
-    CharSeq,
+    /** Fixed literal substring in the parse input, modeled as a binary string (raw bytes). */
+    ByteSeq,
     PatternSet,
     ParserNodeKindEnd,
 }
@@ -70,11 +70,22 @@ export interface PatternSeq {
 }
 
 /**
- * Literal run to match with `startsWith`: same intent as a PatternSeq of successive character matches, but shorter to author.
+ * ============================== EN ==============================
+ * `ByteSeq`: match a fixed contiguous literal in the parse input, treated as a **binary string** (sequence
+ * of raw bytes). `pos` / `range` refer to **byte offsets and lengths** in that model. Implementation uses
+ * `String.prototype.startsWith` / `slice` on `ParserInput.src` with the same offset arithmetic; authors
+ * should supply `src` and `literal` as binary-safe payloads (e.g. one char per byte) when matching raw bytes.
+ * Same convenience role as a `PatternSeq` of single-byte steps, but shorter to author (keywords, delimiters).
+ *
+ * ============================== 中文 ==============================
+ * `ByteSeq`：在解析输入中匹配固定连续字面量；输入与字面量均按**二进制串**（字节序列）理解，`pos` / `range`
+ * 表示**字节**偏移与跨度。实现上仍用 `startsWith` / `slice` 与当前 `pos` 做比较与截取；作者应保证 `src` 与
+ * `literal` 在需要匹配原始字节时按字节安全方式存放（例如一字节一码元）。作用类似把逐字节写成 `PatternSeq`，
+ * 但更便于书写关键字、分隔符等。
  */
-export interface CharSeq {
-    kind: ParserNodeKind.CharSeq;
-    /** Matched text as a contiguous substring; must be non-empty. */
+export interface ByteSeq {
+    kind: ParserNodeKind.ByteSeq;
+    /** Non-empty binary substring to match (raw bytes; `string` holds them in this layer). */
     literal: string;
 }
 
@@ -108,7 +119,7 @@ export interface PatternSet {
 export const AnyChar = { kind: ParserNodeKind.AnyChar } as const;
 
 export type CharMatchNode = CharMatchRange | CharMatchSet | typeof AnyChar;
-export type ParserNode = CharMatchNode | PatternSeq | CharSeq | PatternSet;
+export type ParserNode = CharMatchNode | PatternSeq | ByteSeq | PatternSet;
 
 /** All kinds that belong to CharMatchNode, used for branch checking to avoid hardcoding multiple kinds */
 export const CHAR_MATCH_NODE_KINDS: ParserNodeKind[] = [
@@ -154,12 +165,12 @@ export function mkPatternSeq(
   };
 }
 
-/** Builds a CharSeq; throws if `literal` is empty. */
-export function mkCharSeq(literal: string): CharSeq {
+/** Builds a `ByteSeq`; throws if `literal` is empty. */
+export function mkByteSeq(literal: string): ByteSeq {
   if (literal.length === 0) {
-    throw new Error("CharSeq.literal must be non-empty");
+    throw new Error("ByteSeq.literal must be non-empty");
   }
-  return { kind: ParserNodeKind.CharSeq, literal };
+  return { kind: ParserNodeKind.ByteSeq, literal };
 }
 
 export function mkPatternSet(patterns: ParserNode[]): PatternSet {

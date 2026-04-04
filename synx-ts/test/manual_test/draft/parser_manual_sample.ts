@@ -3,7 +3,7 @@
  */
 import { inspect } from "node:util";
 import { type ASTNode, mkParser, ParseResultKind } from "../../../src/parser";
-import { mkCharRange, mkCharSet, mkPatternSeq, mkCharSeq} from "../../../src/parser_node";
+import { mkByteSeq, mkCharRange, mkCharSet, mkPatternSeq } from "../../../src/parser_node";
 import { AnyChar } from "../../../src/parser_node";
 import { exit } from "node:process";
 import { ParserImpl } from "../../../src/parser_impl";
@@ -45,10 +45,10 @@ const ignore_pattern = AnyChar;
 const input = { src: "  22  00fda20023dfs00 2", pos: 0 };
 const parser = new ParserImpl({ parser_nodes: [] });
 parser.initParse(input);
-const res1 = parser.parseSingleNode(mkPatternSeq([mkCharSeq("0")], "?"), AnyChar);
+const res1 = parser.parseSingleNode(mkPatternSeq([mkByteSeq("0")], "?"), AnyChar);
 input.pos = 0;
 parser.initParse(input);
-const res2 = parser.parseSingleNode(mkPatternSeq([mkCharSeq("0")], "*"), AnyChar);
+const res2 = parser.parseSingleNode(mkPatternSeq([mkByteSeq("0")], "*"), AnyChar);
 
 console.log("---raw result---");
 console.log(inspect(res1, inspectOpts));

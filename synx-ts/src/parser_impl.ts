@@ -8,7 +8,7 @@ import {
     CharMatchRange,
     CharMatchSet,
     PatternSeq,
-    CharSeq,
+    ByteSeq,
     PatternSet,
     Quantifier,
 } from "./parser_node";
@@ -287,8 +287,8 @@ export class ParserImpl implements Parser {
     }
 
     parseSingleNodeSimple(node: ParserNode): ASTNode | null {
-        if (node.kind === ParserNodeKind.CharSeq) {
-            return this.parseCharSeq(node as CharSeq);
+        if (node.kind === ParserNodeKind.ByteSeq) {
+            return this.parseByteSeq(node as ByteSeq);
         }
         if (node.kind === ParserNodeKind.PatternSet) {
             return this.parsePatternSet(node as PatternSet);
@@ -484,11 +484,13 @@ export class ParserImpl implements Parser {
     }
 
     /**
-     * Match a fixed literal once (quantifiers are handled in parseNode, like parsePatternSeq).
+     * Match a fixed `ByteSeq.literal` once (`startsWith` at current byte offset in the binary-string model).
+     * Quantifiers are handled in `parseNode`, like `PatternSeq`.
      *
-     * 匹配固定字面量一次（量词在 parseNode 中处理，与 parsePatternSeq 相同）。
+     * 匹配 `ByteSeq.literal` 一次（在二进制串模型下于当前字节偏移处 `startsWith`）。
+     * 量词在 `parseNode` 中处理，与 `PatternSeq` 相同。
      */
-    parseCharSeq(node: CharSeq): ASTNode | null {
+    parseByteSeq(node: ByteSeq): ASTNode | null {
         const { src, pos } = this.input;
         const start = pos;
         if (!src.startsWith(node.literal, start)) {

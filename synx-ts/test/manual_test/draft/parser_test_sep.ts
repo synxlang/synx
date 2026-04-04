@@ -5,12 +5,12 @@
  */
 import { inspect } from "node:util";
 import { ParserImpl } from "../../../src/parser_impl";
-import { mkCharRange, mkCharSet, mkCharSeq, mkPatternSeq } from "../../../src/parser_node";
+import { mkByteSeq, mkCharRange, mkCharSet, mkPatternSeq } from "../../../src/parser_node";
 import type { CharMatchNode } from "../../../src/parser_node";
 
 const Digit: CharMatchNode = mkCharRange("0", "9");
 const Letter: CharMatchNode = mkCharSet([mkCharRange("a", "z")]);
-const CommaSep = mkCharSeq(",");
+const CommaSep = mkByteSeq(",");
 const Seq_LetterPlusComma_Digit = mkPatternSeq([Letter, Digit], "+ ", false, CommaSep);
 
 const SRC = "a,a,5";

@@ -1,6 +1,6 @@
 import { ParserImpl } from '../../../src/parser_impl';
-import { mkCharRange, mkCharSet, mkCharSeq, mkPatternSeq } from '../../../src/parser_node';
-import type { CharMatchNode, CharSeq, ParserNode, PatternSeq } from '../../../src/parser_node';
+import { mkCharRange, mkCharSet, mkByteSeq, mkPatternSeq } from '../../../src/parser_node';
+import type { ByteSeq, CharMatchNode, ParserNode, PatternSeq } from '../../../src/parser_node';
 import type { ASTNode, ParserInput } from '../../../src/parser';
 import { strict as assert } from 'assert';
 import { inspect } from 'node:util';
@@ -56,7 +56,7 @@ const Seq_Digit_Optional_Letter_Mandatory_IgnoreSpace = mkPatternSeq(
 const Seq_Digit_Letter_Mandatory_IgnoreLetter = mkPatternSeq([Digit, Letter], '  ', false, null, false, IgnoreLetter as ParserNode);
 const Seq_Digit_LetterStar_IgnoreLetter = mkPatternSeq([Digit, Letter], ' *', false, null, false, IgnoreLetter as ParserNode);
 
-const CommaSep = mkCharSeq(',');
+const CommaSep = mkByteSeq(',');
 const Seq_DigitCommaLetter = mkPatternSeq([Digit, Letter], '  ', false, CommaSep);
 const Seq_LetterPlusComma = mkPatternSeq([Letter], '+', false, CommaSep);
 const Seq_LetterPlusComma_Digit = mkPatternSeq([Letter, Digit], '+ ', false, CommaSep);
@@ -109,7 +109,7 @@ function mkChildAST(node: CharMatchNode, value: string, range: [number, number])
   };
 }
 
-function mkCharSeqAST(n: CharSeq, value: string, range: [number, number]): ASTNode {
+function mkByteSeqAST(n: ByteSeq, value: string, range: [number, number]): ASTNode {
   return {
     parser_nodes: [n],
     range,
@@ -841,7 +841,7 @@ function test_parsePatternSeq(): void {
           { node: Digit, value: '5', range: [0, 1] },
           { node: Letter, value: 'a', range: [2, 3] },
         ],
-        [mkCharSeqAST(CommaSep, ',', [1, 2])],
+        [mkByteSeqAST(CommaSep, ',', [1, 2])],
       ),
       expected_error: false,
     },
@@ -863,7 +863,7 @@ function test_parsePatternSeq(): void {
           { node: Letter, value: 'a', range: [0, 1] },
           { node: Letter, value: 'a', range: [2, 3] },
         ]],
-        [mkCharSeqAST(CommaSep, ',', [1, 2])],
+        [mkByteSeqAST(CommaSep, ',', [1, 2])],
       ),
       expected_error: false,
     },
@@ -880,7 +880,7 @@ function test_parsePatternSeq(): void {
         ],
           { node: Digit, value: '5', range: [4, 5] },
         ],
-        [mkCharSeqAST(CommaSep, ',', [1, 2]), mkCharSeqAST(CommaSep, ',', [3, 4])],
+        [mkByteSeqAST(CommaSep, ',', [1, 2]), mkByteSeqAST(CommaSep, ',', [3, 4])],
       ),
       expected_error: false,
     },
@@ -895,7 +895,7 @@ function test_parsePatternSeq(): void {
           { node: Digit, value: '5', range: [0, 1] },
           { node: Letter, value: 'a', range: [2, 3] },
         ],
-        [mkCharSeqAST(CommaSep, ',', [1, 2]), mkCharSeqAST(CommaSep, ',', [3, 4])],
+        [mkByteSeqAST(CommaSep, ',', [1, 2]), mkByteSeqAST(CommaSep, ',', [3, 4])],
       ),
       expected_error: false,
     },
@@ -910,7 +910,7 @@ function test_parsePatternSeq(): void {
           { node: Digit, value: '5', range: [0, 1] },
           { node: Letter, value: 'a', range: [2, 3] },
         ],
-        [mkCharSeqAST(CommaSep, ',', [1, 2])],
+        [mkByteSeqAST(CommaSep, ',', [1, 2])],
       ),
       expected_error: false,
     },
@@ -936,7 +936,7 @@ function test_parsePatternSeq(): void {
           { node: Digit, value: '5', range: [0, 1] },
           { node: Letter, value: 'a', range: [2, 3] },
         ],
-        [mkCharSeqAST(CommaSep, ',', [1, 2])],
+        [mkByteSeqAST(CommaSep, ',', [1, 2])],
       ),
       expected_error: false,
     },
@@ -952,7 +952,7 @@ function test_parsePatternSeq(): void {
           { node: Digit, value: '6', range: [2, 3] },
           { node: Letter, value: 'a', range: [4, 5] },
         ],
-        [mkCharSeqAST(CommaSep, ',', [1, 2]), mkCharSeqAST(CommaSep, ',', [3, 4])],
+        [mkByteSeqAST(CommaSep, ',', [1, 2]), mkByteSeqAST(CommaSep, ',', [3, 4])],
       ),
       expected_error: false,
     },
@@ -978,7 +978,7 @@ function test_parsePatternSeq(): void {
         Seq_DigitStarLetterMandatory_Comma,
         [0, 3],
         [[{ node: Digit, value: '5', range: [0, 1] }], { node: Letter, value: 'a', range: [2, 3] }],
-        [mkCharSeqAST(CommaSep, ',', [1, 2])],
+        [mkByteSeqAST(CommaSep, ',', [1, 2])],
       ),
       expected_error: false,
     },
@@ -1002,7 +1002,7 @@ function test_parsePatternSeq(): void {
         Seq_DigitOptionalOptionalLetter_CommaTrailing,
         [0, 2],
         [{ node: Letter, value: 'a', range: [0, 1] }],
-        [mkCharSeqAST(CommaSep, ',', [1, 2])],
+        [mkByteSeqAST(CommaSep, ',', [1, 2])],
       ),
       expected_error: false,
     },
@@ -1047,7 +1047,7 @@ function test_parsePatternSeq(): void {
           { node: Digit, value: '5', range: [0, 1] },
           { node: Letter, value: 'a', range: [3, 4] },
         ],
-        [mkCharSeqAST(CommaSep, ',', [2, 3])],
+        [mkByteSeqAST(CommaSep, ',', [2, 3])],
       ),
       expected_error: false,
     },
@@ -1062,7 +1062,7 @@ function test_parsePatternSeq(): void {
           { node: Digit, value: '5', range: [0, 1] },
           { node: Letter, value: 'a', range: [3, 4] },
         ],
-        [mkCharSeqAST(CommaSep, ',', [1, 2])],
+        [mkByteSeqAST(CommaSep, ',', [1, 2])],
       ),
       expected_error: false,
     },
@@ -1089,7 +1089,7 @@ function test_parsePatternSeq(): void {
           { node: Digit, value: '5', range: [0, 1] },
           { node: Letter, value: 'a', range: [3, 4] },
         ],
-        [mkCharSeqAST(CommaSep, ',', [2, 3])],
+        [mkByteSeqAST(CommaSep, ',', [2, 3])],
       ),
       expected_error: false,
     },
@@ -1101,7 +1101,7 @@ function test_parsePatternSeq(): void {
         Seq_DigitStarLetterMandatory_Comma_IgnoreSpace,
         [0, 4],
         [[{ node: Digit, value: '1', range: [0, 1] }], { node: Letter, value: 'a', range: [3, 4] }],
-        [mkCharSeqAST(CommaSep, ',', [2, 3])],
+        [mkByteSeqAST(CommaSep, ',', [2, 3])],
       ),
       expected_error: false,
     },
@@ -1116,7 +1116,7 @@ function test_parsePatternSeq(): void {
           { node: Digit, value: '5', range: [0, 1] },
           { node: Letter, value: 'a', range: [2, 3] },
         ],
-        [mkCharSeqAST(CommaSep, ',', [1, 2]), mkCharSeqAST(CommaSep, ',', [4, 5])],
+        [mkByteSeqAST(CommaSep, ',', [1, 2]), mkByteSeqAST(CommaSep, ',', [4, 5])],
       ),
       expected_error: false,
     },
@@ -1131,7 +1131,7 @@ function test_parsePatternSeq(): void {
           { node: Digit, value: '5', range: [0, 1] },
           { node: Letter, value: 'a', range: [3, 4] },
         ],
-        [mkCharSeqAST(CommaSep, ',', [2, 3])],
+        [mkByteSeqAST(CommaSep, ',', [2, 3])],
       ),
       expected_error: false,
     },
