@@ -1,3 +1,5 @@
+import assert from "assert";
+
 export enum ParserNodeKind {
     AnyChar,
     CharMatchRange,
@@ -34,6 +36,9 @@ export interface CharMatchSet {
  * - The separator applies between sub-nodes and in the gaps between successive matches of a sub-node whose quantifier is `*` or `+` (the repetition interval).
  * - Separator nodes appear in this sequence node's `seps` array; they do not appear in `value` or `raw_value`.
  *
+ * `greedy_flags`: a sequence of greedy flags that corresponds in order to the child-node sequence, indicating
+ * whether each child matches greedily.
+ *
  * `ignore` (when non-null): lowest priority. Ignore rules:
  * - Ignore is attempted only when a child match fails, or when the match succeeds but the quantified result is empty because of `?`, `*`, or `+`.
  * - Before the first sub-node;
@@ -49,6 +54,8 @@ export interface CharMatchSet {
  * - 分隔符节点，用于分隔子节点序列，`accept_trailing_sep` 为 true 时，允许序列末尾出现分隔符。
  * - 分隔符会作用于子节点间以及量词为 `*` 或 `+` 的子节点重复的间隔。
  * - sep 节点会出现在本序列节点的 `seps` 数组中，不会出现在 `value` 或 `raw_value` 中。
+ * 
+ * `greedy_flags` 贪婪标志序列，依次对应子节点序列，表示子节点是否贪婪匹配。
  *
  * `ignore`（非 null 时）：优先级最低，忽略规则如下：
  * - 只有当子节点匹配失败或者匹配成功但结果因量词（`?`、`*`、`+`）为空时，才会尝试忽略。
@@ -63,6 +70,7 @@ export interface PatternSeq {
     kind: ParserNodeKind.PatternSeq;
     sub_nodes: ParserNode[];
     sub_quantifiers: string;
+    greedy_flags: boolean[];
     flat: boolean;
     sep: ParserNode | null;
     accept_trailing_sep: boolean;
@@ -153,11 +161,20 @@ export function mkPatternSeq(
   sep: ParserNode | null = null,
   accept_trailing_sep: boolean = false,
   ignore: ParserNode | null = null,
+  greedy_flags: boolean[] | undefined = undefined,
 ): PatternSeq {
+  assert(sub_nodes.length === sub_quantifiers.length, "sub_nodes and sub_quantifiers must have the same length");
+  const flags =
+    greedy_flags ?? sub_nodes.map(() => true);
+  assert(
+    flags.length === sub_nodes.length,
+    "greedy_flags must have the same length as sub_nodes",
+  );
   return {
     kind: ParserNodeKind.PatternSeq,
     sub_nodes,
     sub_quantifiers,
+    greedy_flags: flags,
     flat,
     sep,
     accept_trailing_sep,

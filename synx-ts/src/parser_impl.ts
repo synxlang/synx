@@ -332,6 +332,9 @@ export class ParserImpl implements Parser {
     }
 
     parsePatternSeq(node: PatternSeq): ASTNode | null {
+        // TODO(non-greedy): honor `node.greedy_flags[i]` for `?` / `*` / `+` (default greedy). Today all
+        // quantified matches are greedy; `parseNodeEx` / `parseCharMatchNode` loops must coordinate with
+        // suffix parsing (rest of `sub_nodes`) when a flag is false.
         const start = this.input.pos;
         const children: Array<ASTNode | ASTNode[]> = [];
         const seps: ASTNode[] = [];
