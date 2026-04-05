@@ -50,6 +50,11 @@ export interface CharMatchSet {
  * - 分隔符会作用于子节点间以及量词为 `*` 或 `+` 的子节点重复的间隔。
  * - sep 节点会出现在本序列节点的 `seps` 数组中，不会出现在 `value` 或 `raw_value` 中。
  *
+ * `guard_node_idxs`  guard 节点在 `sub_nodes` 中的索引列表：
+ * - guard节点只有出现在量词为`?`、`*`或`+`的子节点之后，才会生效，用于处理非贪婪匹配的情况。
+ * - 对于任意`?`、`*`节点A，向后依次遍历直到遇到第一个` `或`+`或guard节点B，如果节点B是guard节点，则优先匹配节点B，否则贪婪匹配。
+ * - 对于任意`+`节点A，向后依次遍历直到遇到第一个` `或`+`或guard节点B，如果节点B是guard节点，则在匹配一次节点A后，优先匹配节点B，否则贪婪匹配。
+ * 
  * `ignore`（非 null 时）：优先级最低，忽略规则如下：
  * - 只有当子节点匹配失败或者匹配成功但结果因量词（`?`、`*`、`+`）为空时，才会尝试忽略。
  * - 第一个子节点之前；
@@ -63,6 +68,7 @@ export interface PatternSeq {
     kind: ParserNodeKind.PatternSeq;
     sub_nodes: ParserNode[];
     sub_quantifiers: string;
+    guard_node_idxs: number[];
     flat: boolean;
     sep: ParserNode | null;
     accept_trailing_sep: boolean;
