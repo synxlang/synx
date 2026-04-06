@@ -17,7 +17,8 @@ import { ParseResultKind } from "./parser";
 import type { ASTNode } from "./parser";
 
 interface ParseNodeExResult {
-    nodes: ASTNode[];
+    // '*', '+' 量词时，返回 ASTNode[]，' ' 或 '?' 量词时，返回 ASTNode或null
+    ast_node_res: ASTNode[] | ASTNode | null;
     seps: ASTNode[];
 }
 
@@ -181,8 +182,8 @@ export class ParserImpl implements Parser {
         return results;
     }
 
-    parseNode(node: ParserNode, quantifier: Quantifier, ignored: ParserNode | null = null): ASTNode[] {
-        return this.parseNodeEx(node, quantifier, ignored, null).nodes;
+    parseNode(node: ParserNode, quantifier: Quantifier, ignored: ParserNode | null = null): ASTNode[] | ASTNode | null {
+        return this.parseNodeEx(node, quantifier, ignored, null).ast_node_res;
     }
 
     /**
@@ -197,12 +198,12 @@ export class ParserImpl implements Parser {
         sep: ParserNode | null = null
     ): ParseNodeExResult {
         const ret: ParseNodeExResult = {
-            nodes: [],
+            ast_node_res: [],
             seps: [],
         };
         let push_node = (ast_node: ASTNode | null) => {
             if (ast_node !== null) {
-                ret.nodes.push(ast_node);
+                ret.ast_node_res.push(ast_node);
             }
         };
         let push_sep_node = (sep_node: ASTNode | null) => {
@@ -346,7 +347,7 @@ export class ParserImpl implements Parser {
             const q = node.sub_quantifiers[i] as Quantifier;
             const sub_node = node.sub_nodes[i];
             let res = this.parseNodeEx(sub_node, q, node.ignore, node.sep);
-            let child = res.nodes;
+            let child = res.ast_node_res;
             if (!this.isSuccess()) {
                 this.input.pos = start;
                 return null;

@@ -34,10 +34,10 @@ function main(): void {
     isSuccess: parser.isSuccess(),
     getError: parser.getError(),
     input_pos: parser.input.pos,
-    nodes_count: ex.nodes.length,
+    nodes_count: ex.ast_node_res.length,
     seps_count: ex.seps.length,
     sep_ranges: ex.seps.map((s) => s.range),
-    node_ranges: ex.nodes.map((n) => n.range),
+    node_ranges: ex.ast_node_res.map((n) => n.range),
   });
   console.log("ex 详情:\n" + inspect(ex, { depth: 6, colors: true }));
 
