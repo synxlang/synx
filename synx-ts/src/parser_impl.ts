@@ -32,6 +32,11 @@ interface ParseNodeResult {
     seps: ASTNode[];
 }
 
+interface ParseSingleNodeByStackResult {
+    ast_node: ASTNode | null;
+    parsed_node_idx: number;
+}
+
 /**
  * ============================== EN ==============================
  *
@@ -301,6 +306,10 @@ export class ParserImpl implements Parser {
                 return ret;
             }
         }
+    }
+
+    parseSingleNodeByStack(node: ParserNode[], ignored: ParserNode | null = null): ParseSingleNodeByStackResult {
+
     }
 
     parseSingleNodeSimple(node: ParserNode): ASTNode | null {
