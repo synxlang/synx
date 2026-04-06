@@ -2,6 +2,13 @@ import { ParserImpl } from '../../../src/parser_impl';
 import { mkByteSeq, mkCharRange, mkCharSet } from '../../../src/parser_node';
 import type { CharMatchNode, ParserNode, Quantifier } from '../../../src/parser_node';
 import type { ParserInput } from '../../../src/parser';
+import type { ASTNode } from '../../../src/parser';
+
+function parse_node_result_count(parse_res: ASTNode[] | ASTNode | null): number {
+  if (parse_res === null) return 0;
+  if (Array.isArray(parse_res)) return parse_res.length;
+  return 1;
+}
 
 /** parseNode: multiple inputs covering character nodes, PatternSeq, and ByteSeq */
 function test_parseNode(): void {
@@ -31,8 +38,9 @@ function test_parseNode(): void {
       }
       continue;
     }
-    if (nodes.length !== c.expected_count) {
-      throw new Error(`[case ${c.id}] expected ${c.expected_count} nodes, got ${nodes.length}`);
+    const got_count = parse_node_result_count(nodes);
+    if (got_count !== c.expected_count) {
+      throw new Error(`[case ${c.id}] expected ${c.expected_count} nodes, got ${got_count}`);
     }
   }
 }

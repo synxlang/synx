@@ -5,6 +5,12 @@ import type { ASTNode, ParserInput } from '../../../src/parser';
 import { ParserNodeKind } from '../../../src/parser_node';
 import { strict as assert } from 'assert';
 
+function parse_node_result_count(parse_res: ASTNode[] | ASTNode | null): number {
+  if (parse_res === null) return 0;
+  if (Array.isArray(parse_res)) return parse_res.length;
+  return 1;
+}
+
 /** parseByteSeq: single match only; no setError, no quantifier */
 function test_parseByteSeq(): void {
   const cases: Array<{
@@ -76,16 +82,18 @@ function test_parseNode_byteSeq_quantifiers(): void {
       }
       continue;
     }
+    const count = parse_node_result_count(nodes);
     if (c.expected_values === null) {
-      if (nodes.length !== 0) {
-        throw new Error(`[case ${c.id}] expected 0 nodes, got ${nodes.length}`);
+      if (count !== 0) {
+        throw new Error(`[case ${c.id}] expected 0 nodes, got ${count}`);
       }
     } else {
-      if (nodes.length !== c.expected_values.length) {
-        throw new Error(`[case ${c.id}] expected ${c.expected_values.length} nodes, got ${nodes.length}`);
+      if (count !== c.expected_values.length) {
+        throw new Error(`[case ${c.id}] expected ${c.expected_values.length} nodes, got ${count}`);
       }
-      for (let i = 0; i < nodes.length; i++) {
-        if (nodes[i]!.value !== c.expected_values[i]) {
+      const arr = Array.isArray(nodes) ? nodes : nodes === null ? [] : [nodes];
+      for (let i = 0; i < arr.length; i++) {
+        if (arr[i]!.value !== c.expected_values[i]) {
           throw new Error(`[case ${c.id}] node ${i} value mismatch`);
         }
       }
