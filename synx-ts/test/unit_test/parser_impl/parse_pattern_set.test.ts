@@ -17,7 +17,7 @@ function test_parsePatternSet_basic(): void {
       id: 1,
       input: { src: 'ab', pos: 0 },
       expected: {
-        parser_nodes: [set.patterns[0] as ParserNode, set],
+        parser_nodes: [set.sub_nodes[0] as ParserNode, set],
         range: [0, 2],
         value: 'ab',
         raw_value: 'ab',
@@ -29,7 +29,7 @@ function test_parsePatternSet_basic(): void {
       id: 2,
       input: { src: 'a', pos: 0 },
       expected: {
-        parser_nodes: [set.patterns[1] as ParserNode, set],
+        parser_nodes: [set.sub_nodes[1] as ParserNode, set],
         range: [0, 1],
         value: 'a',
         raw_value: 'a',
@@ -55,7 +55,7 @@ function test_parsePatternSet_basic(): void {
 function test_parsePatternSet_infinite_recursion_self(): void {
   const set: PatternSet = mkPatternSet([]);
   // Self-recursive: attempting the only alternative re-enters the same (node,pos) on the call stack.
-  set.patterns.push(set as unknown as ParserNode);
+  set.sub_nodes.push(set as unknown as ParserNode);
 
   const parser = new ParserImpl({ parser_nodes: [] });
   parser.initParse({ src: 'x', pos: 0 });
@@ -67,8 +67,8 @@ function test_parsePatternSet_infinite_recursion_self(): void {
 function test_parsePatternSet_infinite_recursion_cycle(): void {
   const a: PatternSet = mkPatternSet([]);
   const b: PatternSet = mkPatternSet([]);
-  a.patterns.push(b as unknown as ParserNode);
-  b.patterns.push(a as unknown as ParserNode);
+  a.sub_nodes.push(b as unknown as ParserNode);
+  b.sub_nodes.push(a as unknown as ParserNode);
 
   const parser = new ParserImpl({ parser_nodes: [] });
   parser.initParse({ src: 'x', pos: 0 });
@@ -102,7 +102,7 @@ function test_parsePatternSet_nested_seq_and_set(): void {
     range: [0, 3],
     value: [
       {
-        parser_nodes: [innerSet.patterns[0] as ParserNode, innerSet, outerSet],
+        parser_nodes: [innerSet.sub_nodes[0] as ParserNode, innerSet, outerSet],
         range: [0, 2],
         value: 'ab',
         raw_value: 'ab',
@@ -118,7 +118,7 @@ function test_parsePatternSet_nested_seq_and_set(): void {
     ],
     raw_value: [
       {
-        parser_nodes: [innerSet.patterns[0] as ParserNode, innerSet, outerSet],
+        parser_nodes: [innerSet.sub_nodes[0] as ParserNode, innerSet, outerSet],
         range: [0, 2],
         value: 'ab',
         raw_value: 'ab',
@@ -160,9 +160,9 @@ function test_parsePatternSet_infinite_recursion_nested_cycle(): void {
   const seqB = mkPatternSeq([y, c], '  ');
   const seqC = mkPatternSeq([z, a], '  ');
 
-  a.patterns.push(q as unknown as ParserNode, seqA as unknown as ParserNode);
-  b.patterns.push(r as unknown as ParserNode, seqB as unknown as ParserNode);
-  c.patterns.push(s as unknown as ParserNode, seqC as unknown as ParserNode);
+  a.sub_nodes.push(q as unknown as ParserNode, seqA as unknown as ParserNode);
+  b.sub_nodes.push(r as unknown as ParserNode, seqB as unknown as ParserNode);
+  c.sub_nodes.push(s as unknown as ParserNode, seqC as unknown as ParserNode);
 
   const parser = new ParserImpl({ parser_nodes: [] });
   // Make the first literal fail at pos=0 so the cycle starts immediately at the same position.
@@ -183,7 +183,7 @@ function test_parsePatternSet_left_recursive_plus_chain(): void {
   const plus = mkByteSeq('+');
   const expr = mkPatternSet([]);
   const seq = mkPatternSeq([expr, plus, one], '   ');
-  expr.patterns.push(seq as unknown as ParserNode, one as unknown as ParserNode);
+  expr.sub_nodes.push(seq as unknown as ParserNode, one as unknown as ParserNode);
 
   const parser1 = new ParserImpl({ parser_nodes: [] });
   parser1.initParse({ src: '1', pos: 0 });
@@ -240,7 +240,7 @@ function test_parsePatternSet_left_recursive_expr_plus_expr(): void {
   const plus = mkByteSeq('+');
   const expr = mkPatternSet([]);
   const seq = mkPatternSeq([expr, plus, expr], '   ');
-  expr.patterns.push(seq as unknown as ParserNode, one as unknown as ParserNode);
+  expr.sub_nodes.push(seq as unknown as ParserNode, one as unknown as ParserNode);
 
   const leafAt = (lo: number, hi: number): ASTNode => ({
     parser_nodes: [one, expr],
@@ -302,7 +302,7 @@ function test_parsePatternSet_left_recursive_list_ab(): void {
   const b = mkByteSeq('b');
   const list = mkPatternSet([]);
   const pair = mkPatternSeq([list, b], '  ');
-  list.patterns.push(pair as unknown as ParserNode, a as unknown as ParserNode);
+  list.sub_nodes.push(pair as unknown as ParserNode, a as unknown as ParserNode);
 
   const pA = new ParserImpl({ parser_nodes: [] });
   pA.initParse({ src: 'a', pos: 0 });
@@ -355,8 +355,8 @@ function test_parsePatternSet_synx_shape_ABC(): void {
   const A: PatternSet = mkPatternSet([]);
   const C: PatternSet = mkPatternSet([mkByteSeq('12')]);
   const B = mkPatternSeq([mkByteSeq('ab'), C], '  ');
-  A.patterns.push(B as unknown as ParserNode);
-  C.patterns.push(A as unknown as ParserNode);
+  A.sub_nodes.push(B as unknown as ParserNode);
+  C.sub_nodes.push(A as unknown as ParserNode);
 
   const parser = new ParserImpl({ parser_nodes: [] });
   parser.initParse({ src: 'ab12', pos: 0 });
@@ -367,11 +367,11 @@ function test_parsePatternSet_synx_shape_ABC(): void {
     range: [0, 4],
     value: [
       { parser_nodes: [B.sub_nodes[0] as ParserNode], range: [0, 2], value: 'ab', raw_value: 'ab', seps: [] },
-      { parser_nodes: [C.patterns[0] as ParserNode, C], range: [2, 4], value: '12', raw_value: '12', seps: [] },
+      { parser_nodes: [C.sub_nodes[0] as ParserNode, C], range: [2, 4], value: '12', raw_value: '12', seps: [] },
     ],
     raw_value: [
       { parser_nodes: [B.sub_nodes[0] as ParserNode], range: [0, 2], value: 'ab', raw_value: 'ab', seps: [] },
-      { parser_nodes: [C.patterns[0] as ParserNode, C], range: [2, 4], value: '12', raw_value: '12', seps: [] },
+      { parser_nodes: [C.sub_nodes[0] as ParserNode, C], range: [2, 4], value: '12', raw_value: '12', seps: [] },
     ],
     seps: [],
   });

@@ -308,13 +308,13 @@ export class ParserImpl implements Parser {
         this.pattern_set_node_parse_stack.push({ node, pos: start, alt_idx });
 
         try {
-            if(alt_idx >= node.patterns.length) {
+            if(alt_idx >= node.sub_nodes.length) {
                 this.setError(this.input.pos, "pattern set has no more alternatives");
                 return null;
             }
 
-            for (let i = alt_idx; i < node.patterns.length; i++) {
-                const child = this.parseSingleNode(node.patterns[i]);
+            for (let i = alt_idx; i < node.sub_nodes.length; i++) {
+                const child = this.parseSingleNode(node.sub_nodes[i]);
                 if (this.isSuccess()) {
                     if (child === null) {
                         return null;

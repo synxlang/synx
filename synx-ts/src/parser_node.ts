@@ -113,7 +113,7 @@ export interface PatternSeq {
  */
 export interface PatternSet {
     kind: ParserNodeKind.PatternSet;
-    patterns: ParserNode[];
+    sub_nodes: ParserNode[];
 }
 
 /** Matches any single Char (Unicode scalar or error code point). */
@@ -176,6 +176,6 @@ export function mkByteSeq(literal: string): ByteSeq {
 }
 
 export function mkPatternSet(patterns: ParserNode[]): PatternSet {
-  return { kind: ParserNodeKind.PatternSet, patterns };
+  return { kind: ParserNodeKind.PatternSet, sub_nodes: patterns };
 }
 
