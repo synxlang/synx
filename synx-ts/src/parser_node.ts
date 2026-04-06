@@ -91,27 +91,32 @@ export interface PatternSeq {
 
 /**
  * ============================== EN ==============================
- * `PatternSet`: ordered alternatives (try `patterns` from left to right).
+ * `PatternSet`: ordered alternatives (try `sub_nodes` from left to right).
  *
  * Conventions:
  * - Parsing prefers the first alternative that matches.
  * - On success, this PatternSet is only appended into the winning AST node's `parser_nodes`.
+ *
+ * `neg_flags` (same length as `sub_nodes`): when `neg_flags[i]` is true, that alternative is negated.
+ * If matching that alternative **succeeds**, the whole PatternSet fails (no further alternatives).
+ * If it **fails**, behavior is the same as a non-negated failure: rewind `pos` and try the next alternative.
  *
  * Long infix chains: prefer `\sep` lists in synx, then resolve associativity in a later pass;
  * left-recursion limits and other authoring shapes: see `ParserImpl`'s JSDoc on
  * `pattern_set_node_parse_stack`.
  *
  * ============================== 中文 ==============================
- * `PatternSet`：有序分支（从左到右尝试 `patterns`）。
+ * `PatternSet`：有序分支（从左到右尝试 `sub_nodes`）。
  *
  * 约定：
  * - 解析时优先采用第一个匹配成功的分支。
  * - 成功时，本 `PatternSet` 只会被追加到胜出 AST 节点的 `parser_nodes` 中。
  *
+ * `neg_flags`（与 `sub_nodes` 等长）：`true` 表示该分支为否定分支；若该分支**匹配成功**，
+ * 则整棵 `PatternSet` 失败且不再尝试后续分支；若**匹配失败**，与非否定分支失败相同，回绕并尝试下一分支。
+ *
  * 长中缀链：在 synx 中优先用 `\sep` 收列表，再结合性在后续阶段处理；左递归能力边界及其它写法见
  * `ParserImpl` 中 `pattern_set_node_parse_stack` 的 JSDoc。
- * 
- * `neg_flags`：否定节点标志，用于标记哪些子节点是否定节点。匹配到非否定节点匹配直接成功，匹配到否定节点直接失败，都不再尝试后续节点。
  */
 export interface PatternSet {
     kind: ParserNodeKind.PatternSet;
@@ -178,7 +183,19 @@ export function mkByteSeq(literal: string): ByteSeq {
   return { kind: ParserNodeKind.ByteSeq, literal };
 }
 
-export function mkPatternSet(patterns: ParserNode[]): PatternSet {
-  return { kind: ParserNodeKind.PatternSet, sub_nodes: patterns };
+export function mkPatternSet(
+  patterns: ParserNode[],
+  neg_flags?: boolean[],
+): PatternSet {
+  const n = patterns.length;
+  const flags = neg_flags ?? Array.from({ length: n }, () => false);
+  if (flags.length !== n) {
+    throw new Error("mkPatternSet: neg_flags length must match patterns length");
+  }
+  return {
+    kind: ParserNodeKind.PatternSet,
+    sub_nodes: patterns,
+    neg_flags: flags,
+  };
 }
 

@@ -315,14 +315,20 @@ export class ParserImpl implements Parser {
 
             for (let i = alt_idx; i < node.sub_nodes.length; i++) {
                 const child = this.parseSingleNode(node.sub_nodes[i]);
-                if (this.isSuccess()) {
-                    if (child === null) {
-                        return null;
-                    }
-                    child.parser_nodes.push(node);
-                    return child;
+                if (!this.isSuccess()) {
+                    this.input.pos = start;
+                    continue;
                 }
-                this.input.pos = start;
+                if (node.neg_flags[i]) {
+                    this.input.pos = start;
+                    this.setError(this.input.pos, "negated alternative matched");
+                    return null;
+                }
+                if (child === null) {
+                    return null;
+                }
+                child.parser_nodes.push(node);
+                return child;
             }
             assert.ok(!this.isSuccess());
             return null;

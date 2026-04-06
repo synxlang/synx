@@ -56,6 +56,7 @@ function test_parsePatternSet_infinite_recursion_self(): void {
   const set: PatternSet = mkPatternSet([]);
   // Self-recursive: attempting the only alternative re-enters the same (node,pos) on the call stack.
   set.sub_nodes.push(set as unknown as ParserNode);
+  set.neg_flags.push(false);
 
   const parser = new ParserImpl({ parser_nodes: [] });
   parser.initParse({ src: 'x', pos: 0 });
@@ -69,6 +70,8 @@ function test_parsePatternSet_infinite_recursion_cycle(): void {
   const b: PatternSet = mkPatternSet([]);
   a.sub_nodes.push(b as unknown as ParserNode);
   b.sub_nodes.push(a as unknown as ParserNode);
+  a.neg_flags.push(false);
+  b.neg_flags.push(false);
 
   const parser = new ParserImpl({ parser_nodes: [] });
   parser.initParse({ src: 'x', pos: 0 });
@@ -163,6 +166,9 @@ function test_parsePatternSet_infinite_recursion_nested_cycle(): void {
   a.sub_nodes.push(q as unknown as ParserNode, seqA as unknown as ParserNode);
   b.sub_nodes.push(r as unknown as ParserNode, seqB as unknown as ParserNode);
   c.sub_nodes.push(s as unknown as ParserNode, seqC as unknown as ParserNode);
+  a.neg_flags.push(false, false);
+  b.neg_flags.push(false, false);
+  c.neg_flags.push(false, false);
 
   const parser = new ParserImpl({ parser_nodes: [] });
   // Make the first literal fail at pos=0 so the cycle starts immediately at the same position.
@@ -184,6 +190,7 @@ function test_parsePatternSet_left_recursive_plus_chain(): void {
   const expr = mkPatternSet([]);
   const seq = mkPatternSeq([expr, plus, one], '   ');
   expr.sub_nodes.push(seq as unknown as ParserNode, one as unknown as ParserNode);
+  expr.neg_flags.push(false, false);
 
   const parser1 = new ParserImpl({ parser_nodes: [] });
   parser1.initParse({ src: '1', pos: 0 });
@@ -241,6 +248,7 @@ function test_parsePatternSet_left_recursive_expr_plus_expr(): void {
   const expr = mkPatternSet([]);
   const seq = mkPatternSeq([expr, plus, expr], '   ');
   expr.sub_nodes.push(seq as unknown as ParserNode, one as unknown as ParserNode);
+  expr.neg_flags.push(false, false);
 
   const leafAt = (lo: number, hi: number): ASTNode => ({
     parser_nodes: [one, expr],
@@ -303,6 +311,7 @@ function test_parsePatternSet_left_recursive_list_ab(): void {
   const list = mkPatternSet([]);
   const pair = mkPatternSeq([list, b], '  ');
   list.sub_nodes.push(pair as unknown as ParserNode, a as unknown as ParserNode);
+  list.neg_flags.push(false, false);
 
   const pA = new ParserImpl({ parser_nodes: [] });
   pA.initParse({ src: 'a', pos: 0 });
@@ -357,6 +366,8 @@ function test_parsePatternSet_synx_shape_ABC(): void {
   const B = mkPatternSeq([mkByteSeq('ab'), C], '  ');
   A.sub_nodes.push(B as unknown as ParserNode);
   C.sub_nodes.push(A as unknown as ParserNode);
+  A.neg_flags.push(false);
+  C.neg_flags.push(false);
 
   const parser = new ParserImpl({ parser_nodes: [] });
   parser.initParse({ src: 'ab12', pos: 0 });
@@ -378,6 +389,54 @@ function test_parsePatternSet_synx_shape_ABC(): void {
   assert(parser.isSuccess());
 }
 
+/** `neg_flags`: negated branch inner success fails whole set; inner failure falls through like non-neg failure. */
+function test_parsePatternSet_neg_flags(): void {
+  const aLit = mkByteSeq('a');
+  const bLit = mkByteSeq('b');
+
+  const negThenB = mkPatternSet([aLit, bLit], [true, false]);
+  const p1 = new ParserImpl({ parser_nodes: [] });
+  p1.initParse({ src: 'b', pos: 0 });
+  const r1 = p1.parseSingleNode(negThenB);
+  assert(p1.isSuccess());
+  assert.deepStrictEqual(r1, {
+    parser_nodes: [bLit, negThenB],
+    range: [0, 1],
+    value: 'b',
+    raw_value: 'b',
+    seps: [],
+  });
+
+  const p2 = new ParserImpl({ parser_nodes: [] });
+  p2.initParse({ src: 'a', pos: 0 });
+  assert.strictEqual(p2.parseSingleNode(negThenB), null);
+  assert.ok(!p2.isSuccess());
+
+  const onlyNegA = mkPatternSet([aLit], [true]);
+  const p3 = new ParserImpl({ parser_nodes: [] });
+  p3.initParse({ src: 'x', pos: 0 });
+  assert.strictEqual(p3.parseSingleNode(onlyNegA), null);
+  assert.ok(!p3.isSuccess());
+
+  const p4 = new ParserImpl({ parser_nodes: [] });
+  p4.initParse({ src: 'a', pos: 0 });
+  assert.strictEqual(p4.parseSingleNode(onlyNegA), null);
+  assert.ok(!p4.isSuccess());
+
+  const nonNegLikeNegFallthrough = mkPatternSet([aLit, bLit], [false, false]);
+  const p5 = new ParserImpl({ parser_nodes: [] });
+  p5.initParse({ src: 'b', pos: 0 });
+  const r5 = p5.parseSingleNode(nonNegLikeNegFallthrough);
+  assert(p5.isSuccess());
+  assert.deepStrictEqual(r5, {
+    parser_nodes: [bLit, nonNegLikeNegFallthrough],
+    range: [0, 1],
+    value: 'b',
+    raw_value: 'b',
+    seps: [],
+  });
+}
+
 function runAllTests(): void {
   console.log('Running parsePatternSet tests...\n');
   test_parsePatternSet_basic();
@@ -389,6 +448,7 @@ function runAllTests(): void {
   test_parsePatternSet_left_recursive_expr_plus_expr();
   test_parsePatternSet_left_recursive_list_ab();
   test_parsePatternSet_synx_shape_ABC();
+  test_parsePatternSet_neg_flags();
   console.log('\nAll parsePatternSet tests passed!');
 }
 
