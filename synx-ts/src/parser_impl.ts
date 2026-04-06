@@ -27,7 +27,7 @@ import type { ASTNode } from "./parser";
  * '*', '+' 量词时，返回 ASTNode[]，' ' 或 '?' 量词时，返回 ASTNode或null
  * CharMatchNode特殊，'*', '+' 量词时，无sep且无ignore时合并为单个ASTNode；有sep或有ignore时为 ASTNode[]（不合并）
  */
-interface ParseNodeExResult {
+interface ParseNodeResult {
     ast_node_res: ASTNode[] | ASTNode | null;
     seps: ASTNode[];
 }
@@ -156,7 +156,7 @@ export class ParserImpl implements Parser {
 
     parse(input: ParserInput, root: ParserNode): ParseResult {
         this.initParse(input);
-        const parse_node_res = this.parseNode(root, " ");
+        const parse_node_res = this.parseSingleNode(root);
 
         if (!this.isSuccess()) {
             return {
@@ -185,7 +185,7 @@ export class ParserImpl implements Parser {
 
         while (this.input.pos < this.input.src.length) {
             const start = this.input.pos;
-            const parse_node_res = this.parseNode(node, " ");
+            const parse_node_res = this.parseSingleNode(node);
 
             if (this.isSuccess()) {
                 results.push(parse_node_res as ASTNode);
@@ -198,21 +198,17 @@ export class ParserImpl implements Parser {
         return results;
     }
 
-    parseNode(node: ParserNode, quantifier: Quantifier, ignored: ParserNode | null = null): ASTNode[] | ASTNode | null {
-        return this.parseNodeEx(node, quantifier, ignored, null).ast_node_res;
-    }
-
     /**
      * When `sep` is non-null, it is parsed only between successive matches of the same `node` while expanding `*` / `+` (the loop below).
      *
      * 当 `sep` 非 null 时，仅在本函数展开 `*` / `+` 的循环中、于同一 `node` 的相邻两次匹配之间解析分隔符。
      */
-    parseNodeEx(
+    parseNode(
         node: ParserNode,
         quantifier: Quantifier,
         ignored: ParserNode | null = null,
         sep: ParserNode | null = null
-    ): ParseNodeExResult {
+    ): ParseNodeResult {
         if (ignored === null && sep === null && CHAR_MATCH_NODE_KINDS.includes(node.kind)) {
             const result = this.parseCharMatchNode(node as CharMatchNode, quantifier);
             return {
@@ -366,7 +362,7 @@ export class ParserImpl implements Parser {
         for (let i = 0; i < node.sub_nodes.length; i++) {
             const q = node.sub_quantifiers[i] as Quantifier;
             const sub_node = node.sub_nodes[i];
-            const parse_ex_res = this.parseNodeEx(sub_node, q, node.ignore, node.sep);
+            const parse_ex_res = this.parseNode(sub_node, q, node.ignore, node.sep);
             const ast_res = parse_ex_res.ast_node_res;
             if (!this.isSuccess()) {
                 this.input.pos = start;
