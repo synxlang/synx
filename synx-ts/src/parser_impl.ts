@@ -389,12 +389,21 @@ export class ParserImpl implements Parser {
         };
     }
 
+    parseCharMatchNode(node: CharMatchNode, quantifier: Quantifier, ignored: ParserNode | null = null): ASTNode | null {
+        return this.parseCharMatchNodeEx(node, quantifier, ignored, null);
+    }
+    
     /**
      * Character matching: match according to quantifier and merge into a string, returns an ASTNode (value/raw_value is the matched string); 
      *
      * 字符匹配：按量词匹配并合并为字符串，返回 ASTNode（value/raw_value 为被匹配的字符串）；
      */
-    parseCharMatchNode(node: CharMatchNode, quantifier: Quantifier, ignored: ParserNode | null = null): ASTNode | null {
+    parseCharMatchNodeEx(
+        node: CharMatchNode, 
+        quantifier: Quantifier, 
+        ignored: ParserNode | null = null, 
+        sep: ParserNode | null = null
+    ): ASTNode | null {
         const match_start = this.parseSingleCharMatchNode(node, ignored);
         const make_returned = (end: number, value: string): ASTNode => ({
             parser_nodes: [node],
