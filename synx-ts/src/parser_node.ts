@@ -116,6 +116,7 @@ export interface PatternSet {
     patterns: ParserNode[];
 }
 
+/** Matches any single Char (Unicode scalar or error code point). */
 export const AnyChar = { kind: ParserNodeKind.AnyChar } as const;
 
 // single character match node
