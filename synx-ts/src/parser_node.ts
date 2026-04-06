@@ -1,4 +1,5 @@
 export enum ParserNodeKind {
+    AnyByte,
     AnyChar,
     CharMatchRange,
     CharMatchSet,
@@ -116,10 +117,11 @@ export interface PatternSet {
     patterns: ParserNode[];
 }
 
+export const AnyByte = { kind: ParserNodeKind.AnyByte } as const;
 export const AnyChar = { kind: ParserNodeKind.AnyChar } as const;
 
 // single character match node
-export type CharMatchNode = CharMatchRange | CharMatchSet | typeof AnyChar;
+export type CharMatchNode = CharMatchRange | CharMatchSet | typeof AnyChar | typeof AnyByte;
 export type ParserNode = CharMatchNode | PatternSeq | ByteSeq | PatternSet;
 
 /** All kinds that belong to CharMatchNode, used for branch checking to avoid hardcoding multiple kinds */
