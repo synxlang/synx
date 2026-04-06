@@ -40,7 +40,7 @@ export interface CharMatchSet {
  * - Between adjacent sub-nodes;
  * - Between two successive matches of a sub-node whose quantifier is `*` or `+` (i.e. the gap between repetitions of that child);
  * Text matched solely through `ignore` does not appear in this sequence node's `raw_value`.
- * When `flat` is true, `ignore` still participates in matching, but does not affect `value`.
+ * When `raw` is true, `ignore` still participates in matching, but does not affect `value`.
  *
  * ============================== 中文 ==============================
  * `sub_nodes` 子节点序列，`sub_quantifiers` 量词序列依次对应子节点序列
@@ -56,14 +56,14 @@ export interface CharMatchSet {
  * - 相邻子节点之间；
  * - 当某子节点量词为 `*` 或 `+` 时，该子节点连续两次匹配之间（即该子重复的间隔）;
  * 仅通过 `ignore` 匹配到的文本不会出现在本序列节点的 `raw_value` 中。
- * `flat` 为 true 时 `ignore` 还是会起匹配上的作用，但是不会影响 `value` 的值。
+ * `raw` 为 true 时 `ignore` 还是会起匹配上的作用，但是不会影响 `value` 的值。
  * 
  */
 export interface PatternSeq {
     kind: ParserNodeKind.PatternSeq;
     sub_nodes: ParserNode[];
     sub_quantifiers: string;
-    flat: boolean;
+    raw: boolean;
     sep: ParserNode | null;
     accept_trailing_sep: boolean;
     ignore: ParserNode | null;
@@ -151,7 +151,7 @@ export function mkCharSet(
 export function mkPatternSeq(
   sub_nodes: ParserNode[],
   sub_quantifiers: string,
-  flat: boolean = false,
+  raw: boolean = false,
   sep: ParserNode | null = null,
   accept_trailing_sep: boolean = false,
   ignore: ParserNode | null = null,
@@ -160,7 +160,7 @@ export function mkPatternSeq(
     kind: ParserNodeKind.PatternSeq,
     sub_nodes,
     sub_quantifiers,
-    flat,
+    raw,
     sep,
     accept_trailing_sep,
     ignore,

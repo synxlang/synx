@@ -7,7 +7,7 @@ export interface ASTNode {
     range: [number, number];    // [start, end)
     /** 
      * Semantic value, constructed exactly according to the => return value on the right side of the rule definition.
-     * For PatternSeq nodes with no custom rule: if node.flat=true, value is the matched substring; otherwise value is the array of child AST nodes.
+     * For PatternSeq nodes with no custom rule: if node.raw=true, value is the matched substring; otherwise value is the array of child AST nodes.
      */
     value: any;
     /** Raw AST value; for PatternSeq, each `*`/`+` sub-node is one `ASTNode[]` slot; ` ` / `?` slots are single `ASTNode`s (flattened). */

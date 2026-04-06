@@ -375,7 +375,7 @@ export class ParserImpl implements Parser {
             }
         }
 
-        const value = node.flat
+        const value = node.raw
             ? this.input.src.slice(start, this.input.pos)
             : children;
 

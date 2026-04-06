@@ -9,7 +9,7 @@ StringEscapePrefix="\\";
 
 Space=SpaceChar+;
 DigitLiteral=Digit+;
-Symbol=\flat (Letter,SymbolChar*);
+Symbol=\raw (Letter,SymbolChar*);
 SymbolDotChain=(symbols:Symbol* \sep ".")=>symbols;
 GeneralSymbol={Symbol;SymbolDotChain};          
 
@@ -35,7 +35,7 @@ CharSet = {
 Option=(pattern:Pattern, "?")=>pattern;
 OneOrMany=(pattern:Pattern, "*")=>pattern;
 Many=(pattern:Pattern, "+")=>pattern;
-FlatPattern=("\\flat", pattern:Pattern \ignore Space)=>pattern;
+RawPattern=("\\raw", pattern:Pattern \ignore Space)=>pattern;
 
 AssociateByPart=("\\associateby", pattern:Pattern \ignore Space)=>pattern;
 NegPattern=("-", pattern:Pattern \ignore Space)=>[.pattern=pattern]; \\ reject if match, only can be used in PatternSet
@@ -55,7 +55,7 @@ ConditionPattern=(pattern:Pattern, "\\where", condition:ConditionExpr \ignore Sp
 PatternBinding=(symbol:Symbol,":",pattern:Pattern)=>[.symbol=symbol, .pattern=pattern];
 Rule=(pattern:PatternSeq,"=>",returned:Expr)=>[.pattern=pattern, .returned=returned];
 
-Pattern={NegPattern;CharSet;StringLiteral;Option;OneOrMany;Many;FlatPattern;PatternSeq;PatternSet;PatternBinding;ConditionPattern;Rule;GeneralSymbol \associateby "()"};
+Pattern={NegPattern;CharSet;StringLiteral;Option;OneOrMany;Many;RawPattern;PatternSeq;PatternSet;PatternBinding;ConditionPattern;Rule;GeneralSymbol \associateby "()"};
 
 List=(exprs:Expr* \sep "," \ignore Space \enclosedby "[]")=>exprs;
 
@@ -74,7 +74,7 @@ Expr={
     List;
     Struct;
     Pattern;
-    Flat;
+    Raw;
 
     FuncCallExpr;
     FuncCallArgsList;
@@ -85,7 +85,7 @@ Keyword={
     "\\sep"; "\\ignore"; "\\enclosedby";
     "\\where";
     "\\associateby";
-    "\\flat";  \\ flattern all matched pieces into single string
+    "\\raw";  \\ rawtern all matched pieces into single string
 };
 
 Synx=(expr:Expr* \sep ";" \ignore Space);
