@@ -33,6 +33,19 @@ export function matchCharRange(
   return { matched: false, new_pos: pos };
 }
 
+function charsOfCharMatchString(s: string): string[] {
+  const out: string[] = [];
+  let i = 0;
+  while (i < s.length) {
+    const cp = s.codePointAt(i);
+    if (cp === undefined) break;
+    const len = cp > 0xffff ? 2 : 1;
+    out.push(s.slice(i, i + len));
+    i += len;
+  }
+  return out;
+}
+
 const HIGH_SURROGATE_MIN = 0xd800;
 const HIGH_SURROGATE_MAX = 0xdbff;
 const LOW_SURROGATE_MIN = 0xdc00;
@@ -65,7 +78,7 @@ export function matchChar(src: string, pos: number, match_set: CharMatchSet): Ch
   const nodes: CharMatchNode[] = [];
 
   if (typeof match_set.sub_nodes === 'string') {
-    const setChars = [...match_set.sub_nodes];
+    const setChars = charsOfCharMatchString(match_set.sub_nodes);
     if (setChars.includes(char)) {
       nodes.push(match_set);
       return { nodes, new_pos: pos + length };
