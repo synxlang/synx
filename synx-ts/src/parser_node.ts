@@ -110,10 +110,13 @@ export interface PatternSeq {
  *
  * 长中缀链：在 synx 中优先用 `\sep` 收列表，再结合性在后续阶段处理；左递归能力边界及其它写法见
  * `ParserImpl` 中 `pattern_set_node_parse_stack` 的 JSDoc。
+ * 
+ * `neg_flags`：否定节点标志，用于标记哪些子节点是否定节点。匹配到非否定节点匹配直接成功，匹配到否定节点直接失败，都不再尝试后续节点。
  */
 export interface PatternSet {
     kind: ParserNodeKind.PatternSet;
     sub_nodes: ParserNode[];
+    neg_flags: boolean[];
 }
 
 /** Matches any single Char (Unicode scalar or error code point). */
