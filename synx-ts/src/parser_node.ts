@@ -3,7 +3,6 @@ export enum ParserNodeKind {
     CharMatchRange,
     CharMatchSet,
     PatternSeq,
-    /** Fixed literal substring in the parse input, modeled as a binary string (raw bytes). */
     ByteSeq,
     PatternSet,
     ParserNodeKindEnd,
@@ -11,37 +10,34 @@ export enum ParserNodeKind {
 
 export type Quantifier = '?' | '*' | '+' | ' ';
 
+/**
+ * Range lower bound and upper bound: each is a single logical character, potentially composed of multiple UTF-16 code units (e.g., emoji).
+ *
+ * 范围下界与上界：各为一个逻辑字符，可能由多个 UTF-16 码元组成（如 emoji）。
+ */
 export interface CharMatchRange {
     kind: ParserNodeKind.CharMatchRange;
-    /** Range lower bound: a single logical character, potentially composed of multiple UTF-16 code units (e.g., emoji) */
     start: string;
-    /** Range upper bound: a single logical character, potentially composed of multiple UTF-16 code units (e.g., emoji) */
     end: string;
 }
 
+/**
+ * Array of child nodes, or a string (indicating matching any logical character in the string, each character may consist of multiple code units).
+ *
+ * 子节点数组，或字符串（表示匹配串中任意逻辑字符，每个字符可由多个码元组成）。
+ */
 export interface CharMatchSet {
     kind: ParserNodeKind.CharMatchSet;
-    /** Array of child nodes, or a string (indicating matching any logical character in the string, each character may consist of multiple code units) */
     sub_nodes: CharMatchNode[] | string;
 }
 
 /**
- * ============================== EN ==============================
- * `ByteSeq`: match a fixed contiguous literal in the parse input, treated as a **binary string** (sequence
- * of raw bytes). `pos` / `range` refer to **byte offsets and lengths** in that model. Implementation uses
- * `String.prototype.startsWith` / `slice` on `ParserInput.src` with the same offset arithmetic; authors
- * should supply `src` and `literal` as binary-safe payloads (e.g. one char per byte) when matching raw bytes.
- * Same convenience role as a `PatternSeq` of single-byte steps, but shorter to author (keywords, delimiters).
- *
- * ============================== 中文 ==============================
- * `ByteSeq`：在解析输入中匹配固定连续字面量；输入与字面量均按**二进制串**（字节序列）理解，`pos` / `range`
- * 表示**字节**偏移与跨度。实现上仍用 `startsWith` / `slice` 与当前 `pos` 做比较与截取；作者应保证 `src` 与
- * `literal` 在需要匹配原始字节时按字节安全方式存放（例如一字节一码元）。作用类似把逐字节写成 `PatternSeq`，
- * 但更便于书写关键字、分隔符等。
+ * `literal`: non-empty string to match.
+ * 
+ * `literal`：待匹配的字符串。
  */
 export interface ByteSeq {
   kind: ParserNodeKind.ByteSeq;
-  /** Non-empty binary substring to match (raw bytes; `string` holds them in this layer). */
   literal: string;
 }
 
@@ -64,7 +60,7 @@ export interface ByteSeq {
  *
  * ============================== 中文 ==============================
  * `sub_nodes` 子节点序列，`sub_quantifiers` 量词序列依次对应子节点序列
- * 
+ *
  * `sep` （非 null 时）：
  * - 分隔符节点，用于分隔子节点序列，`accept_trailing_sep` 为 true 时，允许序列末尾出现分隔符。
  * - 分隔符会作用于子节点间以及量词为 `*` 或 `+` 的子节点重复的间隔。
@@ -77,7 +73,7 @@ export interface ByteSeq {
  * - 当某子节点量词为 `*` 或 `+` 时，该子节点连续两次匹配之间（即该子重复的间隔）;
  * 仅通过 `ignore` 匹配到的文本不会出现在本序列节点的 `raw_value` 中。
  * `raw` 为 true 时 `ignore` 还是会起匹配上的作用，但是不会影响 `value` 的值。
- * 
+ *
  */
 export interface PatternSeq {
     kind: ParserNodeKind.PatternSeq;
@@ -124,27 +120,31 @@ export interface PatternSet {
     neg_flags: boolean[];
 }
 
-/** Matches any single Char (Unicode scalar or error code point). */
+/**
+ * Matches any single Char (Unicode scalar or error code point). For `*` and `+` quantifiers, always non-greedy matching.
+ *
+ * 匹配任意单个字符（Unicode 标量值或错误码点）。对于`*`和`+`量词总是非贪婪匹配。
+ */
 export const AnyChar = { kind: ParserNodeKind.AnyChar } as const;
 
-// single character match node
+/**
+ * Single character match node.
+ *
+ * 单字符匹配节点。
+ */
 export type CharMatchNode = CharMatchRange | CharMatchSet | typeof AnyChar;
 export type ParserNode = CharMatchNode | PatternSeq | ByteSeq | PatternSet;
 
-/** All kinds that belong to CharMatchNode, used for branch checking to avoid hardcoding multiple kinds */
+/**
+ * All kinds that belong to CharMatchNode, used for branch checking to avoid hardcoding multiple kinds.
+ *
+ * 属于 CharMatchNode 的 kind 集合，用于分支判断，避免硬编码多种 kind。
+ */
 export const CHAR_MATCH_NODE_KINDS: ParserNodeKind[] = [
     ParserNodeKind.AnyChar,
     ParserNodeKind.CharMatchRange,
     ParserNodeKind.CharMatchSet,
 ];
-
-
-
-
-
-
-
-
 
 export function mkCharRange(start: string, end: string): CharMatchRange {
   return { kind: ParserNodeKind.CharMatchRange, start, end };
@@ -175,7 +175,11 @@ export function mkPatternSeq(
   };
 }
 
-/** Builds a `ByteSeq`; throws if `literal` is empty. */
+/**
+ * Builds a `ByteSeq`; throws if `literal` is empty.
+ *
+ * 构造 `ByteSeq`；若 `literal` 为空则抛出。
+ */
 export function mkByteSeq(literal: string): ByteSeq {
   if (literal.length === 0) {
     throw new Error("ByteSeq.literal must be non-empty");
@@ -198,4 +202,3 @@ export function mkPatternSet(
     neg_flags: flags,
   };
 }
-
