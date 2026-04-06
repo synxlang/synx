@@ -118,6 +118,7 @@ export interface PatternSet {
 
 export const AnyChar = { kind: ParserNodeKind.AnyChar } as const;
 
+// single character match node
 export type CharMatchNode = CharMatchRange | CharMatchSet | typeof AnyChar;
 export type ParserNode = CharMatchNode | PatternSeq | ByteSeq | PatternSet;
 
