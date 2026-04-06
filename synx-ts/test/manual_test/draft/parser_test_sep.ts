@@ -29,15 +29,20 @@ function main(): void {
   // --- 1) 单独跑 parseNodeEx(Letter, '+', null, CommaSep)，看 pos / seps / nodes ---
   parser.initParse({ src: SRC, pos: 0 });
   const ex = parser.parseNodeEx(Letter, "+", null, CommaSep);
+  const ex_ast_nodes = Array.isArray(ex.ast_node_res)
+    ? ex.ast_node_res
+    : ex.ast_node_res !== null
+      ? [ex.ast_node_res]
+      : [];
   console.log("=== parseNodeEx(Letter, '+', null, CommaSep) 之后 ===");
   console.log({
     isSuccess: parser.isSuccess(),
     getError: parser.getError(),
     input_pos: parser.input.pos,
-    nodes_count: ex.ast_node_res.length,
+    nodes_count: ex_ast_nodes.length,
     seps_count: ex.seps.length,
     sep_ranges: ex.seps.map((s) => s.range),
-    node_ranges: ex.ast_node_res.map((n) => n.range),
+    node_ranges: ex_ast_nodes.map((n) => n.range),
   });
   console.log("ex 详情:\n" + inspect(ex, { depth: 6, colors: true }));
 

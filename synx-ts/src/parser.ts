@@ -1,18 +1,28 @@
 import { ParserNode } from "./parser_node";
 import { ParserImpl } from "./parser_impl";
 
+/**
+ * ============================== EN ==============================
+ *
+ * - `parser_nodes`: Matched parser nodes, usually one; when there are multiple nodes, they represent multiple matches, in match order from left to right.
+ * - `range`: Matched span `[start, end)` (half-open).
+ * - `value`: By default the same as `raw_value`; for special cases see the `ParserNode` definitions.
+ * - `raw_value`: Raw AST payload: for `CharMatchNode` it is a string; for other kinds it is `ASTNode[]`, with each entry in one-to-one correspondence with `sub_nodes`.
+ * - `seps`: Separator matches for `PatternSeq` (see `PatternSeq.sep`); empty array for other node kinds.
+ *
+ * ============================== 中文 ==============================
+ *
+ * - `parser_nodes`：匹配的 parser 节点，通常 1 个；多个节点时表示多次被匹配，匹配次序从左到右。
+ * - `range`：匹配区间 `[start, end)`（左闭右开）。
+ * - `value`：默认value和raw_value相同，特殊情况见ParserNode定义。
+ * - `raw_value`：原始 AST 值，对于CharMatchNode为字符串，其它为ASTNode[]，每个节点和sub_nodes一一对应。
+ * - `seps`：`PatternSeq` 的分隔符匹配（见 `PatternSeq.sep`）；其它节点类型为空数组。
+ */
 export interface ASTNode {
-    /** Matched parser nodes, usually 1; multiple nodes indicate multiple interpretations with decreasing priority from left to right */
     parser_nodes: ParserNode[];
-    range: [number, number];    // [start, end)
-    /** 
-     * Semantic value, constructed exactly according to the => return value on the right side of the rule definition.
-     * For PatternSeq nodes with no custom rule: if node.raw=true, value is the matched substring; otherwise value is the array of child AST nodes.
-     */
+    range: [number, number];
     value: any;
-    /** Raw AST value; for PatternSeq, each `*`/`+` sub-node is one `ASTNode[]` slot; ` ` / `?` slots are single `ASTNode`s (flattened). */
     raw_value: any;
-    /** Separator matches for PatternSeq (see `PatternSeq.sep`); empty for other node kinds. */
     seps: ASTNode[];
 }
 
