@@ -1,5 +1,5 @@
 import assert from "assert";
-import { matchChar, matchCharRange, matchAnyChar, CharMatchSetResult } from "./parser_matcher";
+import { matchChar, matchCharRange, matchAnyChar, matchAnyByte, CharMatchSetResult } from "./parser_matcher";
 import {
     ParserNode,
     ParserNodeKind,
@@ -472,6 +472,8 @@ export class ParserImpl implements Parser {
 
         if (node.kind === ParserNodeKind.AnyChar) {
             this.parseAnyChar();
+        } else if (node.kind === ParserNodeKind.AnyByte) {
+            this.parseAnyByte();
         } else if (node.kind === ParserNodeKind.CharMatchRange) {
             this.parseCharMatchRange(node as CharMatchRange);
         }
@@ -535,6 +537,17 @@ export class ParserImpl implements Parser {
     parseAnyChar(): void {
         const { src, pos } = this.input;
         const res = matchAnyChar(src, pos);
+        if (res.matched) {
+            this.input.pos = res.new_pos;
+            this.setSuccess();
+        } else {
+            this.setError(this.input.pos);
+        }
+    }
+
+    parseAnyByte(): void {
+        const { src, pos } = this.input;
+        const res = matchAnyByte(src, pos);
         if (res.matched) {
             this.input.pos = res.new_pos;
             this.setSuccess();

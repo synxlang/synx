@@ -126,6 +126,7 @@ export type ParserNode = CharMatchNode | PatternSeq | ByteSeq | PatternSet;
 
 /** All kinds that belong to CharMatchNode, used for branch checking to avoid hardcoding multiple kinds */
 export const CHAR_MATCH_NODE_KINDS: ParserNodeKind[] = [
+    ParserNodeKind.AnyByte,
     ParserNodeKind.AnyChar,
     ParserNodeKind.CharMatchRange,
     ParserNodeKind.CharMatchSet,

@@ -9,6 +9,8 @@ export {
   PatternSeq,
   ByteSeq,
   PatternSet,
+  AnyByte,
+  AnyChar,
   mkCharRange,
   mkCharSet,
   mkPatternSeq,

@@ -1,4 +1,4 @@
-import { CharMatchRange, CharMatchSet, CharMatchNode, ParserNodeKind, AnyChar } from './parser_node';
+import { CharMatchRange, CharMatchSet, CharMatchNode, ParserNodeKind, AnyByte, AnyChar } from './parser_node';
 
 export {
   ParserNodeKind,
@@ -44,6 +44,14 @@ export function matchAnyChar(
   return { matched: true, new_pos: pos + length };
 }
 
+export function matchAnyByte(
+  src: string,
+  pos: number,
+): { matched: boolean; new_pos: number } {
+  if (pos >= src.length) return { matched: false, new_pos: pos };
+  return { matched: true, new_pos: pos + 1 };
+}
+
 /** Match a single character at pos in src using match_set (by code point, may be 1 or 2 code units), returns the list of matched nodes (from child to parent) */
 export function matchChar(src: string, pos: number, match_set: CharMatchSet): CharMatchSetResult {
   const cp = src.codePointAt(pos);
@@ -70,6 +78,13 @@ export function matchChar(src: string, pos: number, match_set: CharMatchSet): Ch
         nodes.push(AnyChar);
         nodes.push(match_set);
         return { nodes, new_pos: anyCharResult.new_pos };
+      }
+    } else if (item.kind === ParserNodeKind.AnyByte) {
+      const anyByteResult = matchAnyByte(src, pos);
+      if (anyByteResult.matched) {
+        nodes.push(AnyByte);
+        nodes.push(match_set);
+        return { nodes, new_pos: anyByteResult.new_pos };
       }
     } else if (item.kind === ParserNodeKind.CharMatchRange) {
       const range = item as CharMatchRange;
