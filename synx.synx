@@ -13,9 +13,9 @@ Symbol=\flat (Letter,SymbolChar*);
 SymbolDotChain=(symbols:Symbol* \sep ".")=>symbols;
 GeneralSymbol={Symbol;SymbolDotChain};          
 
-Comment=(CommentPrefix,comment:AnyChar*,LineDelimiter?)=>comment;
+Comment=(CommentPrefix,comment:AnyCharOrByte*,LineDelimiter?)=>comment;     \\ AnyCharOrByte with * or + always not greedy
 
-StringLiteral=(text:AnyChar* \enclosedby ("\"", {-"\\\"", "\""} ))=>text;
+StringLiteral=(text:AnyCharOrByte* \enclosedby ("\"", {-"\\\"", "\""}))=>text;
 SingleCharString=(text:StringLiteral) \where char_cnt(text)==1;
 GeneralChar={SymbolChar;SingleCharString;};
 CharRange=(first:GeneralChar, "~", last:GeneralChar)=>[.first=first, .last=last];
@@ -32,7 +32,7 @@ CharSet = {
     \associateby "()";
 };
 
-Option=(pattern:Pattern, "?")=>pattern;+
+Option=(pattern:Pattern, "?")=>pattern;
 OneOrMany=(pattern:Pattern, "*")=>pattern;
 Many=(pattern:Pattern, "+")=>pattern;
 FlatPattern=("\\flat", pattern:Pattern \ignore Space)=>pattern;
