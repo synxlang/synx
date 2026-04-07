@@ -20,12 +20,12 @@ import type { ASTNode } from "./parser";
  * ============================== EN ==============================
  *
  * - With `*` / `+` quantifiers, returns `ASTNode[]`; with ` ` / `?`, returns `ASTNode` or `null`.
- * - CharMatchNode special case: with `*` / `+`, merged into a single `ASTNode` only when both `sep` and `PatternSeq.ignore` are absent (`null`); if `sep` is set, or `ignore` is set, use the general path and return `ASTNode[]` (no merge across repeats).
+ * - CharMatchNode special case: always merge consecutive characters into a single `ASTNode`.
  *
  * ============================== 中文 ==============================
  *
  * '*', '+' 量词时，返回 ASTNode[]，' ' 或 '?' 量词时，返回 ASTNode或null
- * CharMatchNode特殊，'*', '+' 量词时，无sep且无ignore时合并为单个ASTNode；有sep或有ignore时为 ASTNode[]（不合并）
+ * CharMatchNode特殊，总是合并连续的字符。
  */
 interface ParseNodeResult {
     ast_node_res: ASTNode[] | ASTNode | null;
@@ -209,8 +209,8 @@ export class ParserImpl implements Parser {
         ignored: ParserNode | null = null,
         sep: ParserNode | null = null
     ): ParseNodeResult {
-        if (ignored === null && sep === null && CHAR_MATCH_NODE_KINDS.includes(node.kind)) {
-            const result = this.parseCharMatchNode(node as CharMatchNode, quantifier);
+        if (sep === null && CHAR_MATCH_NODE_KINDS.includes(node.kind)) {
+            const result = this.parseCharMatchNodeEx(node as CharMatchNode, quantifier, ignored);
             return {
                 ast_node_res: result,
                 seps: [],
@@ -445,6 +445,94 @@ export class ParserImpl implements Parser {
         }
 
         return make_returned();
+    }
+
+    /**
+     * For quantifier `*` and `+`, merge consecutive matched strings, return ASTNode[].
+     * 
+     * 对于量词`*`和`+`，会合并连续的匹配字符串，返回ASTNode[]。
+     */
+    parseCharMatchNodeEx(node: CharMatchNode, quantifier: Quantifier, ignored: ParserNode | null): ASTNode[] | ASTNode | null {
+        if (ignored === null) {
+            return this.parseCharMatchNode(node, quantifier);
+        }
+
+        const make_ast_node = (start: number): ASTNode => {
+            const end = this.input.pos;
+            return {
+                parser_nodes: [node],
+                range: [start, end],
+                value: this.input.src.slice(start, end),
+                raw_value: this.input.src.slice(start, end),
+                seps: [],
+            };
+        }
+
+        const single = quantifier === " " || quantifier === "?";
+        const match_start = this.parseCharMatchNodeConsecutive(node, ignored, single);
+        if (!this.isSuccess()) {
+            if (quantifier === "?" || quantifier === "*") {
+                this.setSuccess();
+            }
+            if (single) {
+                return null;
+            }
+            return [];
+        }
+
+        const first = make_ast_node(match_start);
+        if (single) {
+            return first;
+        }
+
+        const ret: ASTNode[] = [first];
+        for (; ;) {
+            const match_start = this.parseCharMatchNodeConsecutive(node, ignored, false);
+            if (!this.isSuccess()) {
+                break;
+            }
+            ret.push(make_ast_node(match_start))
+        }
+        this.setSuccess();
+        return ret;
+    }
+
+    /**
+     * Match the node many times, on each failed match, try consuming `ignored` once, and repeat until either the match succeeds or matching cannot succeed even after ignoring.
+     * If the match succeeds, repeat the matching until the match fails.
+     * 
+     * 每次匹配失败时，尝试忽略一次 `ignored` 节点，直到匹配成功或即使忽略也不可能匹配成功。如果匹配成功则重复匹配直到失败。
+     * 返回匹配node的起始匹配位置，失败时返回值为总匹配初始位置
+     */
+    parseCharMatchNodeConsecutive(node: CharMatchNode, ignored: ParserNode, single: boolean): number {
+        const start = this.input.pos;
+
+        for (; ;) {
+            const retry_pos = this.input.pos;
+            this.parseSingleCharMatchNode(node);
+            if (this.isSuccess()) {
+                if (single) {
+                    return retry_pos;
+                }
+                do {
+                    this.parseSingleCharMatchNode(node);
+                } while (this.isSuccess());
+                this.setSuccess();
+                return retry_pos;
+            }
+
+            this.input.pos = retry_pos;
+            this.parseSingleNodeSimple(ignored);
+            if (!this.isSuccess()) {
+                this.input.pos = start;
+                return start;
+            }
+            if (this.input.pos === retry_pos) {
+                this.setError(this.input.pos);
+                this.input.pos = start;
+                return start;
+            }
+        }
     }
 
     parseSingleCharMatchNode(node: CharMatchNode): CharMatchNode[] {

@@ -786,11 +786,7 @@ function test_parsePatternSeq(): void {
       input: { src: '1abc', pos: 0 },
       expected: mkSeqAST(Seq_Digit_LetterStar_IgnoreSpace, [0, 4], [
         { node: Digit, value: '1', range: [0, 1] },
-        [
-          { node: Letter, value: 'a', range: [1, 2] },
-          { node: Letter, value: 'b', range: [2, 3] },
-          { node: Letter, value: 'c', range: [3, 4] },
-        ],
+        [{ node: Letter, value: 'abc', range: [1, 4] }],
       ]),
       expected_error: false,
     },
@@ -800,11 +796,7 @@ function test_parsePatternSeq(): void {
       input: { src: '1 abc', pos: 0 },
       expected: mkSeqAST(Seq_Digit_LetterStar_IgnoreSpace, [0, 5], [
         { node: Digit, value: '1', range: [0, 1] },
-        [
-          { node: Letter, value: 'a', range: [2, 3] },
-          { node: Letter, value: 'b', range: [3, 4] },
-          { node: Letter, value: 'c', range: [4, 5] },
-        ],
+        [{ node: Letter, value: 'abc', range: [2, 5] }],
       ]),
       expected_error: false,
     },
@@ -814,11 +806,7 @@ function test_parsePatternSeq(): void {
       input: { src: '1 abc ', pos: 0 },
       expected: mkSeqAST(Seq_Digit_LetterStar_IgnoreSpace, [0, 5], [
         { node: Digit, value: '1', range: [0, 1] },
-        [
-          { node: Letter, value: 'a', range: [2, 3] },
-          { node: Letter, value: 'b', range: [3, 4] },
-          { node: Letter, value: 'c', range: [4, 5] },
-        ],
+        [{ node: Letter, value: 'abc', range: [2, 5] }],
       ]),
       expected_error: false,
     },
@@ -858,11 +846,7 @@ function test_parsePatternSeq(): void {
       input: { src: '1abc', pos: 0 },
       expected: mkSeqAST(Seq_Digit_LetterStar_IgnoreLetter, [0, 4], [
         { node: Digit, value: '1', range: [0, 1] },
-        [
-          { node: Letter, value: 'a', range: [1, 2] },
-          { node: Letter, value: 'b', range: [2, 3] },
-          { node: Letter, value: 'c', range: [3, 4] },
-        ],
+        [{ node: Letter, value: 'abc', range: [1, 4] }],
       ]),
       expected_error: false,
     },
