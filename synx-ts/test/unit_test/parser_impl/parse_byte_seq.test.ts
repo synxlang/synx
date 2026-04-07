@@ -53,8 +53,8 @@ function test_parseByteSeq(): void {
   }
 }
 
-/** Quantifiers for ByteSeq live in parseNode (same structure as PatternSeq) */
-function test_parseNode_byteSeq_quantifiers(): void {
+/** ByteSeq quantifiers via a single-child PatternSeq (production uses `parsePatternSeq` → `parseNode`). */
+function test_parsePatternSeq_byteSeq_quantifiers(): void {
   const ab = mkByteSeq('ab');
   const cases: Array<{
     id: number;
@@ -75,14 +75,20 @@ function test_parseNode_byteSeq_quantifiers(): void {
   for (const c of cases) {
     const parser = new ParserImpl({ parser_nodes: [] });
     parser.initParse(c.input);
-    const nodes = parser.parseNode(ab, c.quantifier);
-    if (!parser.isSuccess()) {
+    const seq = mkPatternSeq([ab], c.quantifier, false, null, false, null);
+    const top = parser.parsePatternSeq(seq);
+    if (top === null) {
       if (c.expected_error !== (parser.getError() !== null)) {
         throw new Error(`[case ${c.id}] expected_error=${c.expected_error}, last_error=${parser.getError()}`);
       }
       continue;
     }
-    const count = parse_node_result_count(nodes);
+    const v = top.value;
+    if (!Array.isArray(v) || v.length === 0) {
+      throw new Error(`[case ${c.id}] expected one child slot in PatternSeq value`);
+    }
+    const slot = v[0] as ASTNode[] | ASTNode | null;
+    const count = parse_node_result_count(slot);
     if (c.expected_values === null) {
       if (count !== 0) {
         throw new Error(`[case ${c.id}] expected 0 nodes, got ${count}`);
@@ -91,7 +97,7 @@ function test_parseNode_byteSeq_quantifiers(): void {
       if (count !== c.expected_values.length) {
         throw new Error(`[case ${c.id}] expected ${c.expected_values.length} nodes, got ${count}`);
       }
-      const arr = Array.isArray(nodes) ? nodes : nodes === null ? [] : [nodes];
+      const arr = Array.isArray(slot) ? slot : slot === null ? [] : [slot];
       for (let i = 0; i < arr.length; i++) {
         if (arr[i]!.value !== c.expected_values[i]) {
           throw new Error(`[case ${c.id}] node ${i} value mismatch`);
@@ -153,7 +159,7 @@ function test_parsePatternSeq_embedsByteSeq(): void {
 function runAllTests(): void {
   console.log('Running parseByteSeq tests...\n');
   test_parseByteSeq();
-  test_parseNode_byteSeq_quantifiers();
+  test_parsePatternSeq_byteSeq_quantifiers();
   test_parsePatternSeq_embedsByteSeq();
   console.log('\nAll parseByteSeq tests passed!');
 }

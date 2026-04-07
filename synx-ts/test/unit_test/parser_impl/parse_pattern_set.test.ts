@@ -175,7 +175,7 @@ function test_parsePatternSet_infinite_recursion_nested_cycle(): void {
   parser.initParse({ src: 'x', pos: 0 });
   const result = parser.parseSingleNode(a);
   assert.strictEqual(result, null);
-  // Error message may be set by mandatory callers (e.g. parseNode turning null into "Parse match failed").
+  // Error message may be set by mandatory callers (e.g. parsePatternSeq / parseNode turning null into "Parse match failed").
   assert(!parser.isSuccess());
   assert.notStrictEqual(parser.getError(), null);
 }
