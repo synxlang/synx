@@ -74,6 +74,7 @@ export interface ByteSeq {
  * 仅通过 `ignore` 匹配到的文本不会出现在本序列节点的 `raw_value` 中。
  * `raw` 为 true 时 `ignore` 还是会起匹配上的作用，但是不会影响 `value` 的值。
  *
+ * `greedy_flags`（与 `sub_nodes` 等长）：`true` 表示该节点为贪婪匹配量词`*`, `+`, `?`。
  */
 export interface PatternSeq {
     kind: ParserNodeKind.PatternSeq;
@@ -83,6 +84,7 @@ export interface PatternSeq {
     sep: ParserNode | null;
     accept_trailing_sep: boolean;
     ignore: ParserNode | null;
+    greedy_flags: boolean[];
 }
 
 /**

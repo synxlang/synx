@@ -202,12 +202,14 @@ export class ParserImpl implements Parser {
      * When `sep` is non-null, it is parsed only between successive matches of the same `node` while expanding `*` / `+` (the loop below).
      *
      * 当 `sep` 非 null 时，仅在本函数展开 `*` / `+` 的循环中、于同一 `node` 的相邻两次匹配之间解析分隔符。
+     * `ends`：结束节点列表，非贪婪匹配量词`*`, `+`, `?`时，优先匹配结束节点，若匹配到结束节点则提前停止匹配返回结果。列表末端的节点优先级最高。
      */
     parseNode(
         node: ParserNode,
         quantifier: Quantifier,
         ignored: ParserNode | null = null,
-        sep: ParserNode | null = null
+        sep: ParserNode | null = null,
+        ends: ParserNode[] = [],
     ): ParseNodeResult {
         if (sep === null && CHAR_MATCH_NODE_KINDS.includes(node.kind)) {
             const result = this.parseCharMatchNodeEx(node as CharMatchNode, quantifier, ignored);
