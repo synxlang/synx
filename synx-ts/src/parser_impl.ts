@@ -26,10 +26,13 @@ import type { ASTNode } from "./parser";
  *
  * '*', '+' 量词时，返回 ASTNode[]，' ' 或 '?' 量词时，返回 ASTNode或null
  * CharMatchNode特殊，总是合并连续的字符。
+ * 
+ * end_idx：结束节点匹配索引，如果没有匹配到结束节点为-1。
  */
 interface ParseNodeResult {
     ast_node_res: ASTNode[] | ASTNode | null;
     seps: ASTNode[];
+    end_idx: number;
 }
 
 /**
@@ -84,6 +87,7 @@ export class ParserImpl implements Parser {
 
     private error: string | null = null;
     private error_pos: number = 0;
+    private parse_records = new Map<number, ASTNode>();
 
     /**
      * Supports `PatternSet` left recursion and avoids infinite expansion.
@@ -148,10 +152,32 @@ export class ParserImpl implements Parser {
         return this.error === null;
     }
 
+    /**
+     * pos为解析结果匹配的开始位置，用于缓存解析结果，避免重复解析。
+     */
+    recordParse(pos: number, ast_node: ASTNode): void {
+        this.parse_records.set(pos, ast_node);
+    }
+
+    /**
+     * 获取pos位置的缓存解析结果，如果没有解析结果返回空数组。
+     */
+    getParseRecords(pos: number): ASTNode[] {
+        return this.parse_records.get(pos) ?? null;
+    }
+
+    /**
+     * 返回缓存中搜索到的第一个对应位置包含parser_node的解析结果，如果没有找到返回null。
+     */
+    getParseRecord(pos:number, parser_node:ParserNode): ASTNode|null {
+        // TODO
+    }
+
     initParse(input: ParserInput): void {
         this.input = input;
         this.clearError();
         this.pattern_set_node_parse_stack.length = 0;
+        this.parse_records.clear();
     }
 
     parse(input: ParserInput, root: ParserNode): ParseResult {
@@ -202,7 +228,11 @@ export class ParserImpl implements Parser {
      * When `sep` is non-null, it is parsed only between successive matches of the same `node` while expanding `*` / `+` (the loop below).
      *
      * 当 `sep` 非 null 时，仅在本函数展开 `*` / `+` 的循环中、于同一 `node` 的相邻两次匹配之间解析分隔符。
-     * `ends`：结束节点列表，非贪婪匹配量词`*`, `+`, `?`时，优先匹配结束节点，若匹配到结束节点则提前停止匹配返回结果。列表末端的节点优先级最高。
+     * 
+     * `ends`：
+     * - 结束节点列表，非贪婪匹配量词`*`, `+`, `?`时，优先匹配结束节点，若匹配到结束节点则停止匹配返回结果。列表末端的节点优先级最高。
+     * - input.pos为不包含ends的结束匹配位置。
+     * 
      */
     parseNode(
         node: ParserNode,
