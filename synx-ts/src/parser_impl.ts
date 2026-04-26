@@ -212,7 +212,7 @@ export class ParserImpl implements Parser {
         ends: ParserNode[] = [],
     ): ParseNodeResult {
         if (sep === null && CHAR_MATCH_NODE_KINDS.includes(node.kind)) {
-            const result = this.parseCharMatchNodeEx(node as CharMatchNode, quantifier, ignored);
+            const result = this.parseCharMatchNodeEx(node as CharMatchNode, quantifier, ignored, ends);
             return {
                 ast_node_res: result,
                 seps: [],
@@ -364,7 +364,17 @@ export class ParserImpl implements Parser {
         for (let i = 0; i < node.sub_nodes.length; i++) {
             const q = node.sub_quantifiers[i] as Quantifier;
             const sub_node = node.sub_nodes[i];
-            const parse_ex_res = this.parseNode(sub_node, q, node.ignore, node.sep);
+            const ends: ParserNode[] = [];
+            if (node.greedy_flags[i] === false) {
+                for (let j = i + 1; j < node.sub_nodes.length; j++) {
+                    ends.push(node.sub_nodes[j]);
+                    const qj = node.sub_quantifiers[j] as Quantifier;
+                    if (node.greedy_flags[j] || qj === " " || qj === "+") {
+                        break;
+                    }
+                }
+            }
+            const parse_ex_res = this.parseNode(sub_node, q, node.ignore, node.sep, ends);
             const ast_res = parse_ex_res.ast_node_res;
             if (!this.isSuccess()) {
                 this.input.pos = start;
@@ -413,7 +423,11 @@ export class ParserImpl implements Parser {
      *
      * 字符匹配：按量词匹配并合并为字符串，返回 ASTNode（value/raw_value 为被匹配的字符串）；
      */
-    parseCharMatchNode(node: CharMatchNode, quantifier: Quantifier): ASTNode | null {
+    parseCharMatchNode(
+        node: CharMatchNode,
+        quantifier: Quantifier,
+        ends: ParserNode[] = [],
+    ): ASTNode | null {
         const start = this.input.pos;
         const make_returned = (): ASTNode => {
             this.setSuccess();
@@ -454,9 +468,14 @@ export class ParserImpl implements Parser {
      * 
      * 对于量词`*`和`+`，会合并连续的匹配字符串，返回ASTNode[]。
      */
-    parseCharMatchNodeEx(node: CharMatchNode, quantifier: Quantifier, ignored: ParserNode | null): ASTNode[] | ASTNode | null {
+    parseCharMatchNodeEx(
+        node: CharMatchNode,
+        quantifier: Quantifier,
+        ignored: ParserNode | null,
+        ends: ParserNode[] = [],
+    ): ASTNode[] | ASTNode | null {
         if (ignored === null) {
-            return this.parseCharMatchNode(node, quantifier);
+            return this.parseCharMatchNode(node, quantifier, ends);
         }
 
         const make_ast_node = (start: number): ASTNode => {
@@ -471,7 +490,7 @@ export class ParserImpl implements Parser {
         }
 
         const single = quantifier === " " || quantifier === "?";
-        const match_start = this.parseCharMatchNodeConsecutive(node, ignored, single);
+        const match_start = this.parseCharMatchNodeConsecutive(node, ignored, single, ends);
         if (!this.isSuccess()) {
             if (quantifier === "?" || quantifier === "*") {
                 this.setSuccess();
@@ -489,7 +508,7 @@ export class ParserImpl implements Parser {
 
         const ret: ASTNode[] = [first];
         for (; ;) {
-            const match_start = this.parseCharMatchNodeConsecutive(node, ignored, false);
+            const match_start = this.parseCharMatchNodeConsecutive(node, ignored, false, ends);
             if (!this.isSuccess()) {
                 break;
             }
@@ -506,7 +525,12 @@ export class ParserImpl implements Parser {
      * 每次匹配失败时，尝试忽略一次 `ignored` 节点，直到匹配成功或即使忽略也不可能匹配成功。如果匹配成功则重复匹配直到失败。
      * 返回匹配node的起始匹配位置，失败时返回值为总匹配初始位置
      */
-    parseCharMatchNodeConsecutive(node: CharMatchNode, ignored: ParserNode, single: boolean): number {
+    parseCharMatchNodeConsecutive(
+        node: CharMatchNode,
+        ignored: ParserNode,
+        single: boolean,
+        ends: ParserNode[] = [],
+    ): number {
         const start = this.input.pos;
 
         for (; ;) {

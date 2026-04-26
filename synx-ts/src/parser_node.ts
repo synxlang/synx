@@ -57,6 +57,9 @@ export interface ByteSeq {
  * - Between two successive matches of a sub-node whose quantifier is `*` or `+` (i.e. the gap between repetitions of that child);
  * Text matched solely through `ignore` does not appear in this sequence node's `raw_value`.
  * When `raw` is true, `ignore` still participates in matching, but does not affect `value`.
+ * 
+ * `greedy_flags` (same length as `sub_nodes`): `true` means greedy semantics for `*` / `+` / `?` on that slot.
+ * Normalization (via {@link mkPatternSeq}): {@link AnyChar} with `*` or `+` **must** be non-greedy; quantifier `' '` (single mandatory match) **must** be greedy; both override conflicting explicit `greedy_flags`.
  *
  * ============================== 中文 ==============================
  * `sub_nodes` 子节点序列，`sub_quantifiers` 量词序列依次对应子节点序列
@@ -74,7 +77,8 @@ export interface ByteSeq {
  * 仅通过 `ignore` 匹配到的文本不会出现在本序列节点的 `raw_value` 中。
  * `raw` 为 true 时 `ignore` 还是会起匹配上的作用，但是不会影响 `value` 的值。
  *
- * `greedy_flags`（与 `sub_nodes` 等长）：`true` 表示该节点为贪婪匹配量词`*`, `+`, `?`。
+ * `greedy_flags`（与 `sub_nodes` 等长）：`true` 表示该子槽量词 `*` / `+` / `?` 按贪婪语义解析。
+ * 规范化（由 {@link mkPatternSeq} 施加）：{@link AnyChar} 且量词为 `*` 或 `+` 时**必须**为非贪婪；量词为 `' '`（单次必配）的槽**必须**为贪婪；二者均覆盖与之冲突的显式 `greedy_flags`。
  */
 export interface PatternSeq {
     kind: ParserNodeKind.PatternSeq;
@@ -165,7 +169,24 @@ export function mkPatternSeq(
   sep: ParserNode | null = null,
   accept_trailing_sep: boolean = false,
   ignore: ParserNode | null = null,
+  greedy_flags?: boolean[],
 ): PatternSeq {
+  const n = sub_nodes.length;
+  const flags =
+    greedy_flags !== undefined
+      ? greedy_flags.slice()
+      : Array.from({ length: n }, () => true);
+  if (flags.length !== n) {
+    throw new Error("mkPatternSeq: greedy_flags length must match sub_nodes length");
+  }
+  for (let i = 0; i < n; i++) {
+    const q = sub_quantifiers[i];
+    if (q === " ") {
+      flags[i] = true;
+    } else if (sub_nodes[i]!.kind === ParserNodeKind.AnyChar && (q === "*" || q === "+")) {
+      flags[i] = false;
+    }
+  }
   return {
     kind: ParserNodeKind.PatternSeq,
     sub_nodes,
@@ -174,6 +195,7 @@ export function mkPatternSeq(
     sep,
     accept_trailing_sep,
     ignore,
+    greedy_flags: flags,
   };
 }
 
