@@ -35,6 +35,9 @@ interface ParseNodeResult {
     end_idx: number;
 }
 
+/**
+ * end_idx：结束节点匹配索引，如果没有匹配到结束节点为-1。
+ */
 interface PeekEndNodesResult {
     end_ast_node: ASTNode | null;
     end_idx: number;
@@ -174,7 +177,7 @@ export class ParserImpl implements Parser {
     /**
      * 返回缓存中搜索到的第一个对应位置包含parser_node的解析结果，如果没有找到返回null。
      */
-    findParseRecord(pos:number, parser_node:ParserNode): ASTNode|null {
+    findParseRecord(pos: number, parser_node: ParserNode): ASTNode | null {
         const records = this.getParseRecords(pos);
         for (const record of records) {
             if (record.parser_nodes.includes(parser_node)) {
@@ -252,7 +255,7 @@ export class ParserImpl implements Parser {
         sep: ParserNode | null = null,
         ends: ParserNode[] = [],
     ): ParseNodeResult {
-        if(ends.length > 0) {
+        if (ends.length > 0) {
             assert.ok(quantifier !== " ");
         }
         if (sep === null && CHAR_MATCH_NODE_KINDS.includes(node.kind)) {
@@ -260,6 +263,27 @@ export class ParserImpl implements Parser {
             return {
                 ast_node_res: result,
                 seps: [],
+                end_idx: -1,
+            }
+        }
+
+        let ret: ParseNodeResult = {
+            ast_node_res: null,
+            seps: [],
+            end_idx: -1,
+        };
+
+        let peek_ends = () => {
+            let peek_res = this.peekEndNodes(ends, ignored);
+            if (peek_res.end_idx >= 0) {
+                ret.end_idx = peek_res.end_idx;
+            }
+        }
+
+        if(quantifier === "?" || quantifier === "*") {
+            peek_ends();
+            if (ret.end_idx >= 0) {
+                return ret;
             }
         }
 
@@ -271,19 +295,14 @@ export class ParserImpl implements Parser {
             first = null;
         }
         if (quantifier === " " || quantifier === "?") {
-            return {
-                ast_node_res: first,
-                seps: [],
-            };
+            ret.ast_node_res = first;
+            return ret;
         }
 
-        const ret = {
-            ast_node_res: [] as ASTNode[],
-            seps: [] as ASTNode[],
-        };
+        ret.ast_node_res = [] as ASTNode[];
         let push_node = (ast_node: ASTNode | null) => {
             if (ast_node !== null) {
-                ret.ast_node_res.push(ast_node);
+                (ret.ast_node_res as ASTNode[]).push(ast_node);
             }
         };
         let push_sep_node = (sep_node: ASTNode | null) => {
@@ -312,6 +331,10 @@ export class ParserImpl implements Parser {
                 break;
             }
             push_sep_node(sep_node);
+            peek_ends();
+            if (ret.end_idx >= 0) {
+                break;
+            }
             push_node(n);
         }
         this.setSuccess();
@@ -324,10 +347,11 @@ export class ParserImpl implements Parser {
      *
      * 探测当前位置是否能匹配任一结束节点，但不消费输入。
      * `ends` 从右向左尝试，列表末尾节点优先级最高。
+     * 此函数不会确保错误状态约定，应当通过返回值中的end_idx判定是否成功。
      */
     peekEndNodes(ends: ParserNode[], ignored: ParserNode | null = null): PeekEndNodesResult {
         const start = this.input.pos;
-        let ret:PeekEndNodesResult = {
+        let ret: PeekEndNodesResult = {
             end_ast_node: null,
             end_idx: -1,
         };
