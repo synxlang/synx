@@ -35,6 +35,11 @@ interface ParseNodeResult {
     end_idx: number;
 }
 
+interface PeekEndNodesResult {
+    end_ast_node: ASTNode | null;
+    end_idx: number;
+}
+
 /**
  * ============================== EN ==============================
  *
@@ -60,7 +65,7 @@ interface ParseNodeResult {
  *
  * 解析器实现类，供 mkParser 与测试使用；不作为对外公开 API 导出。
  *
- * 解析调用约定：
+ * 解析调用约定（针对parse开头的函数）：
  * - 索引：
  *   - 成功：返回前将解析索引移动到已匹配片段之后的下一未消费位置。
  *   - 失败：要求还原索引到初始位置。
@@ -247,6 +252,9 @@ export class ParserImpl implements Parser {
         sep: ParserNode | null = null,
         ends: ParserNode[] = [],
     ): ParseNodeResult {
+        if(ends.length > 0) {
+            assert.ok(quantifier !== " ");
+        }
         if (sep === null && CHAR_MATCH_NODE_KINDS.includes(node.kind)) {
             const result = this.parseCharMatchNodeEx(node as CharMatchNode, quantifier, ignored, ends);
             return {
@@ -307,6 +315,31 @@ export class ParserImpl implements Parser {
             push_node(n);
         }
         this.setSuccess();
+        return ret;
+    }
+
+    /**
+     * Peek whether any end node matches at the current input position without consuming input. 
+     * `ends` is tried from right to left because the last item has the highest priority.
+     *
+     * 探测当前位置是否能匹配任一结束节点，但不消费输入。
+     * `ends` 从右向左尝试，列表末尾节点优先级最高。
+     */
+    peekEndNodes(ends: ParserNode[], ignored: ParserNode | null = null): PeekEndNodesResult {
+        const start = this.input.pos;
+        let ret:PeekEndNodesResult = {
+            end_ast_node: null,
+            end_idx: -1,
+        };
+        for (let i = ends.length - 1; i >= 0; i--) {
+            let res = this.parseSingleNode(ends[i], ignored);
+            if (this.isSuccess()) {
+                ret.end_ast_node = res;
+                ret.end_idx = i;
+                break;
+            }
+        }
+        this.input.pos = start;
         return ret;
     }
 
