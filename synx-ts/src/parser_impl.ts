@@ -410,15 +410,24 @@ export class ParserImpl implements Parser {
                     }
                 }
             }
-            const parse_ex_res = this.parseNode(sub_node, q, node.ignore, node.sep, ends);
-            const ast_res = parse_ex_res.ast_node_res;
+            const parse_res = this.parseNode(sub_node, q, node.ignore, node.sep, ends);
+            const ast_res = parse_res.ast_node_res;
             if (!this.isSuccess()) {
                 this.input.pos = start;
                 return null;
             }
 
-            seps.push(...parse_ex_res.seps);
+            seps.push(...parse_res.seps);
             children.push(ast_res);
+            let next_i = i;
+            if (parse_res.end_idx >= 0) {
+                const end_node_idx = i + 1 + parse_res.end_idx;
+                for (let j = i + 1; j < end_node_idx; j++) {
+                    const qj = node.sub_quantifiers[j] as Quantifier;
+                    children.push(qj === "*" ? [] : null);
+                }
+                next_i = end_node_idx - 1;
+            }
 
             if (node.sep !== null && this.input.pos > last_sep_end) {   // check last_sep_end for consecutive empty child nodes case
                 if (i < node.sub_nodes.length - 1) {
@@ -438,6 +447,7 @@ export class ParserImpl implements Parser {
                 }
                 last_sep_end = this.input.pos;
             }
+            i = next_i;
         }
 
         const value = node.raw
