@@ -87,7 +87,7 @@ export class ParserImpl implements Parser {
 
     private error: string | null = null;
     private error_pos: number = 0;
-    private parse_records = new Map<number, ASTNode>();
+    private parse_records: ASTNode[][] = [];
 
     /**
      * Supports `PatternSet` left recursion and avoids infinite expansion.
@@ -156,28 +156,34 @@ export class ParserImpl implements Parser {
      * pos为解析结果匹配的开始位置，用于缓存解析结果，避免重复解析。
      */
     recordParse(pos: number, ast_node: ASTNode): void {
-        this.parse_records.set(pos, ast_node);
+        this.parse_records[pos]!.push(ast_node);
     }
 
     /**
      * 获取pos位置的缓存解析结果，如果没有解析结果返回空数组。
      */
     getParseRecords(pos: number): ASTNode[] {
-        return this.parse_records.get(pos) ?? null;
+        return this.parse_records[pos] ?? [];
     }
 
     /**
      * 返回缓存中搜索到的第一个对应位置包含parser_node的解析结果，如果没有找到返回null。
      */
-    getParseRecord(pos:number, parser_node:ParserNode): ASTNode|null {
-        // TODO
+    findParseRecord(pos:number, parser_node:ParserNode): ASTNode|null {
+        const records = this.getParseRecords(pos);
+        for (const record of records) {
+            if (record.parser_nodes.includes(parser_node)) {
+                return record;
+            }
+        }
+        return null;
     }
 
     initParse(input: ParserInput): void {
         this.input = input;
         this.clearError();
         this.pattern_set_node_parse_stack.length = 0;
-        this.parse_records.clear();
+        this.parse_records = Array.from({ length: input.src.length + 1 }, () => []);
     }
 
     parse(input: ParserInput, root: ParserNode): ParseResult {
