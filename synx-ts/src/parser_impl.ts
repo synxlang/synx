@@ -21,13 +21,13 @@ import type { ASTNode } from "./parser";
  *
  * - With `*` / `+` quantifiers, returns `ASTNode[]`; with ` ` / `?`, returns `ASTNode` or `null`.
  * - CharMatchNode special case: always merge consecutive characters into a single `ASTNode`.
+ * - `end_idx` is the matched end-node index, or `-1` if no end node matched.
  *
  * ============================== 中文 ==============================
  *
- * '*', '+' 量词时，返回 ASTNode[]，' ' 或 '?' 量词时，返回 ASTNode或null
- * CharMatchNode特殊，总是合并连续的字符。
- * 
- * end_idx：结束节点匹配索引，如果没有匹配到结束节点为-1。
+ * `*`、`+` 量词时返回 `ASTNode[]`；`' '` 或 `?` 量词时返回 `ASTNode` 或 `null`。
+ * `CharMatchNode` 特殊，总是把连续字符合并为单个 `ASTNode`。
+ * `end_idx` 为结束节点匹配索引；未匹配到结束节点时为 `-1`。
  */
 interface ParseNodeResult {
     ast_node_res: ASTNode[] | ASTNode | null;
@@ -36,7 +36,15 @@ interface ParseNodeResult {
 }
 
 /**
- * end_idx：结束节点匹配索引，如果没有匹配到结束节点为-1。
+ * ============================== EN ==============================
+ *
+ * Result of peeking end nodes.
+ * `end_idx` is the matched end-node index, or `-1` if no end node matched.
+ *
+ * ============================== 中文 ==============================
+ *
+ * 探测结束节点的结果。
+ * `end_idx` 为结束节点匹配索引；未匹配到结束节点时为 `-1`。
  */
 interface PeekEndNodesResult {
     end_ast_node: ASTNode | null;
@@ -44,8 +52,15 @@ interface PeekEndNodesResult {
 }
 
 /**
- * start: 成功时为匹配node的起始匹配位置，失败时为总匹配初始位置
- * end_idx: 结束节点匹配索引，如果没有匹配到结束节点为-1。
+ * ============================== EN ==============================
+ *
+ * `start` is the matched node start position on success, or the whole-match start position on failure.
+ * `end_idx` is the matched end-node index, or `-1` if no end node matched.
+ *
+ * ============================== 中文 ==============================
+ *
+ * `start` 成功时为匹配 `node` 的起始匹配位置，失败时为总匹配初始位置。
+ * `end_idx` 为结束节点匹配索引；未匹配到结束节点时为 `-1`。
  */
 interface ParseCharMatchNodeConsecutiveResult {
     start: number;
@@ -62,7 +77,7 @@ interface ParseCharMatchNodeExResult {
  *
  * Parser implementation class, used by mkParser and tests; not exported as public API.
  *
- * Parse call conventions:
+ * Parse-call conventions (for functions whose names start with `parse`):
  * - Index:
  *   - On success: before returning, move the parse index to the next unconsumed position after the matched span.
  *   - On failure: restore the index to the initial position.
@@ -74,9 +89,10 @@ interface ParseCharMatchNodeExResult {
  *   - Success must be determined only with `isSuccess()`; do not use any other rule.
  *   - On success, `isSuccess()` is true; on failure, `isSuccess()` is false.
  *
- * - Single parse vs quantified parse:
- *   - `parseSingleNode(node)` parses exactly ONE instance of `node` (no outer quantifier).
- *   - `parseNode(node, quantifier)` is the ONLY place that expands quantifiers for non-char nodes.
+ * - `ends` parameter:
+ *   - Used for non-greedy matching: prefer matching nodes in the `ends` list; the last item in the list has the highest priority.
+ *   - If a node in `ends` matches, stop matching and return the current result.
+ *   - `ends` does not consume input (matching is probed without advancing the read position).
  *
  * ============================== 中文 ==============================
  *
@@ -94,9 +110,10 @@ interface ParseCharMatchNodeExResult {
  *   - 是否成功只能用 `isSuccess()` 判定，不得以其他方式。
  *   - 成功时 `isSuccess()` 为真；失败时 `isSuccess()` 为假。
  *
- * - 单次与带量词解析：
- *   - `parseSingleNode(node)` 只解析 `node` 的一次实例（无外层量词）。
- *   - `parseNode(node, quantifier)` 是展开非字符节点量词的唯一位置。
+ * - ends 参数：
+ *   - 用于非贪婪匹配，优先匹配 ends 列表中的节点，列表末端的节点优先级最高。
+ *   - 如果匹配到 ends 列表中的节点，则停止匹配并返回当前结果。
+ *   - ends不消耗输入。
  *
  */
 export class ParserImpl implements Parser {
@@ -112,14 +129,16 @@ export class ParserImpl implements Parser {
     private parse_records: ASTNode[][] = [];
 
     /**
+     * ============================== EN ==============================
+     *
      * Supports `PatternSet` left recursion and avoids infinite expansion.
      *
      * Note: left recursion is limited to a single depth level.
      *
-     * Authoring longer infix chains (synx-style; `{…}` alternative order still matters where used):
+     * For writing arbitrarily long infix chains, prefer synx-style lists with `\sep`, and handle associativity later:
      *
-     * - **Preferred — list with `\sep`, associativity later** — parse a flat list of operands separated by
-     *   the operator, then fold (left / right / precedence) in a separate semantic pass:
+     * - **Preferred — list with `\sep`, then associativity** — first collect operands separated by the operator into a list,
+     *   then fold by left associativity, right associativity, or precedence in the semantic phase:
      *   `Sum=(terms:Term* \sep "+")=>terms;`
      *   Same idea as `SymbolDotChain=(symbols:Symbol* \sep ".")=>symbols;` in the synx grammar.
      *
@@ -130,7 +149,7 @@ export class ParserImpl implements Parser {
      *
      * - **Weak shape** (right side not a full `Expr`) — e.g. `Expr={ (Expr,"+","1"); "1"; };`
      *
-     * ---
+     * ============================== 中文 ==============================
      *
      * 用于支持 PatternSet 左递归，以及避免无限展开。
      *
@@ -138,7 +157,8 @@ export class ParserImpl implements Parser {
      *
      * 若要写「任意长的中缀链」，优先用 synx 式列表 + `\sep`，结合性放到后续分析：
      *
-     * - **推荐 — `\sep` 得到列表，再结合性** — 先把被运算符隔开的各项收成列表（或等价结构），再在语义阶段按左结合、右结合或优先级折叠：
+     * - **推荐 — `\sep` 得到列表，再结合性** — 先把被运算符隔开的各项收成列表（或等价结构），
+     *   再在语义阶段按左结合、右结合或优先级折叠：
      *   `Sum=(terms:Term* \sep "+")=>terms;`
      *   与同文件中 `SymbolDotChain=(symbols:Symbol* \sep ".")=>symbols;` 同一思路。
      *
@@ -175,21 +195,24 @@ export class ParserImpl implements Parser {
     }
 
     /**
-     * pos为解析结果匹配的开始位置，用于缓存解析结果，避免重复解析。
+     * Record a parse result by its matched start position to avoid repeated parsing.
+     * 按解析结果的匹配起始位置缓存解析结果，避免重复解析。
      */
     recordParse(pos: number, ast_node: ASTNode): void {
         this.parse_records[pos]!.push(ast_node);
     }
 
     /**
-     * 获取pos位置的缓存解析结果，如果没有解析结果返回空数组。
+     * Get cached parse results at `pos`; return an empty array if no result exists.
+     * 获取 `pos` 位置的缓存解析结果；如果没有解析结果则返回空数组。
      */
     getParseRecords(pos: number): ASTNode[] {
         return this.parse_records[pos] ?? [];
     }
 
     /**
-     * 返回缓存中搜索到的第一个对应位置包含parser_node的解析结果，如果没有找到返回null。
+     * Find the first cached result at `pos` whose `parser_nodes` contains `parser_node`.
+     * 返回缓存中 `pos` 位置第一个包含 `parser_node` 的解析结果；如果没有找到则返回 `null`。
      */
     findParseRecord(pos: number, parser_node: ParserNode): ASTNode | null {
         const records = this.getParseRecords(pos);
@@ -253,14 +276,21 @@ export class ParserImpl implements Parser {
     }
 
     /**
+     * ============================== EN ==============================
+     *
      * When `sep` is non-null, it is parsed only between successive matches of the same `node` while expanding `*` / `+` (the loop below).
      *
+     * `ends` is the end-node list. For non-greedy `*`, `+`, and `?`, end nodes are tried before the current node;
+     * if any end node matches, parsing stops and returns the current result. The last item in `ends` has the highest priority.
+     * When an end node matches, `input.pos` is the end position that excludes the end node.
+     *
+     * ============================== 中文 ==============================
+     *
      * 当 `sep` 非 null 时，仅在本函数展开 `*` / `+` 的循环中、于同一 `node` 的相邻两次匹配之间解析分隔符。
-     * 
-     * `ends`：
-     * - 结束节点列表，非贪婪匹配量词`*`, `+`, `?`时，优先匹配结束节点，若匹配到结束节点则停止匹配返回结果。列表末端的节点优先级最高。
-     * - input.pos为不包含ends的结束匹配位置。
-     * 
+     *
+     * `ends` 为结束节点列表。非贪婪匹配量词 `*`、`+`、`?` 时，优先匹配结束节点；
+     * 如果匹配到结束节点，则停止匹配并返回当前结果。列表末端的节点优先级最高。
+     * 匹配到结束节点时，`input.pos` 为不包含 `ends` 的结束匹配位置。
      */
     parseNode(
         node: ParserNode,
@@ -356,12 +386,17 @@ export class ParserImpl implements Parser {
     }
 
     /**
+     * ============================== EN ==============================
+     *
      * Peek whether any end node matches at the current input position without consuming input. 
      * `ends` is tried from right to left because the last item has the highest priority.
+     * This function does not guarantee the error-state convention; use `end_idx` in the return value to determine success.
+     *
+     * ============================== 中文 ==============================
      *
      * 探测当前位置是否能匹配任一结束节点，但不消费输入。
      * `ends` 从右向左尝试，列表末尾节点优先级最高。
-     * 此函数不会确保错误状态约定，应当通过返回值中的end_idx判定是否成功。
+     * 此函数不会确保错误状态约定，应当通过返回值中的 `end_idx` 判定是否成功。
      */
     peekEndNodes(ends: ParserNode[], ignored: ParserNode | null = null): PeekEndNodesResult {
         const start = this.input.pos;
@@ -538,7 +573,7 @@ export class ParserImpl implements Parser {
     /**
      * Character matching: match according to quantifier and merge into a string, returns an ASTNode (value/raw_value is the matched string); 
      *
-     * 字符匹配：按量词匹配并合并为字符串，返回 ASTNode（value/raw_value 为被匹配的字符串）；
+     * 字符匹配：按量词匹配并合并为字符串，返回 `ASTNode`（`value` / `raw_value` 为被匹配的字符串）。
      */
     parseCharMatchNode(
         node: CharMatchNode,
@@ -582,7 +617,7 @@ export class ParserImpl implements Parser {
     /**
      * For quantifier `*` and `+`, merge consecutive matched strings, return ASTNode[].
      * 
-     * 对于量词`*`和`+`，会合并连续的匹配字符串，返回ASTNode[]。
+     * 对于量词 `*` 和 `+`，会合并连续的匹配字符串，返回 `ASTNode[]`。
      */
     parseCharMatchNodeEx(
         node: CharMatchNode,
@@ -648,11 +683,17 @@ export class ParserImpl implements Parser {
     }
 
     /**
-     * Match the node many times, on each failed match, try consuming `ignored` once, and repeat until either the match succeeds or matching cannot succeed even after ignoring.
-     * 
-     * 每次匹配失败时，尝试忽略一次 `ignored` 节点，直到匹配成功或即使忽略也不可能匹配成功。如果匹配成功则重复匹配直到失败。
-     * 成功时至少匹配到一次node
-     * 返回值参考ParseCharMatchNodeConsecutiveResult定义。
+     * ============================== EN ==============================
+     *
+     * Match `node` many times. On each failed match, try consuming `ignored` once until matching succeeds or cannot succeed even after ignoring.
+     * If matching succeeds, keep matching until failure. On success, at least one `node` is matched.
+     * See `ParseCharMatchNodeConsecutiveResult` for the return value.
+     *
+     * ============================== 中文 ==============================
+     *
+     * 多次匹配 `node`。每次匹配失败时，尝试忽略一次 `ignored` 节点，直到匹配成功，或即使忽略也不可能匹配成功。
+     * 如果匹配成功，则重复匹配直到失败。成功时至少匹配到一次 `node`。
+     * 返回值参考 `ParseCharMatchNodeConsecutiveResult` 定义。
      */
     parseCharMatchNodeConsecutive(
         node: CharMatchNode,

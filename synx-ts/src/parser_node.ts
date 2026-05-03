@@ -43,6 +43,7 @@ export interface ByteSeq {
 
 /**
  * ============================== EN ==============================
+ *
  * `sub_nodes` — child sequence; `sub_quantifiers` — quantifier sequence, one entry per child in order.
  *
  * `sep` (when non-null):
@@ -62,7 +63,8 @@ export interface ByteSeq {
  * Normalization (via {@link mkPatternSeq}): {@link AnyChar} with `*` or `+` **must** be non-greedy; quantifier `' '` (single mandatory match) **must** be greedy; both override conflicting explicit `greedy_flags`.
  *
  * ============================== 中文 ==============================
- * `sub_nodes` 子节点序列，`sub_quantifiers` 量词序列依次对应子节点序列
+ *
+ * `sub_nodes` 为子节点序列；`sub_quantifiers` 为量词序列，与子节点序列逐项对应。
  *
  * `sep` （非 null 时）：
  * - 分隔符节点，用于分隔子节点序列，`accept_trailing_sep` 为 true 时，允许序列末尾出现分隔符。
@@ -93,6 +95,7 @@ export interface PatternSeq {
 
 /**
  * ============================== EN ==============================
+ *
  * `PatternSet`: ordered alternatives (try `sub_nodes` from left to right).
  *
  * Conventions:
@@ -100,24 +103,29 @@ export interface PatternSeq {
  * - On success, this PatternSet is only appended into the winning AST node's `parser_nodes`.
  *
  * `neg_flags` (same length as `sub_nodes`): when `neg_flags[i]` is true, that alternative is negated.
- * If matching that alternative **succeeds**, the whole PatternSet fails (no further alternatives).
- * If it **fails**, behavior is the same as a non-negated failure: rewind `pos` and try the next alternative.
+ * If that alternative **matches successfully**, the whole PatternSet fails and no later alternatives are tried.
+ * If it **fails**, behavior is the same as a non-negated failure:
+ * rewind `pos` and try the next alternative.
  *
- * Long infix chains: prefer `\sep` lists in synx, then resolve associativity in a later pass;
- * left-recursion limits and other authoring shapes: see `ParserImpl`'s JSDoc on
- * `pattern_set_node_parse_stack`.
+ * Long infix chains: in synx, prefer collecting lists with `\sep`, then handle associativity in a later phase.
+ * For left-recursion limits and other authoring shapes, see the JSDoc for
+ * `pattern_set_node_parse_stack` in `ParserImpl`.
  *
  * ============================== 中文 ==============================
+ *
  * `PatternSet`：有序分支（从左到右尝试 `sub_nodes`）。
  *
  * 约定：
  * - 解析时优先采用第一个匹配成功的分支。
  * - 成功时，本 `PatternSet` 只会被追加到胜出 AST 节点的 `parser_nodes` 中。
  *
- * `neg_flags`（与 `sub_nodes` 等长）：`true` 表示该分支为否定分支；若该分支**匹配成功**，
- * 则整棵 `PatternSet` 失败且不再尝试后续分支；若**匹配失败**，与非否定分支失败相同，回绕并尝试下一分支。
+ * `neg_flags`（与 `sub_nodes` 等长）：`true` 表示该分支为否定分支。
+ * 若该分支**匹配成功**，则整棵 `PatternSet` 失败且不再尝试后续分支。
+ * 若**匹配失败**，与非否定分支失败相同：
+ * 回绕并尝试下一分支。
  *
- * 长中缀链：在 synx 中优先用 `\sep` 收列表，再结合性在后续阶段处理；左递归能力边界及其它写法见
+ * 长中缀链：在 synx 中优先用 `\sep` 收列表，再结合性在后续阶段处理。
+ * 左递归能力边界及其它写法见
  * `ParserImpl` 中 `pattern_set_node_parse_stack` 的 JSDoc。
  */
 export interface PatternSet {
