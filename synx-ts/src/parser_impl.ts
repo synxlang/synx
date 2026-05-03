@@ -611,11 +611,7 @@ export class ParserImpl implements Parser {
         }
 
         const single = quantifier === " " || quantifier === "?";
-        let first_ends: ParserNode[] = [];
-        if (quantifier === "?" || quantifier === "*") {
-            first_ends = ends;
-        }
-        const match_res = this.parseCharMatchNodeConsecutive(node, ignored, single, first_ends);
+        const match_res = this.parseCharMatchNodeConsecutive(node, ignored, single, ends, quantifier !== "+");
         ret.end_idx = match_res.end_idx;
         if (!this.isSuccess()) {
             if (quantifier === "?" || quantifier === "*") {
@@ -663,6 +659,7 @@ export class ParserImpl implements Parser {
         ignored: ParserNode | null,
         single: boolean,
         ends: ParserNode[] = [],
+        first_peek_ends: boolean = true,
     ): ParseCharMatchNodeConsecutiveResult {
         const start = this.input.pos;
         const ret: ParseCharMatchNodeConsecutiveResult = {
@@ -677,7 +674,7 @@ export class ParserImpl implements Parser {
         };
 
         for (; ;) {
-            if (peek_ends()) {
+            if (first_peek_ends && peek_ends()) {
                 this.setError(this.input.pos);
                 return ret;
             }
