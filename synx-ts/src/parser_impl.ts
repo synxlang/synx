@@ -52,6 +52,11 @@ interface ParseCharMatchNodeConsecutiveResult {
     end_idx: number;
 }
 
+interface ParseCharMatchNodeExResult {
+    ast_node_res: ASTNode[] | ASTNode | null;
+    end_idx: number;
+}
+
 /**
  * ============================== EN ==============================
  *
@@ -270,9 +275,9 @@ export class ParserImpl implements Parser {
         if (sep === null && CHAR_MATCH_NODE_KINDS.includes(node.kind)) {
             const result = this.parseCharMatchNodeEx(node as CharMatchNode, quantifier, ignored, ends);
             return {
-                ast_node_res: result,
+                ast_node_res: result.ast_node_res,
                 seps: [],
-                end_idx: -1,
+                end_idx: result.end_idx,
             }
         }
 
@@ -330,6 +335,12 @@ export class ParserImpl implements Parser {
                 }
             }
 
+            if (peek_ends()) {
+                if (sep !== null) {
+                    this.input.pos = sep_retry_pos;
+                }
+                break;
+            }
             let n = this.parseSingleNode(node, ignored);
             if (!this.isSuccess()) {
                 if (sep !== null) {
@@ -338,9 +349,6 @@ export class ParserImpl implements Parser {
                 break;
             }
             push_sep_node(sep_node);
-            if (peek_ends()) {
-                break;
-            }
             push_node(n);
         }
         this.setSuccess();
@@ -581,7 +589,16 @@ export class ParserImpl implements Parser {
         quantifier: Quantifier,
         ignored: ParserNode | null,
         ends: ParserNode[] = [],
-    ): ASTNode[] | ASTNode | null {
+    ): ParseCharMatchNodeExResult {
+        const ret: ParseCharMatchNodeExResult = {
+            ast_node_res: null,
+            end_idx: -1,
+        };
+        if (ignored === null && ends.length === 0) {
+            ret.ast_node_res = this.parseCharMatchNode(node, quantifier);
+            return ret;
+        }
+
         const make_ast_node = (start: number): ASTNode => {
             const end = this.input.pos;
             return {
@@ -594,29 +611,41 @@ export class ParserImpl implements Parser {
         }
 
         const single = quantifier === " " || quantifier === "?";
-        const match_res = this.parseCharMatchNodeConsecutive(node, ignored, single, ends);
+        let first_ends: ParserNode[] = [];
+        if (quantifier === "?" || quantifier === "*") {
+            first_ends = ends;
+        }
+        const match_res = this.parseCharMatchNodeConsecutive(node, ignored, single, first_ends);
+        ret.end_idx = match_res.end_idx;
         if (!this.isSuccess()) {
             if (quantifier === "?" || quantifier === "*") {
                 this.setSuccess();
             }
             if (single) {
-                return null;
+                return ret;
             }
-            return [];
+            ret.ast_node_res = [];
+            return ret;
         }
 
         const first = make_ast_node(match_res.start);
         if (single) {
-            return first;
+            ret.ast_node_res = first;
+            return ret;
         }
 
-        const ret: ASTNode[] = [first];
+        ret.ast_node_res = [first];
         for (; ;) {
             const match_res = this.parseCharMatchNodeConsecutive(node, ignored, false, ends);
             if (!this.isSuccess()) {
+                ret.end_idx = match_res.end_idx;
                 break;
             }
-            ret.push(make_ast_node(match_res.start))
+            ret.ast_node_res.push(make_ast_node(match_res.start))
+            ret.end_idx = match_res.end_idx;
+            if (ret.end_idx >= 0) {
+                break;
+            }
         }
         this.setSuccess();
         return ret;
