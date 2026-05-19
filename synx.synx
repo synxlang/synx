@@ -40,6 +40,7 @@ RawPattern=("\\raw", pattern:Pattern \ignore Space)=>pattern;
 
 AssociateByPart=("\\associateby", pattern:Pattern \ignore Space)=>pattern;
 NegPattern=("-", pattern:Pattern \ignore Space)=>[.pattern=pattern]; \\ reject if match, only can be used in PatternSet
+NonGreedyPattern=(pattern:Pattern, "^")=>pattern;
 PatternSet=((patterns:Pattern* \sep ";" \ignore Space), 
     associateby_part:AssociateByPart? \ignore Space \enclosedby "{}")=>[.patterns=patterns, .associateby=associateby_part];
 
