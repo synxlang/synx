@@ -16,7 +16,7 @@ GeneralSymbol={Symbol;SymbolDotChain};
 Comment=(CommentPrefix,comment:AnyChar*,LineDelimiter?)=>comment;     \\ AnyChar with * or + always not greedy
 
 EscapeChar=("\\", c:AnyChar)=>c;
-StringLiteral=(text:{EscapeChar, {-EscapeChar, -"\"", AnyChar}+}* \enclosedby "\"\"")=>text;
+StringLiteral=(text:{EscapeChar; {-EscapeChar; -"\""; AnyChar}+}* \enclosedby "\"\"")=>text;
 SingleCharString=(text:StringLiteral) \where char_cnt(text)==1;
 GeneralChar={SymbolChar;SingleCharString;};
 CharRange=(first:GeneralChar, "~", last:GeneralChar)=>[.first=first, .last=last];
@@ -24,7 +24,7 @@ CharRange=(first:GeneralChar, "~", last:GeneralChar)=>[.first=first, .last=last]
 FieldAssignment=(".", symbol:Symbol, "=", expr:Expr \ignore Space)=>[.target=symbol, .source=expr];
 Struct=(field_assignments:FieldAssignment* \sep "," \ignore Space \enclosedby "[]")=>field_assignments;
 
-GeneralCharSet=(charsets:CharSet* \sep ";" \ignore Space \enclosedby "{}")=>charsets;
+GeneralCharSet=({charsets:CharSet; neg_patterns:NegPattern}* \sep ";" \ignore Space \enclosedby "{}")=>[.charsets=charsets, .neg_patterns=neg_patterns];
 CharSet = {
     CharRange;
     ("\\oneof", string:StringLiteral)=>string;
