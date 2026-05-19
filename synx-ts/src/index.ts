@@ -4,6 +4,7 @@ export {
   ParserNode,
   ParserNodeKind,
   CharMatchNode,
+  GeneralCharMatchNode,
   CharMatchRange,
   CharMatchSet,
   PatternSeq,
@@ -14,6 +15,7 @@ export {
   mkPatternSeq,
   mkByteSeq,
   mkPatternSet,
+  isGeneralCharMatchNode,
   Quantifier,
 } from './parser_node';
 export { Symbol, Letter, Digit, SymbolChar } from './synx_parser_node';

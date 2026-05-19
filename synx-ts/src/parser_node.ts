@@ -112,6 +112,11 @@ export interface PatternSeq {
  * If it **fails**, behavior is the same as a non-negated failure:
  * rewind `pos` and try the next alternative.
  *
+ * `charset_flag`: marks that this PatternSet should be interpreted as a general character set.
+ * This corresponds to `GeneralCharSet` in `synx.synx`: normal alternatives are charset members,
+ * while negated alternatives are rejecting patterns for the set.
+ * When this flag is true, the PatternSet is handled with the same character-matching contract as `CharMatchSet`.
+ *
  * Long infix chains: in synx, prefer collecting lists with `\sep`, then handle associativity in a later phase.
  * For left-recursion limits and other authoring shapes, see the JSDoc for
  * `pattern_set_node_parse_stack` in `ParserImpl`.
@@ -129,6 +134,11 @@ export interface PatternSeq {
  * 若**匹配失败**，与非否定分支失败相同：
  * 回绕并尝试下一分支。
  *
+ * `charset_flag`：标记该 PatternSet 应按通用字符集解释。
+ * 这对应 `synx.synx` 中的 `GeneralCharSet`：普通分支为字符集成员，
+ * 否定分支为该集合的拒绝模式。
+ * 当该标记为 true 时，PatternSet 按与 `CharMatchSet` 相同的字符匹配契约处理。
+ *
  * 长中缀链：在 synx 中优先用 `\sep` 收列表，再结合性在后续阶段处理。
  * 左递归能力边界及其它写法见
  * `ParserImpl` 中 `pattern_set_node_parse_stack` 的 JSDoc。
@@ -137,6 +147,7 @@ export interface PatternSet {
     kind: ParserNodeKind.PatternSet;
     sub_nodes: ParserNode[];
     neg_flags: boolean[];
+    charset_flag: boolean;
 }
 
 /**
@@ -152,6 +163,7 @@ export const AnyChar = { kind: ParserNodeKind.AnyChar } as const;
  * 单字符匹配节点。
  */
 export type CharMatchNode = CharMatchRange | CharMatchSet | typeof AnyChar;
+export type GeneralCharMatchNode = CharMatchNode | (PatternSet & { charset_flag: true });
 export type ParserNode = CharMatchNode | PatternSeq | ByteSeq | PatternSet;
 
 /**
@@ -164,6 +176,11 @@ export const CHAR_MATCH_NODE_KINDS: ParserNodeKind[] = [
     ParserNodeKind.CharMatchRange,
     ParserNodeKind.CharMatchSet,
 ];
+
+export function isGeneralCharMatchNode(node: ParserNode): node is GeneralCharMatchNode {
+  return CHAR_MATCH_NODE_KINDS.includes(node.kind)
+    || (node.kind === ParserNodeKind.PatternSet && (node as PatternSet).charset_flag);
+}
 
 export function mkCharRange(start: string, end: string): CharMatchRange {
   return { kind: ParserNodeKind.CharMatchRange, start, end };
@@ -242,5 +259,28 @@ export function mkPatternSet(
     kind: ParserNodeKind.PatternSet,
     sub_nodes: patterns,
     neg_flags: flags,
+    charset_flag: inferPatternSetCharsetFlag(patterns, flags),
   };
+}
+
+function isPatternSetCharsetMember(node: ParserNode): boolean {
+  return isGeneralCharMatchNode(node);
+}
+
+function inferPatternSetCharsetFlag(
+  patterns: ParserNode[],
+  neg_flags: boolean[],
+): boolean {
+  if (patterns.length === 0) {
+    return false;
+  }
+  for (let i = 0; i < patterns.length; i++) {
+    if (neg_flags[i]) {
+      continue;
+    }
+    if (!isPatternSetCharsetMember(patterns[i])) {
+      return false;
+    }
+  }
+  return true;
 }
