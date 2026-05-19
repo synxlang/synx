@@ -1,4 +1,4 @@
-import { ParserImpl } from '../../../src/parser_impl';
+﻿import { ParserImpl } from '../../../src/parser_impl';
 import { mkByteSeq, mkCharRange, mkCharSet, mkPatternSeq } from '../../../src/parser_node';
 import type { Quantifier } from '../../../src/parser_node';
 import type { ASTNode, ParserInput } from '../../../src/parser';
@@ -125,14 +125,14 @@ function test_parsePatternSeq_embedsByteSeq(): void {
         range: [0, 2],
         value: '=>',
         raw_value: '=>',
-        seps: [],
+        seps: [], enclosure: null,
       },
       {
         parser_nodes: [letter],
         range: [2, 3],
         value: 'b',
         raw_value: 'b',
-        seps: [],
+        seps: [], enclosure: null,
       },
     ],
     raw_value: [
@@ -141,17 +141,17 @@ function test_parsePatternSeq_embedsByteSeq(): void {
         range: [0, 2],
         value: '=>',
         raw_value: '=>',
-        seps: [],
+        seps: [], enclosure: null,
       },
       {
         parser_nodes: [letter],
         range: [2, 3],
         value: 'b',
         raw_value: 'b',
-        seps: [],
+        seps: [], enclosure: null,
       },
     ],
-    seps: [],
+    seps: [], enclosure: null,
   });
   assert.strictEqual(parser.getError(), null);
 }

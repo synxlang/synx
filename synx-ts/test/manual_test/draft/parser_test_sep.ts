@@ -1,7 +1,10 @@
 /**
  * 临时调试 case 93（Seq_LetterPlusComma_Digit + "a,a,5"）
  *
- *   npx tsc && node dist/test/manual_test/draft/parser_test_sep.js
+ *   npm run build && node dist/test/manual_test/draft/parser_test_sep.js
+ *
+ * If a TypeScript runner is installed:
+ *   npx tsx test/manual_test/draft/parser_test_sep.ts
  */
 import { inspect } from "node:util";
 import { ParserImpl } from "../../../src/parser_impl";

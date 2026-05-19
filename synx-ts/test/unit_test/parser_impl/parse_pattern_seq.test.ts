@@ -1,5 +1,5 @@
-import { ParserImpl } from '../../../src/parser_impl';
-import { mkCharRange, mkCharSet, mkByteSeq, mkPatternSeq } from '../../../src/parser_node';
+﻿import { ParserImpl } from '../../../src/parser_impl';
+import { AnyChar, mkCharRange, mkCharSet, mkByteSeq, mkPatternSeq } from '../../../src/parser_node';
 import type { ByteSeq, CharMatchNode, ParserNode, PatternSeq } from '../../../src/parser_node';
 import type { ASTNode, ParserInput } from '../../../src/parser';
 import { strict as assert } from 'assert';
@@ -105,7 +105,7 @@ function mkChildAST(node: CharMatchNode, value: string, range: [number, number])
     range,
     value,
     raw_value: value,
-    seps: [],
+    seps: [], enclosure: null,
   };
 }
 
@@ -115,7 +115,7 @@ function mkByteSeqAST(n: ByteSeq, value: string, range: [number, number]): ASTNo
     range,
     value,
     raw_value: value,
-    seps: [],
+    seps: [], enclosure: null,
   };
 }
 
@@ -155,6 +155,7 @@ function mkSeqAST(
     value: normalized,
     raw_value: normalized,
     seps,
+    enclosure: null,
   };
 }
 
@@ -165,6 +166,17 @@ type TestCase = {
   expected: ASTNode | null;
   expected_error: boolean;
 };
+
+function test_mkPatternSeq_validates_shape(): void {
+  assert.throws(
+    () => mkPatternSeq([Digit, Letter], ' '),
+    /sub_quantifiers length must match sub_nodes length/,
+  );
+  assert.throws(
+    () => mkPatternSeq([Digit], '  '),
+    /sub_quantifiers length must match sub_nodes length/,
+  );
+}
 
 /** parsePatternSeq: multiple inputs covering sequence matching, various quantifier combinations, and failure scenarios */
 function test_parsePatternSeq(): void {
@@ -1262,9 +1274,154 @@ function test_parsePatternSeq(): void {
   }
 }
 
+function test_parsePatternSeq_enclosure(): void {
+  const Quote = mkByteSeq('"');
+  const QuotedRaw = mkPatternSeq([AnyChar], '*', true, null, false, null, null, [Quote, Quote]);
+  const parser = new ParserImpl({ parser_nodes: [] });
+  parser.initParse({ src: '"abc"', pos: 0 });
+
+  const result = parser.parsePatternSeq(QuotedRaw);
+
+  assert(parser.isSuccess());
+  assert.deepStrictEqual(result, {
+    parser_nodes: [QuotedRaw],
+    range: [0, 5],
+    value: 'abc',
+    raw_value: [{
+      parser_nodes: [AnyChar],
+      range: [1, 4],
+      value: 'abc',
+      raw_value: 'abc',
+      seps: [],
+      enclosure: null,
+    }],
+    seps: [],
+    enclosure: [
+      {
+        parser_nodes: [Quote],
+        range: [0, 1],
+        value: '"',
+        raw_value: '"',
+        seps: [],
+        enclosure: null,
+      },
+      {
+        parser_nodes: [Quote],
+        range: [4, 5],
+        value: '"',
+        raw_value: '"',
+        seps: [],
+        enclosure: null,
+      },
+    ],
+  });
+}
+
+function test_parsePatternSeq_enclosure_ignores_before_left(): void {
+  const Quote = mkByteSeq('"');
+  const Space = mkByteSeq(' ');
+  const QuotedRaw = mkPatternSeq([AnyChar], '*', true, null, false, Space, null, [Quote, Quote]);
+  const parser = new ParserImpl({ parser_nodes: [] });
+  parser.initParse({ src: '  "abc"', pos: 0 });
+
+  const result = parser.parsePatternSeq(QuotedRaw);
+
+  assert(parser.isSuccess());
+  assert.deepStrictEqual(result, {
+    parser_nodes: [QuotedRaw],
+    range: [0, 7],
+    value: 'abc',
+    raw_value: [[{
+      parser_nodes: [AnyChar],
+      range: [3, 6],
+      value: 'abc',
+      raw_value: 'abc',
+      seps: [],
+      enclosure: null,
+    }]],
+    seps: [],
+    enclosure: [
+      {
+        parser_nodes: [Quote],
+        range: [2, 3],
+        value: '"',
+        raw_value: '"',
+        seps: [],
+        enclosure: null,
+      },
+      {
+        parser_nodes: [Quote],
+        range: [6, 7],
+        value: '"',
+        raw_value: '"',
+        seps: [],
+        enclosure: null,
+      },
+    ],
+  });
+}
+
+function test_parsePatternSeq_enclosure_end_applies_to_last_nongreedy_child(): void {
+  const Quote = mkByteSeq('"');
+  const X = mkByteSeq('x');
+  const QuotedRaw = mkPatternSeq([X, AnyChar], ' *', true, null, false, null, [true, false], [Quote, Quote]);
+  const parser = new ParserImpl({ parser_nodes: [] });
+  parser.initParse({ src: '"xabc"', pos: 0 });
+
+  const result = parser.parsePatternSeq(QuotedRaw);
+
+  assert(parser.isSuccess());
+  assert.deepStrictEqual(result, {
+    parser_nodes: [QuotedRaw],
+    range: [0, 6],
+    value: 'xabc',
+    raw_value: [
+      {
+        parser_nodes: [X],
+        range: [1, 2],
+        value: 'x',
+        raw_value: 'x',
+        seps: [],
+        enclosure: null,
+      },
+      {
+        parser_nodes: [AnyChar],
+        range: [2, 5],
+        value: 'abc',
+        raw_value: 'abc',
+        seps: [],
+        enclosure: null,
+      },
+    ],
+    seps: [],
+    enclosure: [
+      {
+        parser_nodes: [Quote],
+        range: [0, 1],
+        value: '"',
+        raw_value: '"',
+        seps: [],
+        enclosure: null,
+      },
+      {
+        parser_nodes: [Quote],
+        range: [5, 6],
+        value: '"',
+        raw_value: '"',
+        seps: [],
+        enclosure: null,
+      },
+    ],
+  });
+}
+
 function runAllTests(): void {
   console.log('Running parsePatternSeq tests...\n');
+  test_mkPatternSeq_validates_shape();
   test_parsePatternSeq();
+  test_parsePatternSeq_enclosure();
+  test_parsePatternSeq_enclosure_ignores_before_left();
+  test_parsePatternSeq_enclosure_end_applies_to_last_nongreedy_child();
   console.log('\nAll parsePatternSeq tests passed!');
 }
 

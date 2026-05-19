@@ -1,5 +1,8 @@
 /**
- *   npx tsc && node dist/test/manual_test/draft/parser_manual_sample.js
+ *   npm run build && node dist/test/manual_test/draft/parser_manual_sample.js
+ *
+ * If a TypeScript runner is installed:
+ *   npx tsx test/manual_test/draft/parser_manual_sample.ts
  */
 import { inspect } from "node:util";
 import { type ASTNode, mkParser, ParseResultKind } from "../../../src/parser";

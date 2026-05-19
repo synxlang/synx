@@ -9,6 +9,7 @@ import { ParserImpl } from "./parser_impl";
  * - `value`: By default the same as `raw_value`; for special cases see the `ParserNode` definitions.
  * - `raw_value`: Raw AST payload: for `CharMatchNode` it is a string; for other kinds it is `ASTNode[]`, with each entry in one-to-one correspondence with `sub_nodes`.
  * - `seps`: Separator matches for `PatternSeq` (see `PatternSeq.sep`); empty array for other node kinds.
+ * - `enclosure`: See `PatternSeq` definition.
  *
  * ============================== 中文 ==============================
  *
@@ -17,6 +18,7 @@ import { ParserImpl } from "./parser_impl";
  * - `value`：默认value和raw_value相同，特殊情况见ParserNode定义。
  * - `raw_value`：原始 AST 值，对于CharMatchNode为字符串，其它为ASTNode[]，每个节点和sub_nodes一一对应。
  * - `seps`：`PatternSeq` 的分隔符匹配（见 `PatternSeq.sep`）；其它节点类型为空数组。
+ * - `enclosure`：见PatternSeq定义。
  */
 export interface ASTNode {
     parser_nodes: ParserNode[];
@@ -24,6 +26,7 @@ export interface ASTNode {
     value: any;
     raw_value: any;
     seps: ASTNode[];
+    enclosure: [ASTNode, ASTNode] | null;
 }
 
 export interface ParserInput {

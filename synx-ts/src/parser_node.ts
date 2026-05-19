@@ -57,10 +57,12 @@ export interface ByteSeq {
  * - Between adjacent sub-nodes;
  * - Between two successive matches of a sub-node whose quantifier is `*` or `+` (i.e. the gap between repetitions of that child);
  * Text matched solely through `ignore` does not appear in this sequence node's `raw_value`.
- * When `raw` is true, `ignore` still participates in matching, but does not affect `value`.
+ * When `raw` is true, `value` is the original matched source text for the sequence body; `raw_value` remains the structured child payload.
  * 
  * `greedy_flags` (same length as `sub_nodes`): `true` means greedy semantics for `*` / `+` / `?` on that slot.
  * Normalization (via {@link mkPatternSeq}): {@link AnyChar} with `*` or `+` **must** be non-greedy; quantifier `' '` (single mandatory match) **must** be greedy; both override conflicting explicit `greedy_flags`.
+ *
+ * `enclosure` (when non-null): boundary pair corresponding to `\enclosedby`, requiring that the input matched by `sep` and the right closing delimiter do not overlap; otherwise the result is undefined.
  *
  * ============================== 中文 ==============================
  *
@@ -77,10 +79,12 @@ export interface ByteSeq {
  * - 相邻子节点之间；
  * - 当某子节点量词为 `*` 或 `+` 时，该子节点连续两次匹配之间（即该子重复的间隔）;
  * 仅通过 `ignore` 匹配到的文本不会出现在本序列节点的 `raw_value` 中。
- * `raw` 为 true 时 `ignore` 还是会起匹配上的作用，但是不会影响 `value` 的值。
+ * `raw` 为 true 时，`value` 是序列主体匹配到的原始源文本；`raw_value` 仍是结构化的子节点结果。
  *
  * `greedy_flags`（与 `sub_nodes` 等长）：`true` 表示该子槽量词 `*` / `+` / `?` 按贪婪语义解析。
  * 规范化（由 {@link mkPatternSeq} 施加）：{@link AnyChar} 且量词为 `*` 或 `+` 时**必须**为非贪婪；量词为 `' '`（单次必配）的槽**必须**为贪婪；二者均覆盖与之冲突的显式 `greedy_flags`。
+ *
+ * `enclosure`（非 null 时）：对应 `\enclosedby` 的边界对，要求sep和右闭合符匹配到的输入没有交集，否则结果未定义。
  */
 export interface PatternSeq {
     kind: ParserNodeKind.PatternSeq;
@@ -91,6 +95,7 @@ export interface PatternSeq {
     accept_trailing_sep: boolean;
     ignore: ParserNode | null;
     greedy_flags: boolean[];
+    enclosure: [ParserNode, ParserNode] | null;
 }
 
 /**
@@ -177,11 +182,15 @@ export function mkPatternSeq(
   sep: ParserNode | null = null,
   accept_trailing_sep: boolean = false,
   ignore: ParserNode | null = null,
-  greedy_flags?: boolean[],
+  greedy_flags: boolean[] | null = null,
+  enclosure: [ParserNode, ParserNode] | null = null,
 ): PatternSeq {
   const n = sub_nodes.length;
+  if (sub_quantifiers.length !== n) {
+    throw new Error("mkPatternSeq: sub_quantifiers length must match sub_nodes length");
+  }
   const flags =
-    greedy_flags !== undefined
+    greedy_flags !== null
       ? greedy_flags.slice()
       : Array.from({ length: n }, () => true);
   if (flags.length !== n) {
@@ -191,7 +200,7 @@ export function mkPatternSeq(
     const q = sub_quantifiers[i];
     if (q === " ") {
       flags[i] = true;
-    } else if (sub_nodes[i]!.kind === ParserNodeKind.AnyChar && (q === "*" || q === "+")) {
+    } else if (sub_nodes[i].kind === ParserNodeKind.AnyChar && (q === "*" || q === "+")) {
       flags[i] = false;
     }
   }
@@ -204,6 +213,7 @@ export function mkPatternSeq(
     accept_trailing_sep,
     ignore,
     greedy_flags: flags,
+    enclosure,
   };
 }
 

@@ -4,7 +4,10 @@
  * 这个脚本不是单测：不做 assert，不给 pass/fail 结论。
  * 它只跑几组代表性输入，打印 input 下标、slot 摘要、sep 摘要与 raw AST，方便人工观察是否符合预期。
  *
- *   npx tsc && node dist/test/manual_test/draft/parser_test_nongreedy.js
+ *   npm run build && node dist/test/manual_test/draft/parser_test_nongreedy.js
+ *
+ * If a TypeScript runner is installed:
+ *   npx tsx test/manual_test/draft/parser_test_nongreedy.ts
  */
 import { inspect } from "node:util";
 import type { ASTNode } from "../../../src/parser";

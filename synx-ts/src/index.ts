@@ -17,3 +17,4 @@ export {
   Quantifier,
 } from './parser_node';
 export { Symbol, Letter, Digit, SymbolChar } from './synx_parser_node';
+export { SynxFmt } from './synx_fmt';

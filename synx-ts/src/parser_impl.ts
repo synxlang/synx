@@ -20,13 +20,15 @@ import type { ASTNode } from "./parser";
  * ============================== EN ==============================
  *
  * - With `*` / `+` quantifiers, returns `ASTNode[]`; with ` ` / `?`, returns `ASTNode` or `null`.
- * - CharMatchNode special case: always merge consecutive characters into a single `ASTNode`.
+ * - CharMatchNode special case: when `ignored` is null, repeated character matches are merged into one `ASTNode`;
+ *   when `ignored` is non-null, `*` / `+` returns `ASTNode[]` so separated runs remain observable.
  * - `end_idx` is the matched end-node index, or `-1` if no end node matched.
  *
  * ============================== 中文 ==============================
  *
  * `*`、`+` 量词时返回 `ASTNode[]`；`' '` 或 `?` 量词时返回 `ASTNode` 或 `null`。
- * `CharMatchNode` 特殊，总是把连续字符合并为单个 `ASTNode`。
+ * `CharMatchNode` 特殊：`ignored` 为空时，重复字符匹配会合并为一个 `ASTNode`；
+ * `ignored` 非空时，`*` / `+` 返回 `ASTNode[]`，以保留被 ignored 分隔的多段结果。
  * `end_idx` 为结束节点匹配索引；未匹配到结束节点时为 `-1`。
  */
 interface ParseNodeResult {
@@ -502,7 +504,20 @@ export class ParserImpl implements Parser {
         const start = this.input.pos;
         const children: (ASTNode[] | ASTNode | null)[] = [];
         const seps: ASTNode[] = [];
-        let last_sep_end: number = start;
+        let left_enclosure: ASTNode | null = null;
+        let right_enclosure: ASTNode | null = null;
+
+        if (node.enclosure !== null) {
+            const left = this.parseSingleNode(node.enclosure[0], node.ignore);
+            if (!this.isSuccess() || left === null) {
+                this.input.pos = start;
+                return null;
+            }
+            left_enclosure = left;
+        }
+
+        const body_start = this.input.pos;
+        let last_sep_end: number = body_start;
         for (let i = 0; i < node.sub_nodes.length; i++) {
             const q = node.sub_quantifiers[i] as Quantifier;
             const sub_node = node.sub_nodes[i];
@@ -514,6 +529,9 @@ export class ParserImpl implements Parser {
                     if (node.greedy_flags[j] || qj === " " || qj === "+") {
                         break;
                     }
+                }
+                if (i === node.sub_nodes.length - 1 && node.enclosure !== null) {
+                    ends.push(node.enclosure[1]);
                 }
             }
             const parse_res = this.parseNode(sub_node, q, node.ignore, node.sep, ends);
@@ -556,8 +574,18 @@ export class ParserImpl implements Parser {
             i = next_i;
         }
 
+        const body_end = this.input.pos;
+        if (node.enclosure !== null) {
+            const right = this.parseSingleNode(node.enclosure[1], node.ignore);
+            if (!this.isSuccess() || right === null) {
+                this.input.pos = start;
+                return null;
+            }
+            right_enclosure = right;
+        }
+
         const value = node.raw
-            ? this.input.src.slice(start, this.input.pos)
+            ? this.input.src.slice(body_start, body_end)
             : children;
 
         this.setSuccess();
@@ -567,6 +595,9 @@ export class ParserImpl implements Parser {
             value,
             raw_value: children,
             seps,
+            enclosure: node.enclosure !== null
+                ? [left_enclosure!, right_enclosure!]
+                : null,
         };
     }
 
@@ -589,6 +620,7 @@ export class ParserImpl implements Parser {
                 value: this.input.src.slice(start, end),
                 raw_value: this.input.src.slice(start, end),
                 seps: [],
+                enclosure: null,
             };
         }
 
@@ -615,9 +647,25 @@ export class ParserImpl implements Parser {
     }
 
     /**
-     * For quantifier `*` and `+`, merge consecutive matched strings, return ASTNode[].
-     * 
-     * 对于量词 `*` 和 `+`，会合并连续的匹配字符串，返回 `ASTNode[]`。
+     * ============================== EN ==============================
+     *
+     * Extended CharMatch parsing used by parseNode.
+     *
+     * Return shape convention:
+     * - When ignored is null, return a single merged ASTNode for matched runs with `*` / `+` quantifiers.
+     * - If non-greedy ends stops a `*` quantifier before any character is consumed, return null.
+     * - When ignored is non-null, return ASTNode[] for `*` / `+` quantifiers so runs split by ignored text stay separate;
+     *   zero matched runs are represented as [].
+     *
+     * ============================== 中文 ==============================
+     *
+     * parseNode 使用的扩展字符匹配。
+     *
+     * 返回形状约定：
+     * - ignored 为空时，量词为 `*` 或 `+` 的匹配返回合并后的单个 ASTNode。
+     * - 非贪婪 ends 让 `*` 量词在消费任何字符前停止时，返回 null。
+     * - ignored 非空时，量词为 `*` 或 `+` 的匹配返回 ASTNode[]，以保留被 ignored 文本分隔的多段结果；
+     *   零段匹配表示为 []。
      */
     parseCharMatchNodeEx(
         node: CharMatchNode,
@@ -642,6 +690,7 @@ export class ParserImpl implements Parser {
                 value: this.input.src.slice(start, end),
                 raw_value: this.input.src.slice(start, end),
                 seps: [],
+                enclosure: null,
             };
         }
 
@@ -655,12 +704,19 @@ export class ParserImpl implements Parser {
             if (single) {
                 return ret;
             }
-            ret.ast_node_res = [];
+            if (ignored !== null) {
+                ret.ast_node_res = [];
+            }
             return ret;
         }
 
         const first = make_ast_node(match_res.start);
         if (single) {
+            ret.ast_node_res = first;
+            return ret;
+        }
+
+        if (ignored === null) {
             ret.ast_node_res = first;
             return ret;
         }
@@ -797,6 +853,7 @@ export class ParserImpl implements Parser {
             value: this.input.src.slice(start, end),
             raw_value: this.input.src.slice(start, end),
             seps: [],
+            enclosure: null,
         };
     }
 
