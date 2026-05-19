@@ -1,4 +1,4 @@
-import { strict as assert } from "assert";
+﻿import { strict as assert } from "assert";
 import { inspect } from "node:util";
 import { ParserImpl } from "../../../src/parser_impl";
 import type { ASTNode, ParserInput } from "../../../src/parser";
@@ -39,7 +39,7 @@ function mkByteSeqAST(n: ByteSeq, value: string, range: [number, number]): ASTNo
     range,
     value,
     raw_value: value,
-    seps: [],
+    seps: [], enclosure: null,
   };
 }
 
@@ -49,7 +49,7 @@ function mkCharRangeAST(n: CharMatchNode, value: string, range: [number, number]
     range,
     value,
     raw_value: value,
-    seps: [],
+    seps: [], enclosure: null,
   };
 }
 
@@ -59,7 +59,7 @@ function mkAnyCharAST(value: string, range: [number, number]): ASTNode {
     range,
     value,
     raw_value: value,
-    seps: [],
+    seps: [], enclosure: null,
   };
 }
 
@@ -70,6 +70,7 @@ function mkSeqAST(seq: PatternSeq, range: [number, number], parts: (ASTNode | AS
     value: parts,
     raw_value: parts,
     seps,
+    enclosure: null,
   };
 }
 
@@ -157,7 +158,7 @@ function test_parsePatternSeq_nongreedy(): void {
       name: "AnyChar * default non-greedy: zero matches before Bang",
       seq: Seq_AnyChar_star_Bang,
       input: { src: "!", pos: 0 },
-      expected: mkSeqAST(Seq_AnyChar_star_Bang, [0, 1], [[], mkByteSeqAST(Bang, "!", [0, 1])]),
+      expected: mkSeqAST(Seq_AnyChar_star_Bang, [0, 1], [null, mkByteSeqAST(Bang, "!", [0, 1])]),
       expected_error: false,
     },
     {
@@ -165,7 +166,7 @@ function test_parsePatternSeq_nongreedy(): void {
       name: "AnyChar * default non-greedy: stops before Bang",
       seq: Seq_AnyChar_star_Bang,
       input: { src: "abc!tail", pos: 0 },
-      expected: mkSeqAST(Seq_AnyChar_star_Bang, [0, 4], [[mkAnyCharAST("abc", [0, 3])], mkByteSeqAST(Bang, "!", [3, 4])]),
+      expected: mkSeqAST(Seq_AnyChar_star_Bang, [0, 4], [mkAnyCharAST("abc", [0, 3]), mkByteSeqAST(Bang, "!", [3, 4])]),
       expected_error: false,
     },
     {
@@ -173,7 +174,7 @@ function test_parsePatternSeq_nongreedy(): void {
       name: "AnyChar + default non-greedy: one char then Bang",
       seq: Seq_AnyChar_plus_Bang,
       input: { src: "x!", pos: 0 },
-      expected: mkSeqAST(Seq_AnyChar_plus_Bang, [0, 2], [[mkAnyCharAST("x", [0, 1])], mkByteSeqAST(Bang, "!", [1, 2])]),
+      expected: mkSeqAST(Seq_AnyChar_plus_Bang, [0, 2], [mkAnyCharAST("x", [0, 1]), mkByteSeqAST(Bang, "!", [1, 2])]),
       expected_error: false,
     },
     {
@@ -181,7 +182,7 @@ function test_parsePatternSeq_nongreedy(): void {
       name: "AnyChar * with Digit end",
       seq: Seq_AnyChar_star_Digit,
       input: { src: "abc1rest", pos: 0 },
-      expected: mkSeqAST(Seq_AnyChar_star_Digit, [0, 4], [[mkAnyCharAST("abc", [0, 3])], mkCharRangeAST(Digit, "1", [3, 4])]),
+      expected: mkSeqAST(Seq_AnyChar_star_Digit, [0, 4], [mkAnyCharAST("abc", [0, 3]), mkCharRangeAST(Digit, "1", [3, 4])]),
       expected_error: false,
     },
   ];

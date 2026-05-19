@@ -15,7 +15,8 @@ GeneralSymbol={Symbol;SymbolDotChain};
 
 Comment=(CommentPrefix,comment:AnyChar*,LineDelimiter?)=>comment;     \\ AnyChar with * or + always not greedy
 
-StringLiteral=(text:AnyChar* \enclosedby ("\"", {-"\\\"", "\""}))=>text;
+EscapeChar=("\\", c:AnyChar)=>c;
+StringLiteral=(text:{EscapeChar, {-EscapeChar, -"\"", AnyChar}+}* \enclosedby "\"\"")=>text;
 SingleCharString=(text:StringLiteral) \where char_cnt(text)==1;
 GeneralChar={SymbolChar;SingleCharString;};
 CharRange=(first:GeneralChar, "~", last:GeneralChar)=>[.first=first, .last=last];
@@ -44,7 +45,7 @@ PatternSet=((patterns:Pattern* \sep ";" \ignore Space),
 
 sepPart=("\\sep", pattern:Pattern \ignore Space)=>pattern;
 IgnorePart=("\\ignore", pattern:Pattern \ignore Space)=>pattern;
-EnclosedbyPart=("\\enclosedby", pattern:Pattern \ignore Space)=>pattern;
+EnclosedbyPart=("\\enclosedby", pattern:Pattern \ignore Space)=>pattern;        \\ valid pattern is StringLiteral of length 2 or PatternSeq of length 2
 PatternSeq=(
     (patterns:Pattern* \sep "," \ignore Space), 
     sep_part:sepPart?, ignore_part:IgnorePart?, enclosedby_part:EnclosedbyPart? 
