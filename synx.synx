@@ -34,8 +34,8 @@ CharSet = {
 };
 
 Option=(pattern:Pattern, "?")=>pattern;
-OneOrMany=(pattern:Pattern, "*")=>pattern;
-Many=(pattern:Pattern, "+")=>pattern;
+OneOrMany=(pattern:Pattern, "+")=>pattern;
+Many=(pattern:Pattern, "*")=>pattern;
 RawPattern=("\\raw", pattern:Pattern \ignore Space)=>pattern;
 
 AssociateByPart=("\\associateby", pattern:Pattern \ignore Space)=>pattern;
