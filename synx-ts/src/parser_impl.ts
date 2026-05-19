@@ -1,10 +1,11 @@
 import assert from "assert";
-import { matchChar, matchCharRange, matchAnyChar, CharMatchSetResult } from "./parser_matcher";
+import { matchChar, matchCharRange, matchAnyChar } from "./parser_matcher";
 import {
     ParserNode,
     ParserNodeKind,
-    CHAR_MATCH_NODE_KINDS,
     CharMatchNode,
+    GeneralCharMatchNode,
+    isGeneralCharMatchNode,
     CharMatchRange,
     CharMatchSet,
     PatternSeq,
@@ -20,14 +21,14 @@ import type { ASTNode } from "./parser";
  * ============================== EN ==============================
  *
  * - With `*` / `+` quantifiers, returns `ASTNode[]`; with ` ` / `?`, returns `ASTNode` or `null`.
- * - CharMatchNode special case: when `ignored` is null, repeated character matches are merged into one `ASTNode`;
+ * - GeneralCharMatchNode special case: when `ignored` is null, repeated character matches are merged into one `ASTNode`;
  *   when `ignored` is non-null, `*` / `+` returns `ASTNode[]` so separated runs remain observable.
  * - `end_idx` is the matched end-node index, or `-1` if no end node matched.
  *
  * ============================== 中文 ==============================
  *
  * `*`、`+` 量词时返回 `ASTNode[]`；`' '` 或 `?` 量词时返回 `ASTNode` 或 `null`。
- * `CharMatchNode` 特殊：`ignored` 为空时，重复字符匹配会合并为一个 `ASTNode`；
+ * GeneralCharMatchNode 特殊处理：`ignored` 为空时，重复字符匹配会合并为一个 `ASTNode`；
  * `ignored` 非空时，`*` / `+` 返回 `ASTNode[]`，以保留被 ignored 分隔的多段结果。
  * `end_idx` 为结束节点匹配索引；未匹配到结束节点时为 `-1`。
  */
@@ -304,8 +305,8 @@ export class ParserImpl implements Parser {
         if (ends.length > 0) {
             assert.ok(quantifier !== " ");
         }
-        if (sep === null && CHAR_MATCH_NODE_KINDS.includes(node.kind)) {
-            const result = this.parseCharMatchNodeEx(node as CharMatchNode, quantifier, ignored, ends);
+        if (sep === null && isGeneralCharMatchNode(node)) {
+            const result = this.parseCharMatchNodeEx(node, quantifier, ignored, ends);
             return {
                 ast_node_res: result.ast_node_res,
                 seps: [],
@@ -453,16 +454,16 @@ export class ParserImpl implements Parser {
         if (node.kind === ParserNodeKind.ByteSeq) {
             return this.parseByteSeq(node as ByteSeq);
         }
-        if (node.kind === ParserNodeKind.PatternSet) {
-            return this.parsePatternSet(node as PatternSet);
-        }
         if (node.kind === ParserNodeKind.PatternSeq) {
             return this.parsePatternSeq(node as PatternSeq);
         }
-        if (CHAR_MATCH_NODE_KINDS.includes(node.kind)) {
-            return this.parseCharMatchNode(node as CharMatchNode, " ");
+        if (isGeneralCharMatchNode(node)) {
+            return this.parseCharMatchNode(node, " ");
         }
-        assert.fail(`unimplemented node kind: ${node.kind}`);
+        if (node.kind === ParserNodeKind.PatternSet) {
+            return this.parsePatternSet(node as PatternSet);
+        }
+        assert.fail("unimplemented node kind");
     }
 
     parsePatternSet(node: PatternSet): ASTNode | null {
@@ -495,6 +496,51 @@ export class ParserImpl implements Parser {
             }
             assert.ok(!this.isSuccess());
             return null;
+        } finally {
+            this.pattern_set_node_parse_stack.pop();
+        }
+    }
+
+    /**
+     * Match a `charset_flag` PatternSet as `GeneralCharSet`: rejecting branches are probes, normal branches consume one Char.
+     * 按 `GeneralCharSet` 匹配 `charset_flag` PatternSet：否定分支只探测拒绝，普通分支消费一个字符。
+     */
+    parseCharMatchPatternSet(node: PatternSet): ParserNode[] {
+        const start = this.input.pos;
+        let alt_idx = this.getPatternSetNextAltIdx(node, start);
+        this.pattern_set_node_parse_stack.push({ node, pos: start, alt_idx });
+
+        try {
+            if (alt_idx >= node.sub_nodes.length) {
+                this.setError(this.input.pos, "pattern set has no more alternatives");
+                return [];
+            }
+
+            for (let i = alt_idx; i < node.sub_nodes.length; i++) {
+                const sub_node = node.sub_nodes[i];
+                let matched_nodes: ParserNode[] = [];
+                if (node.neg_flags[i]) {
+                    this.parseSingleNode(sub_node);
+                } else {
+                    assert.ok(isGeneralCharMatchNode(sub_node));
+                    matched_nodes = this.parseSingleCharMatchNode(sub_node);
+                }
+
+                if (!this.isSuccess()) {
+                    this.input.pos = start;
+                    continue;
+                }
+                if (node.neg_flags[i]) {
+                    this.input.pos = start;
+                    this.setError(start, "charset reject pattern matched");
+                    return [];
+                }
+                matched_nodes.push(node);
+                return matched_nodes;
+            }
+
+            assert.ok(!this.isSuccess());
+            return [];
         } finally {
             this.pattern_set_node_parse_stack.pop();
         }
@@ -607,7 +653,7 @@ export class ParserImpl implements Parser {
      * 字符匹配：按量词匹配并合并为字符串，返回 `ASTNode`（`value` / `raw_value` 为被匹配的字符串）。
      */
     parseCharMatchNode(
-        node: CharMatchNode,
+        node: GeneralCharMatchNode,
         quantifier: Quantifier,
     ): ASTNode | null {
         const start = this.input.pos;
@@ -668,7 +714,7 @@ export class ParserImpl implements Parser {
      *   零段匹配表示为 []。
      */
     parseCharMatchNodeEx(
-        node: CharMatchNode,
+        node: GeneralCharMatchNode,
         quantifier: Quantifier,
         ignored: ParserNode | null,
         ends: ParserNode[] = [],
@@ -752,7 +798,7 @@ export class ParserImpl implements Parser {
      * 返回值参考 `ParseCharMatchNodeConsecutiveResult` 定义。
      */
     parseCharMatchNodeConsecutive(
-        node: CharMatchNode,
+        node: GeneralCharMatchNode,
         ignored: ParserNode | null,
         single: boolean,
         ends: ParserNode[] = [],
@@ -812,9 +858,12 @@ export class ParserImpl implements Parser {
         }
     }
 
-    parseSingleCharMatchNode(node: CharMatchNode): CharMatchNode[] {
+    parseSingleCharMatchNode(node: GeneralCharMatchNode): ParserNode[] {
         if (node.kind === ParserNodeKind.CharMatchSet) {
             return this.parseCharMatchSet(node as CharMatchSet);
+        }
+        if (node.kind === ParserNodeKind.PatternSet) {
+            return this.parseCharMatchPatternSet(node as PatternSet);
         }
 
         if (node.kind === ParserNodeKind.AnyChar) {
@@ -829,6 +878,7 @@ export class ParserImpl implements Parser {
             return [];
         }
     }
+
 
     /**
      * Match a fixed `ByteSeq.literal` once (`startsWith` at current byte offset in the binary-string model).

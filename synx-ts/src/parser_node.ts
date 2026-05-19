@@ -163,6 +163,7 @@ export const AnyChar = { kind: ParserNodeKind.AnyChar } as const;
  * 单字符匹配节点。
  */
 export type CharMatchNode = CharMatchRange | CharMatchSet | typeof AnyChar;
+export type GeneralCharMatchNode = CharMatchNode | (PatternSet & { charset_flag: true });
 export type ParserNode = CharMatchNode | PatternSeq | ByteSeq | PatternSet;
 
 /**
@@ -175,6 +176,11 @@ export const CHAR_MATCH_NODE_KINDS: ParserNodeKind[] = [
     ParserNodeKind.CharMatchRange,
     ParserNodeKind.CharMatchSet,
 ];
+
+export function isGeneralCharMatchNode(node: ParserNode): node is GeneralCharMatchNode {
+  return CHAR_MATCH_NODE_KINDS.includes(node.kind)
+    || (node.kind === ParserNodeKind.PatternSet && (node as PatternSet).charset_flag);
+}
 
 export function mkCharRange(start: string, end: string): CharMatchRange {
   return { kind: ParserNodeKind.CharMatchRange, start, end };
@@ -258,8 +264,7 @@ export function mkPatternSet(
 }
 
 function isPatternSetCharsetMember(node: ParserNode): boolean {
-  return CHAR_MATCH_NODE_KINDS.includes(node.kind)
-    || (node.kind === ParserNodeKind.PatternSet && (node as PatternSet).charset_flag);
+  return isGeneralCharMatchNode(node);
 }
 
 function inferPatternSetCharsetFlag(

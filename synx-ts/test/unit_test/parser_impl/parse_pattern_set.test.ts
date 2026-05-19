@@ -1,6 +1,6 @@
 ﻿import { strict as assert } from 'assert';
 import { ParserImpl } from '../../../src/parser_impl';
-import { mkByteSeq, mkPatternSeq, mkPatternSet } from '../../../src/parser_node';
+import { AnyChar, mkByteSeq, mkCharRange, mkPatternSeq, mkPatternSet } from '../../../src/parser_node';
 import type { PatternSet, ParserNode } from '../../../src/parser_node';
 import type { ASTNode, ParserInput } from '../../../src/parser';
 
@@ -437,6 +437,110 @@ function test_parsePatternSet_neg_flags(): void {
   });
 }
 
+function test_parsePatternSet_charset_flag_char_match_contract(): void {
+  const lower = mkCharRange('a', 'z');
+  const lowerSet = mkPatternSet([lower]);
+  assert.strictEqual(lowerSet.charset_flag, true);
+
+  const p1 = new ParserImpl({ parser_nodes: [] });
+  p1.initParse({ src: 'm', pos: 0 });
+  const r1 = p1.parseSingleNode(lowerSet);
+  assert(p1.isSuccess());
+  assert.deepStrictEqual(r1, {
+    parser_nodes: [lowerSet],
+    range: [0, 1],
+    value: 'm',
+    raw_value: 'm',
+    seps: [], enclosure: null,
+  });
+
+  const p2 = new ParserImpl({ parser_nodes: [] });
+  p2.initParse({ src: '5', pos: 0 });
+  assert.strictEqual(p2.parseSingleNode(lowerSet), null);
+  assert.ok(!p2.isSuccess());
+}
+
+function test_parsePatternSet_charset_flag_reject_patterns(): void {
+  const quote = mkByteSeq('"');
+  const notQuote = mkPatternSet([quote, AnyChar], [true, false]);
+  assert.strictEqual(notQuote.charset_flag, true);
+
+  const p1 = new ParserImpl({ parser_nodes: [] });
+  p1.initParse({ src: 'x', pos: 0 });
+  const r1 = p1.parseSingleNode(notQuote);
+  assert(p1.isSuccess());
+  assert.deepStrictEqual(r1, {
+    parser_nodes: [notQuote],
+    range: [0, 1],
+    value: 'x',
+    raw_value: 'x',
+    seps: [], enclosure: null,
+  });
+
+  const p2 = new ParserImpl({ parser_nodes: [] });
+  p2.initParse({ src: '"', pos: 0 });
+  assert.strictEqual(p2.parseSingleNode(notQuote), null);
+  assert.ok(!p2.isSuccess());
+  assert.strictEqual(p2.input.pos, 0);
+}
+
+function test_parsePatternSet_charset_flag_multichar_reject_pattern(): void {
+  const backslash = mkByteSeq('\\');
+  const escape = mkPatternSeq([backslash, AnyChar], '  ');
+  const quote = mkByteSeq('"');
+  const stringChar = mkPatternSet([escape, quote, AnyChar], [true, true, false]);
+  assert.strictEqual(stringChar.charset_flag, true);
+
+  const p1 = new ParserImpl({ parser_nodes: [] });
+  p1.initParse({ src: '\\n', pos: 0 });
+  assert.strictEqual(p1.parseSingleNode(stringChar), null);
+  assert.ok(!p1.isSuccess());
+  assert.strictEqual(p1.input.pos, 0);
+
+  const p2 = new ParserImpl({ parser_nodes: [] });
+  p2.initParse({ src: '😀', pos: 0 });
+  const r2 = p2.parseSingleNode(stringChar);
+  assert(p2.isSuccess());
+  assert.deepStrictEqual(r2, {
+    parser_nodes: [stringChar],
+    range: [0, 2],
+    value: '😀',
+    raw_value: '😀',
+    seps: [], enclosure: null,
+  });
+}
+
+function test_parsePatternSet_charset_flag_repetition_merges_like_char_match_set(): void {
+  const quote = mkByteSeq('"');
+  const notQuote = mkPatternSet([quote, AnyChar], [true, false]);
+  const text = mkPatternSeq([notQuote], '+');
+
+  const parser = new ParserImpl({ parser_nodes: [] });
+  parser.initParse({ src: 'abc"tail', pos: 0 });
+  const result = parser.parseSingleNode(text);
+
+  assert(parser.isSuccess());
+  assert.deepStrictEqual(result, {
+    parser_nodes: [text],
+    range: [0, 3],
+    value: [{
+      parser_nodes: [notQuote],
+      range: [0, 3],
+      value: 'abc',
+      raw_value: 'abc',
+      seps: [], enclosure: null,
+    }],
+    raw_value: [{
+      parser_nodes: [notQuote],
+      range: [0, 3],
+      value: 'abc',
+      raw_value: 'abc',
+      seps: [], enclosure: null,
+    }],
+    seps: [], enclosure: null,
+  });
+}
+
 function runAllTests(): void {
   console.log('Running parsePatternSet tests...\n');
   test_parsePatternSet_basic();
@@ -449,10 +553,13 @@ function runAllTests(): void {
   test_parsePatternSet_left_recursive_list_ab();
   test_parsePatternSet_synx_shape_ABC();
   test_parsePatternSet_neg_flags();
+  test_parsePatternSet_charset_flag_char_match_contract();
+  test_parsePatternSet_charset_flag_reject_patterns();
+  test_parsePatternSet_charset_flag_multichar_reject_pattern();
+  test_parsePatternSet_charset_flag_repetition_merges_like_char_match_set();
   console.log('\nAll parsePatternSet tests passed!');
 }
 
 if (require.main === module) {
   runAllTests();
 }
-
