@@ -137,6 +137,7 @@ export interface PatternSet {
     kind: ParserNodeKind.PatternSet;
     sub_nodes: ParserNode[];
     neg_flags: boolean[];
+    charset_flag: boolean;
 }
 
 /**
