@@ -1,7 +1,7 @@
-import type { ASTNode } from "./parser";
+﻿import type { ASTNode } from "./parser";
 import {
   ParserNodeKind,
-  type ByteSeq,
+  type CharSeq,
   type CharMatchNode,
   type CharMatchRange,
   type CharMatchSet,
@@ -62,8 +62,8 @@ function stringifyParserNode(node: ParserNode, seen: SeenState): string {
         return stringifyCharMatchSet(node as CharMatchSet, id, seen);
       case ParserNodeKind.PatternSeq:
         return stringifyPatternSeq(node as PatternSeq, id, seen);
-      case ParserNodeKind.ByteSeq:
-        return stringifyByteSeq(node as ByteSeq, id);
+      case ParserNodeKind.CharSeq:
+        return stringifyCharSeq(node as CharSeq, id);
       case ParserNodeKind.PatternSet:
         return stringifyPatternSet(node as PatternSet, id, seen);
       default:
@@ -83,8 +83,8 @@ function stringifyCharMatchSet(node: CharMatchSet, id: number, seen: SeenState):
   return `#${id} CharMatchSet(${stringifyArray(node.sub_nodes, seen)})`;
 }
 
-function stringifyByteSeq(node: ByteSeq, id: number): string {
-  return `#${id} ByteSeq(${quote(node.literal)})`;
+function stringifyCharSeq(node: CharSeq, id: number): string {
+  return `#${id} CharSeq(${quote(node.literal)})`;
 }
 
 function stringifyPatternSeq(node: PatternSeq, id: number, seen: SeenState): string {

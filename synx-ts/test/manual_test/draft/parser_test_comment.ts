@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Manual observation script for the `Comment` grammar in `synx.synx`.
  * 手工观察 `synx.synx` 中的 `Comment` 语法。
  *
@@ -12,7 +12,7 @@ import { ParserImpl } from "../../../src/parser_impl";
 import { SynxFmt } from "../../../src/synx_fmt";
 import {
   AnyChar,
-  mkByteSeq,
+  mkCharSeq,
   mkPatternSeq,
   mkPatternSet,
   type ParserNode,
@@ -23,9 +23,9 @@ import {
  * `CommentPrefix = "\\\\"` from `synx.synx`, namely two backslash characters.
  * 来自 `synx.synx` 的 `CommentPrefix = "\\\\"`，也就是两个反斜杠字符。
  */
-const CommentPrefix = mkByteSeq("\\\\");
-const Lf = mkByteSeq("\n");
-const CrLf = mkByteSeq("\r\n");
+const CommentPrefix = mkCharSeq("\\\\");
+const Lf = mkCharSeq("\n");
+const CrLf = mkCharSeq("\r\n");
 
 /**
  * Prefer CRLF before LF so Windows line delimiters stay as one AST node.

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 临时非贪婪功能观察脚本。
  *
  * 这个脚本不是单测：不做 assert，不给 pass/fail 结论。
@@ -14,7 +14,7 @@ import type { ASTNode } from "../../../src/parser";
 import { ParserImpl } from "../../../src/parser_impl";
 import {
   AnyChar,
-  mkByteSeq,
+  mkCharSeq,
   mkCharRange,
   mkCharSet,
   mkPatternSeq,
@@ -22,12 +22,12 @@ import {
   type PatternSeq,
 } from "../../../src/parser_node";
 
-const A = mkByteSeq("a");
-const B = mkByteSeq("b");
-const C = mkByteSeq("c");
-const Bang = mkByteSeq("!");
-const Five = mkByteSeq("5");
-const Comma = mkByteSeq(",");
+const A = mkCharSeq("a");
+const B = mkCharSeq("b");
+const C = mkCharSeq("c");
+const Bang = mkCharSeq("!");
+const Five = mkCharSeq("5");
+const Comma = mkCharSeq(",");
 const Space = mkCharSet(" ");
 const Digit = mkCharRange("0", "9");
 
@@ -139,7 +139,7 @@ function runCase(c: CaseDef, index: number): void {
 
 const cases: CaseDef[] = [
   {
-    name: "ByteSeq *? + mandatory end",
+    name: "CharSeq *? + mandatory end",
     src: "aaabtail",
     seq: mkPatternSeq([A, B], "* ", false, null, false, null, [false, true]),
     note: "观察 A*? 如何在 B 前停下：slot0 应收连续 a，slot1 应收第一个 b，tail 不应被消费。",
@@ -196,7 +196,7 @@ const cases: CaseDef[] = [
     name: "AnyChar * + CharRange end",
     src: "abc1rest",
     seq: mkPatternSeq([AnyChar, Digit], "* "),
-    note: "观察 end 不是 ByteSeq 而是 CharRange 时，AnyChar* 是否在第一个 digit 前停止。",
+    note: "观察 end 不是 CharSeq 而是 CharRange 时，AnyChar* 是否在第一个 digit 前停止。",
   },
 ];
 

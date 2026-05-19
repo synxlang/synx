@@ -1,9 +1,9 @@
-export enum ParserNodeKind {
+﻿export enum ParserNodeKind {
     AnyChar,
     CharMatchRange,
     CharMatchSet,
     PatternSeq,
-    ByteSeq,
+    CharSeq,
     PatternSet,
     ParserNodeKindEnd,
 }
@@ -36,8 +36,8 @@ export interface CharMatchSet {
  * 
  * `literal`：待匹配的字符串。
  */
-export interface ByteSeq {
-  kind: ParserNodeKind.ByteSeq;
+export interface CharSeq {
+  kind: ParserNodeKind.CharSeq;
   literal: string;
 }
 
@@ -164,7 +164,7 @@ export const AnyChar = { kind: ParserNodeKind.AnyChar } as const;
  */
 export type CharMatchNode = CharMatchRange | CharMatchSet | typeof AnyChar;
 export type GeneralCharMatchNode = CharMatchNode | (PatternSet & { charset_flag: true });
-export type ParserNode = CharMatchNode | PatternSeq | ByteSeq | PatternSet;
+export type ParserNode = CharMatchNode | PatternSeq | CharSeq | PatternSet;
 
 /**
  * All kinds that belong to CharMatchNode, used for branch checking to avoid hardcoding multiple kinds.
@@ -235,15 +235,15 @@ export function mkPatternSeq(
 }
 
 /**
- * Builds a `ByteSeq`; throws if `literal` is empty.
+ * Builds a `CharSeq`; throws if `literal` is empty.
  *
- * 构造 `ByteSeq`；若 `literal` 为空则抛出。
+ * 构造 `CharSeq`；若 `literal` 为空则抛出。
  */
-export function mkByteSeq(literal: string): ByteSeq {
+export function mkCharSeq(literal: string): CharSeq {
   if (literal.length === 0) {
-    throw new Error("ByteSeq.literal must be non-empty");
+    throw new Error("CharSeq.literal must be non-empty");
   }
-  return { kind: ParserNodeKind.ByteSeq, literal };
+  return { kind: ParserNodeKind.CharSeq, literal };
 }
 
 export function mkPatternSet(

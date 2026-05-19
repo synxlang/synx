@@ -1,5 +1,5 @@
 ﻿import { ParserImpl } from '../../../src/parser_impl';
-import { mkByteSeq, mkCharRange, mkCharSet, mkPatternSeq } from '../../../src/parser_node';
+import { mkCharSeq, mkCharRange, mkCharSet, mkPatternSeq } from '../../../src/parser_node';
 import type { Quantifier } from '../../../src/parser_node';
 import type { ASTNode, ParserInput } from '../../../src/parser';
 import { ParserNodeKind } from '../../../src/parser_node';
@@ -11,8 +11,8 @@ function parse_node_result_count(parse_res: ASTNode[] | ASTNode | null): number 
   return 1;
 }
 
-/** parseByteSeq: single match only; no setError, no quantifier */
-function test_parseByteSeq(): void {
+/** parseCharSeq: single match only; no setError, no quantifier */
+function test_parseCharSeq(): void {
   const cases: Array<{
     id: number;
     literal: string;
@@ -24,10 +24,10 @@ function test_parseByteSeq(): void {
     { id: 3, literal: '5😀', input: { src: '5😀z', pos: 0 }, expected_value: '5😀' },
   ];
   for (const c of cases) {
-    const node = mkByteSeq(c.literal);
+    const node = mkCharSeq(c.literal);
     const parser = new ParserImpl({ parser_nodes: [] });
     parser.initParse(c.input);
-    const result = parser.parseByteSeq(node);
+    const result = parser.parseCharSeq(node);
     if (c.expected_value === null) {
       if (result !== null) {
         throw new Error(`[case ${c.id}] expected null, got ${(result as ASTNode).value}`);
@@ -39,7 +39,7 @@ function test_parseByteSeq(): void {
       if (result.value !== c.expected_value) {
         throw new Error(`[case ${c.id}] expected value ${JSON.stringify(c.expected_value)}, got ${JSON.stringify(result.value)}`);
       }
-      if (result.parser_nodes[0]!.kind !== ParserNodeKind.ByteSeq) {
+      if (result.parser_nodes[0]!.kind !== ParserNodeKind.CharSeq) {
         throw new Error(`[case ${c.id}] wrong parser node kind`);
       }
     }
@@ -48,14 +48,14 @@ function test_parseByteSeq(): void {
         throw new Error(`[case ${c.id}] expected parse failure (no literal match)`);
       }
     } else if (!parser.isSuccess()) {
-      throw new Error(`[case ${c.id}] parseByteSeq success expected, got error ${parser.getError()}`);
+      throw new Error(`[case ${c.id}] parseCharSeq success expected, got error ${parser.getError()}`);
     }
   }
 }
 
-/** ByteSeq quantifiers via a single-child PatternSeq (production uses `parsePatternSeq` → `parseNode`). */
+/** CharSeq quantifiers via a single-child PatternSeq (production uses `parsePatternSeq` → `parseNode`). */
 function test_parsePatternSeq_byteSeq_quantifiers(): void {
-  const ab = mkByteSeq('ab');
+  const ab = mkCharSeq('ab');
   const cases: Array<{
     id: number;
     quantifier: Quantifier;
@@ -107,9 +107,9 @@ function test_parsePatternSeq_byteSeq_quantifiers(): void {
   }
 }
 
-/** ByteSeq as a child of PatternSeq (e.g. synx `=>` before a symbol) */
-function test_parsePatternSeq_embedsByteSeq(): void {
-  const lit = mkByteSeq('=>');
+/** CharSeq as a child of PatternSeq (e.g. synx `=>` before a symbol) */
+function test_parsePatternSeq_embedsCharSeq(): void {
+  const lit = mkCharSeq('=>');
   const letter = mkCharSet([mkCharRange('a', 'z')]);
   const seq = mkPatternSeq([lit, letter], '  ');
   const parser = new ParserImpl({ parser_nodes: [] });
@@ -157,11 +157,11 @@ function test_parsePatternSeq_embedsByteSeq(): void {
 }
 
 function runAllTests(): void {
-  console.log('Running parseByteSeq tests...\n');
-  test_parseByteSeq();
+  console.log('Running parseCharSeq tests...\n');
+  test_parseCharSeq();
   test_parsePatternSeq_byteSeq_quantifiers();
-  test_parsePatternSeq_embedsByteSeq();
-  console.log('\nAll parseByteSeq tests passed!');
+  test_parsePatternSeq_embedsCharSeq();
+  console.log('\nAll parseCharSeq tests passed!');
 }
 
 if (require.main === module) {

@@ -1,4 +1,4 @@
-export { Parser, ParserConfig, ParseResult, ParseResultKind, ParserInput, ASTNode } from './parser';
+﻿export { Parser, ParserConfig, ParseResult, ParseResultKind, ParserInput, ASTNode } from './parser';
 export { ParserImpl } from './parser_impl';
 export { 
   ParserNode,
@@ -8,12 +8,12 @@ export {
   CharMatchRange,
   CharMatchSet,
   PatternSeq,
-  ByteSeq,
+  CharSeq,
   PatternSet,
   mkCharRange,
   mkCharSet,
   mkPatternSeq,
-  mkByteSeq,
+  mkCharSeq,
   mkPatternSet,
   isGeneralCharMatchNode,
   Quantifier,

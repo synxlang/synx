@@ -1,11 +1,11 @@
 ﻿import { strict as assert } from 'assert';
 import { ParserImpl } from '../../../src/parser_impl';
-import { AnyChar, mkByteSeq, mkCharRange, mkPatternSeq, mkPatternSet } from '../../../src/parser_node';
+import { AnyChar, mkCharSeq, mkCharRange, mkPatternSeq, mkPatternSet } from '../../../src/parser_node';
 import type { PatternSet, ParserNode } from '../../../src/parser_node';
 import type { ASTNode, ParserInput } from '../../../src/parser';
 
 function test_parsePatternSet_basic(): void {
-  const set: PatternSet = mkPatternSet([mkByteSeq('ab'), mkByteSeq('a')]);
+  const set: PatternSet = mkPatternSet([mkCharSeq('ab'), mkCharSeq('a')]);
 
   const cases: Array<{
     id: number;
@@ -83,14 +83,14 @@ function test_parsePatternSet_infinite_recursion_cycle(): void {
 function test_parsePatternSet_nested_seq_and_set(): void {
   // Synx shape:
   // innerSet = { "ab" ; "a" }
-  const innerSet: PatternSet = mkPatternSet([mkByteSeq('ab'), mkByteSeq('a')]);
+  const innerSet: PatternSet = mkPatternSet([mkCharSeq('ab'), mkCharSeq('a')]);
   // outerSet = { innerSet ; "x" }
-  const outerSet: PatternSet = mkPatternSet([innerSet, mkByteSeq('x')]);
+  const outerSet: PatternSet = mkPatternSet([innerSet, mkCharSeq('x')]);
   // seq = outerSet , "!"
   //
   // Equivalent Synx-style pattern (schematically):
   // ( { { "ab" ; "a" } ; "x" } , "!" )
-  const bang = mkByteSeq('!');
+  const bang = mkCharSeq('!');
   const seq = mkPatternSeq([outerSet, bang], '  ');
 
   const parser = new ParserImpl({ parser_nodes: [] });
@@ -99,7 +99,7 @@ function test_parsePatternSet_nested_seq_and_set(): void {
 
   // Expect: PatternSeq with two children.
   // - child[0] comes from outerSet picking innerSet picking "ab"
-  //   flatten rules append sets into parser_nodes of the winning ByteSeq.
+  //   flatten rules append sets into parser_nodes of the winning CharSeq.
   assert.deepStrictEqual(result, {
     parser_nodes: [seq],
     range: [0, 3],
@@ -152,12 +152,12 @@ function test_parsePatternSet_infinite_recursion_nested_cycle(): void {
   const a: PatternSet = mkPatternSet([]);
   const b: PatternSet = mkPatternSet([]);
   const c: PatternSet = mkPatternSet([]);
-  const q = mkByteSeq('q');
-  const r = mkByteSeq('r');
-  const s = mkByteSeq('s');
-  const x = mkByteSeq('x');
-  const y = mkByteSeq('y');
-  const z = mkByteSeq('z');
+  const q = mkCharSeq('q');
+  const r = mkCharSeq('r');
+  const s = mkCharSeq('s');
+  const x = mkCharSeq('x');
+  const y = mkCharSeq('y');
+  const z = mkCharSeq('z');
 
   const seqA = mkPatternSeq([x, b], '  ');
   const seqB = mkPatternSeq([y, c], '  ');
@@ -185,8 +185,8 @@ function test_parsePatternSet_infinite_recursion_nested_cycle(): void {
  * First alternative is left-recursive; re-entry at the same `pos` skips to the next index (base case).
  */
 function test_parsePatternSet_left_recursive_plus_chain(): void {
-  const one = mkByteSeq('1');
-  const plus = mkByteSeq('+');
+  const one = mkCharSeq('1');
+  const plus = mkCharSeq('+');
   const expr = mkPatternSet([]);
   const seq = mkPatternSeq([expr, plus, one], '   ');
   expr.sub_nodes.push(seq as unknown as ParserNode, one as unknown as ParserNode);
@@ -243,8 +243,8 @@ function test_parsePatternSet_left_recursive_plus_chain(): void {
  * in one top-level match (`range` covers the full string).
  */
 function test_parsePatternSet_left_recursive_expr_plus_expr(): void {
-  const one = mkByteSeq('1');
-  const plus = mkByteSeq('+');
+  const one = mkCharSeq('1');
+  const plus = mkCharSeq('+');
   const expr = mkPatternSet([]);
   const seq = mkPatternSeq([expr, plus, expr], '   ');
   expr.sub_nodes.push(seq as unknown as ParserNode, one as unknown as ParserNode);
@@ -306,8 +306,8 @@ function test_parsePatternSet_left_recursive_expr_plus_expr(): void {
  * Left recursion: List ::= List 'b' | 'a'
  */
 function test_parsePatternSet_left_recursive_list_ab(): void {
-  const a = mkByteSeq('a');
-  const b = mkByteSeq('b');
+  const a = mkCharSeq('a');
+  const b = mkCharSeq('b');
   const list = mkPatternSet([]);
   const pair = mkPatternSeq([list, b], '  ');
   list.sub_nodes.push(pair as unknown as ParserNode, a as unknown as ParserNode);
@@ -362,8 +362,8 @@ function test_parsePatternSet_synx_shape_ABC(): void {
   // - A is a PatternSet with alternative: B
 
   const A: PatternSet = mkPatternSet([]);
-  const C: PatternSet = mkPatternSet([mkByteSeq('12')]);
-  const B = mkPatternSeq([mkByteSeq('ab'), C], '  ');
+  const C: PatternSet = mkPatternSet([mkCharSeq('12')]);
+  const B = mkPatternSeq([mkCharSeq('ab'), C], '  ');
   A.sub_nodes.push(B as unknown as ParserNode);
   C.sub_nodes.push(A as unknown as ParserNode);
   A.neg_flags.push(false);
@@ -391,8 +391,8 @@ function test_parsePatternSet_synx_shape_ABC(): void {
 
 /** `neg_flags`: negated branch inner success fails whole set; inner failure falls through like non-neg failure. */
 function test_parsePatternSet_neg_flags(): void {
-  const aLit = mkByteSeq('a');
-  const bLit = mkByteSeq('b');
+  const aLit = mkCharSeq('a');
+  const bLit = mkCharSeq('b');
 
   const negThenB = mkPatternSet([aLit, bLit], [true, false]);
   const p1 = new ParserImpl({ parser_nodes: [] });
@@ -461,7 +461,7 @@ function test_parsePatternSet_charset_flag_char_match_contract(): void {
 }
 
 function test_parsePatternSet_charset_flag_reject_patterns(): void {
-  const quote = mkByteSeq('"');
+  const quote = mkCharSeq('"');
   const notQuote = mkPatternSet([quote, AnyChar], [true, false]);
   assert.strictEqual(notQuote.charset_flag, true);
 
@@ -485,9 +485,9 @@ function test_parsePatternSet_charset_flag_reject_patterns(): void {
 }
 
 function test_parsePatternSet_charset_flag_multichar_reject_pattern(): void {
-  const backslash = mkByteSeq('\\');
+  const backslash = mkCharSeq('\\');
   const escape = mkPatternSeq([backslash, AnyChar], '  ');
-  const quote = mkByteSeq('"');
+  const quote = mkCharSeq('"');
   const stringChar = mkPatternSet([escape, quote, AnyChar], [true, true, false]);
   assert.strictEqual(stringChar.charset_flag, true);
 
@@ -511,7 +511,7 @@ function test_parsePatternSet_charset_flag_multichar_reject_pattern(): void {
 }
 
 function test_parsePatternSet_charset_flag_repetition_merges_like_char_match_set(): void {
-  const quote = mkByteSeq('"');
+  const quote = mkCharSeq('"');
   const notQuote = mkPatternSet([quote, AnyChar], [true, false]);
   const text = mkPatternSeq([notQuote], '+');
 

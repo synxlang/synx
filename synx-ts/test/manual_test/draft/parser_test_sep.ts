@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 临时调试 case 93（Seq_LetterPlusComma_Digit + "a,a,5"）
  *
  *   npm run build && node dist/test/manual_test/draft/parser_test_sep.js
@@ -8,12 +8,12 @@
  */
 import { inspect } from "node:util";
 import { ParserImpl } from "../../../src/parser_impl";
-import { mkByteSeq, mkCharRange, mkCharSet, mkPatternSeq } from "../../../src/parser_node";
+import { mkCharSeq, mkCharRange, mkCharSet, mkPatternSeq } from "../../../src/parser_node";
 import type { CharMatchNode } from "../../../src/parser_node";
 
 const Digit: CharMatchNode = mkCharRange("0", "9");
 const Letter: CharMatchNode = mkCharSet([mkCharRange("a", "z")]);
-const CommaSep = mkByteSeq(",");
+const CommaSep = mkCharSeq(",");
 const Seq_LetterPlusComma_Digit = mkPatternSeq([Letter, Digit], "+ ", false, CommaSep);
 /** Single child: Letter+ with CommaSep — same `parseNode` path as inside `parsePatternSeq`. */
 const Seq_LetterOnlyPlusComma = mkPatternSeq([Letter], "+", false, CommaSep, false, null);

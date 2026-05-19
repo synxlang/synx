@@ -1,5 +1,5 @@
-import { ParserImpl } from '../../../src/parser_impl';
-import { mkByteSeq, mkCharRange, mkCharSet, mkPatternSeq } from '../../../src/parser_node';
+﻿import { ParserImpl } from '../../../src/parser_impl';
+import { mkCharSeq, mkCharRange, mkCharSet, mkPatternSeq } from '../../../src/parser_node';
 import type { CharMatchNode, ParserNode, Quantifier } from '../../../src/parser_node';
 import type { ParserInput } from '../../../src/parser';
 import type { ASTNode } from '../../../src/parser';
@@ -32,8 +32,8 @@ function test_parsePatternSeq_singleSlot_quantifiers(): void {
     { id: 1, node: Digit, quantifier: ' ', input: { src: '5', pos: 0 }, expected_count: 1, expected_error: false },
     { id: 2, node: Digit, quantifier: ' ', input: { src: 'a', pos: 0 }, expected_count: 0, expected_error: true },
     { id: 3, node: Letter, quantifier: '?', input: { src: 'x', pos: 0 }, expected_count: 1, expected_error: false },
-    { id: 5, node: mkByteSeq('=>'), quantifier: ' ', input: { src: '=>y', pos: 0 }, expected_count: 1, expected_error: false },
-    { id: 6, node: mkByteSeq('=>'), quantifier: ' ', input: { src: '=y', pos: 0 }, expected_count: 0, expected_error: true },
+    { id: 5, node: mkCharSeq('=>'), quantifier: ' ', input: { src: '=>y', pos: 0 }, expected_count: 1, expected_error: false },
+    { id: 6, node: mkCharSeq('=>'), quantifier: ' ', input: { src: '=y', pos: 0 }, expected_count: 0, expected_error: true },
   ];
   for (const c of cases) {
     const parser = new ParserImpl({ parser_nodes: [] });

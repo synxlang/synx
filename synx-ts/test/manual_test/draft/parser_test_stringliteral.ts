@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Manual observation script for the `StringLiteral` grammar in `synx.synx`.
  * 手工观察 `synx.synx` 中的 `StringLiteral` 语法。
  *
@@ -12,15 +12,15 @@ import { ParserImpl } from "../../../src/parser_impl";
 import { SynxFmt } from "../../../src/synx_fmt";
 import {
   AnyChar,
-  mkByteSeq,
+  mkCharSeq,
   mkPatternSeq,
   mkPatternSet,
   type ParserNode,
   type PatternSeq,
 } from "../../../src/parser_node";
 
-const Backslash = mkByteSeq("\\");
-const Quote = mkByteSeq("\"");
+const Backslash = mkCharSeq("\\");
+const Quote = mkCharSeq("\"");
 
 /**
  * EscapeChar = ("\\", c:AnyChar) => c

@@ -4,22 +4,22 @@ import { ParserImpl } from "../../../src/parser_impl";
 import type { ASTNode, ParserInput } from "../../../src/parser";
 import {
   AnyChar,
-  mkByteSeq,
+  mkCharSeq,
   mkCharRange,
   mkCharSet,
   mkPatternSeq,
-  type ByteSeq,
+  type CharSeq,
   type CharMatchNode,
   type ParserNode,
   type PatternSeq,
 } from "../../../src/parser_node";
 
-const A = mkByteSeq("a");
-const B = mkByteSeq("b");
-const C = mkByteSeq("c");
-const Bang = mkByteSeq("!");
-const Five = mkByteSeq("5");
-const Comma = mkByteSeq(",");
+const A = mkCharSeq("a");
+const B = mkCharSeq("b");
+const C = mkCharSeq("c");
+const Bang = mkCharSeq("!");
+const Five = mkCharSeq("5");
+const Comma = mkCharSeq(",");
 const Space = mkCharSet(" ");
 const Digit: CharMatchNode = mkCharRange("0", "9");
 
@@ -33,7 +33,7 @@ const Seq_AnyChar_star_Bang = mkPatternSeq([AnyChar, Bang], "* ");
 const Seq_AnyChar_plus_Bang = mkPatternSeq([AnyChar, Bang], "+ ");
 const Seq_AnyChar_star_Digit = mkPatternSeq([AnyChar, Digit], "* ");
 
-function mkByteSeqAST(n: ByteSeq, value: string, range: [number, number]): ASTNode {
+function mkCharSeqAST(n: CharSeq, value: string, range: [number, number]): ASTNode {
   return {
     parser_nodes: [n],
     range,
@@ -88,12 +88,12 @@ function test_parsePatternSeq_nongreedy(): void {
   const cases: NongreedyCase[] = [
     {
       id: 1,
-      name: "ByteSeq * non-greedy stops before mandatory B",
+      name: "CharSeq * non-greedy stops before mandatory B",
       seq: Seq_A_star_B_mandatory_nongreedy,
       input: { src: "aaabtail", pos: 0 },
       expected: mkSeqAST(Seq_A_star_B_mandatory_nongreedy, [0, 4], [
-        [mkByteSeqAST(A, "a", [0, 1]), mkByteSeqAST(A, "a", [1, 2]), mkByteSeqAST(A, "a", [2, 3])],
-        mkByteSeqAST(B, "b", [3, 4]),
+        [mkCharSeqAST(A, "a", [0, 1]), mkCharSeqAST(A, "a", [1, 2]), mkCharSeqAST(A, "a", [2, 3])],
+        mkCharSeqAST(B, "b", [3, 4]),
       ]),
       expected_error: false,
     },
@@ -102,7 +102,7 @@ function test_parsePatternSeq_nongreedy(): void {
       name: "Consecutive ?? non-greedy: skip to final mandatory C",
       seq: Seq_A_q_B_q_C_mandatory,
       input: { src: "c", pos: 0 },
-      expected: mkSeqAST(Seq_A_q_B_q_C_mandatory, [0, 1], [null, null, mkByteSeqAST(C, "c", [0, 1])]),
+      expected: mkSeqAST(Seq_A_q_B_q_C_mandatory, [0, 1], [null, null, mkCharSeqAST(C, "c", [0, 1])]),
       expected_error: false,
     },
     {
@@ -111,9 +111,9 @@ function test_parsePatternSeq_nongreedy(): void {
       seq: Seq_A_star_B_star_C_mandatory,
       input: { src: "aaac", pos: 0 },
       expected: mkSeqAST(Seq_A_star_B_star_C_mandatory, [0, 4], [
-        [mkByteSeqAST(A, "a", [0, 1]), mkByteSeqAST(A, "a", [1, 2]), mkByteSeqAST(A, "a", [2, 3])],
+        [mkCharSeqAST(A, "a", [0, 1]), mkCharSeqAST(A, "a", [1, 2]), mkCharSeqAST(A, "a", [2, 3])],
         [],
-        mkByteSeqAST(C, "c", [3, 4]),
+        mkCharSeqAST(C, "c", [3, 4]),
       ]),
       expected_error: false,
     },
@@ -123,9 +123,9 @@ function test_parsePatternSeq_nongreedy(): void {
       seq: Seq_A_star_B_plus_C_mandatory,
       input: { src: "aaabbc", pos: 0 },
       expected: mkSeqAST(Seq_A_star_B_plus_C_mandatory, [0, 6], [
-        [mkByteSeqAST(A, "a", [0, 1]), mkByteSeqAST(A, "a", [1, 2]), mkByteSeqAST(A, "a", [2, 3])],
-        [mkByteSeqAST(B, "b", [3, 4]), mkByteSeqAST(B, "b", [4, 5])],
-        mkByteSeqAST(C, "c", [5, 6]),
+        [mkCharSeqAST(A, "a", [0, 1]), mkCharSeqAST(A, "a", [1, 2]), mkCharSeqAST(A, "a", [2, 3])],
+        [mkCharSeqAST(B, "b", [3, 4]), mkCharSeqAST(B, "b", [4, 5])],
+        mkCharSeqAST(C, "c", [5, 6]),
       ]),
       expected_error: false,
     },
@@ -137,8 +137,8 @@ function test_parsePatternSeq_nongreedy(): void {
       expected: mkSeqAST(
         Seq_A_plus_Five_mandatory_comma,
         [0, 5],
-        [[mkByteSeqAST(A, "a", [0, 1]), mkByteSeqAST(A, "a", [2, 3])], mkByteSeqAST(Five, "5", [4, 5])],
-        [mkByteSeqAST(Comma, ",", [1, 2]), mkByteSeqAST(Comma, ",", [3, 4])],
+        [[mkCharSeqAST(A, "a", [0, 1]), mkCharSeqAST(A, "a", [2, 3])], mkCharSeqAST(Five, "5", [4, 5])],
+        [mkCharSeqAST(Comma, ",", [1, 2]), mkCharSeqAST(Comma, ",", [3, 4])],
       ),
       expected_error: false,
     },
@@ -148,8 +148,8 @@ function test_parsePatternSeq_nongreedy(): void {
       seq: Seq_A_star_B_mandatory_ignoreSpace,
       input: { src: "aaa   b", pos: 0 },
       expected: mkSeqAST(Seq_A_star_B_mandatory_ignoreSpace, [0, 7], [
-        [mkByteSeqAST(A, "a", [0, 1]), mkByteSeqAST(A, "a", [1, 2]), mkByteSeqAST(A, "a", [2, 3])],
-        mkByteSeqAST(B, "b", [6, 7]),
+        [mkCharSeqAST(A, "a", [0, 1]), mkCharSeqAST(A, "a", [1, 2]), mkCharSeqAST(A, "a", [2, 3])],
+        mkCharSeqAST(B, "b", [6, 7]),
       ]),
       expected_error: false,
     },
@@ -158,7 +158,7 @@ function test_parsePatternSeq_nongreedy(): void {
       name: "AnyChar * default non-greedy: zero matches before Bang",
       seq: Seq_AnyChar_star_Bang,
       input: { src: "!", pos: 0 },
-      expected: mkSeqAST(Seq_AnyChar_star_Bang, [0, 1], [null, mkByteSeqAST(Bang, "!", [0, 1])]),
+      expected: mkSeqAST(Seq_AnyChar_star_Bang, [0, 1], [null, mkCharSeqAST(Bang, "!", [0, 1])]),
       expected_error: false,
     },
     {
@@ -166,7 +166,7 @@ function test_parsePatternSeq_nongreedy(): void {
       name: "AnyChar * default non-greedy: stops before Bang",
       seq: Seq_AnyChar_star_Bang,
       input: { src: "abc!tail", pos: 0 },
-      expected: mkSeqAST(Seq_AnyChar_star_Bang, [0, 4], [mkAnyCharAST("abc", [0, 3]), mkByteSeqAST(Bang, "!", [3, 4])]),
+      expected: mkSeqAST(Seq_AnyChar_star_Bang, [0, 4], [mkAnyCharAST("abc", [0, 3]), mkCharSeqAST(Bang, "!", [3, 4])]),
       expected_error: false,
     },
     {
@@ -174,7 +174,7 @@ function test_parsePatternSeq_nongreedy(): void {
       name: "AnyChar + default non-greedy: one char then Bang",
       seq: Seq_AnyChar_plus_Bang,
       input: { src: "x!", pos: 0 },
-      expected: mkSeqAST(Seq_AnyChar_plus_Bang, [0, 2], [mkAnyCharAST("x", [0, 1]), mkByteSeqAST(Bang, "!", [1, 2])]),
+      expected: mkSeqAST(Seq_AnyChar_plus_Bang, [0, 2], [mkAnyCharAST("x", [0, 1]), mkCharSeqAST(Bang, "!", [1, 2])]),
       expected_error: false,
     },
     {
