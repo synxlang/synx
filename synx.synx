@@ -11,7 +11,8 @@ Space=SpaceChar+;
 DigitLiteral=Digit+;
 Symbol=\raw (Letter,SymbolChar*);
 SymbolDotChain=(symbols:Symbol* \sep ".")=>symbols;
-GeneralSymbol={Symbol;SymbolDotChain};          
+GeneralSymbol={Symbol;SymbolDotChain};
+ResolvedSymbol="\\resolved_symbol";
 
 Comment=(CommentPrefix,comment:AnyChar*,LineDelimiter?)=>comment;     \\ AnyChar with * or + always not greedy
 
@@ -29,7 +30,7 @@ CharSet = {
     CharRange;
     ("\\oneof", string:StringLiteral)=>string;
     GeneralCharSet;
-    GeneralSymbol;
+    \resolved_symbol;
     \associateby "()";
 };
 
@@ -57,7 +58,7 @@ ConditionPattern=(pattern:Pattern, "\\where", condition:ConditionExpr \ignore Sp
 PatternBinding=(symbol:Symbol,":",pattern:Pattern)=>[.symbol=symbol, .pattern=pattern];
 Rule=(pattern:PatternSeq,"=>",returned:Expr)=>[.pattern=pattern, .returned=returned];
 
-Pattern={NegPattern;CharSet;StringLiteral;Option;OneOrMany;Many;RawPattern;PatternSeq;PatternSet;PatternBinding;ConditionPattern;Rule;GeneralSymbol \associateby "()"};
+Pattern={NegPattern;CharSet;StringLiteral;Option;OneOrMany;Many;RawPattern;PatternSeq;PatternSet;PatternBinding;ConditionPattern;Rule;\resolved_symbol \associateby "()"};
 
 List=(exprs:Expr* \sep "," \ignore Space \enclosedby "[]")=>exprs;
 
@@ -87,7 +88,8 @@ Keyword={
     "\\sep"; "\\ignore"; "\\enclosedby";
     "\\where";
     "\\associateby";
-    "\\raw";  \\ rawtern all matched pieces into single string
+    "\\raw";  \\ raw represents raw text within matched text
+    "\\resolved_symbol";
 };
 
 Synx=(expr:Expr* \sep ";" \ignore Space);
