@@ -554,15 +554,8 @@ export class ParserImpl implements Parser {
         let right_enclosure: ASTNode | null = null;
         const binding_context: Record<string, any> = Object.create(null);
 
-        const push_child = (child_idx: number, child: ASTNode[] | ASTNode | null): void => {
+        const push_child = (child: ASTNode[] | ASTNode | null): void => {
             children.push(child);
-            const binding = node.sub_node_bindings?.[child_idx] ?? null;
-            if (binding === null) {
-                return;
-            }
-            const isolated = node.sub_node_isolated_scope_flags?.[child_idx] ?? true;
-            assert.ok(isolated, "non-isolated PatternSeq binding scope is not implemented yet");
-            binding_context[binding] = child;
         };
 
         if (node.enclosure !== null) {
@@ -600,13 +593,13 @@ export class ParserImpl implements Parser {
             }
 
             seps.push(...parse_res.seps);
-            push_child(i, ast_res);
+            push_child(ast_res);
             let next_i = i;
             if (parse_res.end_idx >= 0) {
                 const end_node_idx = i + 1 + parse_res.end_idx;
                 for (let j = i + 1; j < end_node_idx; j++) {
                     const qj = node.sub_quantifiers[j] as Quantifier;
-                    push_child(j, qj === "*" ? [] : null);
+                    push_child(qj === "*" ? [] : null);
                 }
                 next_i = end_node_idx - 1;
             }
@@ -640,6 +633,19 @@ export class ParserImpl implements Parser {
                 return null;
             }
             right_enclosure = right;
+        }
+
+        if (node.sub_node_bindings !== null) {
+            for (let i = 0; i < node.sub_node_bindings.length; i++) {
+                const binding = node.sub_node_bindings[i];
+                if (binding === null) {
+                    continue;
+                }
+                const isolated = node.sub_node_isolated_scope_flags?.[i] ?? true;
+                assert.ok(isolated, "non-isolated PatternSeq binding scope is not implemented yet");
+                assert.ok(!(binding in binding_context), `duplicate PatternSeq binding: ${binding}`);
+                binding_context[binding] = children[i];
+            }
         }
 
         let value: any = node.raw
