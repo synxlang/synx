@@ -66,6 +66,7 @@ export interface CharSeq {
  *
  * `sub_node_bindings` (when non-null, same length as `sub_nodes`): binding names for child parse results.
  * A non-null entry binds the corresponding child AST value into this PatternSeq's local context.
+ * Duplicate binding names are not allowed in the same scope.
  *
  * `sub_node_isolated_scope_flags` (when non-null, same length as `sub_nodes`): controls whether each child
  * parses in an isolated binding scope.
@@ -103,6 +104,7 @@ export interface CharSeq {
  *
  * `sub_node_bindings`（非 null 时，与 `sub_nodes` 等长）：子节点解析结果的绑定名。
  * 非 null 项会把对应子节点 AST 的 value 绑定到当前 PatternSeq 的局部上下文。
+ * 同一作用域中不允许出现同名变量。
  *
  * `sub_node_isolated_scope_flags`（非 null 时，与 `sub_nodes` 等长）：控制每个子节点是否在独立作用域中解析。
  *
