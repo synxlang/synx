@@ -552,7 +552,7 @@ export class ParserImpl implements Parser {
         const seps: ASTNode[] = [];
         let left_enclosure: ASTNode | null = null;
         let right_enclosure: ASTNode | null = null;
-        const binding_context: Record<string, any> = Object.create(null);
+        const bindings: Record<string, any> = {};
 
         const push_child = (child: ASTNode[] | ASTNode | null): void => {
             children.push(child);
@@ -643,8 +643,8 @@ export class ParserImpl implements Parser {
                 }
                 const isolated = node.sub_node_isolated_scope_flags?.[i] ?? true;
                 assert.ok(isolated, "non-isolated PatternSeq binding scope is not implemented yet");
-                assert.ok(!(binding in binding_context), `duplicate PatternSeq binding: ${binding}`);
-                binding_context[binding] = children[i];
+                assert.ok(!Object.prototype.hasOwnProperty.call(bindings, binding), `duplicate PatternSeq binding: ${binding}`);
+                bindings[binding] = children[i];
             }
         }
 
@@ -654,8 +654,8 @@ export class ParserImpl implements Parser {
         if (node.assignment_map !== null) {
             value = {};
             for (const [target, source] of node.assignment_map) {
-                if (Object.prototype.hasOwnProperty.call(binding_context, source)) {
-                    value[target] = binding_context[source];
+                if (Object.prototype.hasOwnProperty.call(bindings, source)) {
+                    value[target] = bindings[source];
                 }
             }
         }
@@ -670,6 +670,7 @@ export class ParserImpl implements Parser {
             enclosure: node.enclosure !== null
                 ? [left_enclosure!, right_enclosure!]
                 : null,
+            bindings: bindings,
         };
     }
 
@@ -693,6 +694,7 @@ export class ParserImpl implements Parser {
                 raw_value: this.input.src.slice(start, end),
                 seps: [],
                 enclosure: null,
+                bindings: null,
             };
         }
 
@@ -763,6 +765,7 @@ export class ParserImpl implements Parser {
                 raw_value: this.input.src.slice(start, end),
                 seps: [],
                 enclosure: null,
+                bindings: null,
             };
         }
 
@@ -930,6 +933,7 @@ export class ParserImpl implements Parser {
             raw_value: this.input.src.slice(start, end),
             seps: [],
             enclosure: null,
+            bindings: null,
         };
     }
 

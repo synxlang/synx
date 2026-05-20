@@ -105,7 +105,7 @@ function mkChildAST(node: CharMatchNode, value: string, range: [number, number])
     range,
     value,
     raw_value: value,
-    seps: [], enclosure: null,
+    seps: [], enclosure: null, bindings: null,
   };
 }
 
@@ -115,7 +115,7 @@ function mkCharSeqAST(n: CharSeq, value: string, range: [number, number]): ASTNo
     range,
     value,
     raw_value: value,
-    seps: [], enclosure: null,
+    seps: [], enclosure: null, bindings: null,
   };
 }
 
@@ -155,7 +155,7 @@ function mkSeqAST(
     value: normalized,
     raw_value: normalized,
     seps,
-    enclosure: null,
+    enclosure: null, bindings: {},
   };
 }
 
@@ -1304,7 +1304,7 @@ function test_parsePatternSeq_enclosure(): void {
       value: 'abc',
       raw_value: 'abc',
       seps: [],
-      enclosure: null,
+      enclosure: null, bindings: null,
     }],
     seps: [],
     enclosure: [
@@ -1314,7 +1314,7 @@ function test_parsePatternSeq_enclosure(): void {
         value: '"',
         raw_value: '"',
         seps: [],
-        enclosure: null,
+        enclosure: null, bindings: null,
       },
       {
         parser_nodes: [Quote],
@@ -1322,9 +1322,10 @@ function test_parsePatternSeq_enclosure(): void {
         value: '"',
         raw_value: '"',
         seps: [],
-        enclosure: null,
+        enclosure: null, bindings: null,
       },
     ],
+    bindings: {},
   });
 }
 
@@ -1348,7 +1349,7 @@ function test_parsePatternSeq_enclosure_ignores_before_left(): void {
       value: 'abc',
       raw_value: 'abc',
       seps: [],
-      enclosure: null,
+      enclosure: null, bindings: null,
     }]],
     seps: [],
     enclosure: [
@@ -1358,7 +1359,7 @@ function test_parsePatternSeq_enclosure_ignores_before_left(): void {
         value: '"',
         raw_value: '"',
         seps: [],
-        enclosure: null,
+        enclosure: null, bindings: null,
       },
       {
         parser_nodes: [Quote],
@@ -1366,9 +1367,10 @@ function test_parsePatternSeq_enclosure_ignores_before_left(): void {
         value: '"',
         raw_value: '"',
         seps: [],
-        enclosure: null,
+        enclosure: null, bindings: null,
       },
     ],
+    bindings: {},
   });
 }
 
@@ -1393,7 +1395,7 @@ function test_parsePatternSeq_enclosure_end_applies_to_last_nongreedy_child(): v
         value: 'x',
         raw_value: 'x',
         seps: [],
-        enclosure: null,
+        enclosure: null, bindings: null,
       },
       {
         parser_nodes: [AnyChar],
@@ -1401,7 +1403,7 @@ function test_parsePatternSeq_enclosure_end_applies_to_last_nongreedy_child(): v
         value: 'abc',
         raw_value: 'abc',
         seps: [],
-        enclosure: null,
+        enclosure: null, bindings: null,
       },
     ],
     seps: [],
@@ -1412,7 +1414,7 @@ function test_parsePatternSeq_enclosure_end_applies_to_last_nongreedy_child(): v
         value: '"',
         raw_value: '"',
         seps: [],
-        enclosure: null,
+        enclosure: null, bindings: null,
       },
       {
         parser_nodes: [Quote],
@@ -1420,9 +1422,10 @@ function test_parsePatternSeq_enclosure_end_applies_to_last_nongreedy_child(): v
         value: '"',
         raw_value: '"',
         seps: [],
-        enclosure: null,
+        enclosure: null, bindings: null,
       },
     ],
+    bindings: {},
   });
 }
 
@@ -1458,7 +1461,7 @@ function test_parsePatternSeq_binding_assignment_isolated_scope(): void {
       value: '5',
       raw_value: '5',
       seps: [],
-      enclosure: null,
+      enclosure: null, bindings: null,
     },
     {
       parser_nodes: [Letter],
@@ -1466,7 +1469,7 @@ function test_parsePatternSeq_binding_assignment_isolated_scope(): void {
       value: 'a',
       raw_value: 'a',
       seps: [],
-      enclosure: null,
+      enclosure: null, bindings: null,
     },
   ];
   assert.deepStrictEqual(result.value, {
