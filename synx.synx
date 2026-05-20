@@ -25,7 +25,7 @@ CharRange=(first:GeneralChar, "~", last:GeneralChar)=>[.first=first, .last=last]
 FieldAssignment=(".", symbol:Symbol, "=", expr:Expr \ignore Space)=>[.target=symbol, .source=expr];
 Struct=(field_assignments:FieldAssignment* \sep "," \ignore Space \enclosedby "[]")=>field_assignments;
 
-GeneralCharSet=({charsets:CharSet; neg_patterns:NegPattern}* \sep ";" \ignore Space \enclosedby "{}")=>[.charsets=charsets, .neg_patterns=neg_patterns];
+GeneralCharSet=(patterns:{CharSet; NegPattern}* \sep ";" \ignore Space \enclosedby "{}")=>[.patterns=patterns];
 CharSet = {
     CharRange;
     ("\\oneof", string:StringLiteral)=>string;
