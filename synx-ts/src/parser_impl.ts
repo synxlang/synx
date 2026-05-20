@@ -552,6 +552,18 @@ export class ParserImpl implements Parser {
         const seps: ASTNode[] = [];
         let left_enclosure: ASTNode | null = null;
         let right_enclosure: ASTNode | null = null;
+        const binding_context: Record<string, any> = Object.create(null);
+
+        const push_child = (child_idx: number, child: ASTNode[] | ASTNode | null): void => {
+            children.push(child);
+            const binding = node.sub_node_bindings?.[child_idx] ?? null;
+            if (binding === null) {
+                return;
+            }
+            const isolated = node.sub_node_isolated_scope_flags?.[child_idx] ?? true;
+            assert.ok(isolated, "non-isolated PatternSeq binding scope is not implemented yet");
+            binding_context[binding] = child;
+        };
 
         if (node.enclosure !== null) {
             const left = this.parseSingleNode(node.enclosure[0], node.ignore);
@@ -588,13 +600,13 @@ export class ParserImpl implements Parser {
             }
 
             seps.push(...parse_res.seps);
-            children.push(ast_res);
+            push_child(i, ast_res);
             let next_i = i;
             if (parse_res.end_idx >= 0) {
                 const end_node_idx = i + 1 + parse_res.end_idx;
                 for (let j = i + 1; j < end_node_idx; j++) {
                     const qj = node.sub_quantifiers[j] as Quantifier;
-                    children.push(qj === "*" ? [] : null);
+                    push_child(j, qj === "*" ? [] : null);
                 }
                 next_i = end_node_idx - 1;
             }
@@ -630,9 +642,17 @@ export class ParserImpl implements Parser {
             right_enclosure = right;
         }
 
-        const value = node.raw
+        let value: any = node.raw
             ? this.input.src.slice(body_start, body_end)
             : children;
+        if (node.assignment_map !== null) {
+            value = {};
+            for (const [target, source] of node.assignment_map) {
+                if (Object.prototype.hasOwnProperty.call(binding_context, source)) {
+                    value[target] = binding_context[source];
+                }
+            }
+        }
 
         this.setSuccess();
         return {

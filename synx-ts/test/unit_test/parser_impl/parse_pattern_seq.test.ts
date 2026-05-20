@@ -176,6 +176,17 @@ function test_mkPatternSeq_validates_shape(): void {
     () => mkPatternSeq([Digit], '  '),
     /sub_quantifiers length must match sub_nodes length/,
   );
+  assert.throws(
+    () => mkPatternSeq([Digit, Letter], '  ', false, null, false, null, null, null, ['digit']),
+    /sub_node_bindings length must match sub_nodes length/,
+  );
+  assert.throws(
+    () => mkPatternSeq([Digit, Letter], '  ', false, null, false, null, null, null, null, [true]),
+    /sub_node_isolated_scope_flags length must match sub_nodes length/,
+  );
+
+  const seq = mkPatternSeq([Digit], ' ', false, null, false, null, null, null, ['digit']);
+  assert.deepStrictEqual(seq.sub_node_isolated_scope_flags, [true]);
 }
 
 /** parsePatternSeq: multiple inputs covering sequence matching, various quantifier combinations, and failure scenarios */
@@ -1415,6 +1426,79 @@ function test_parsePatternSeq_enclosure_end_applies_to_last_nongreedy_child(): v
   });
 }
 
+function test_parsePatternSeq_binding_assignment_isolated_scope(): void {
+  const seq = mkPatternSeq(
+    [Digit, Letter],
+    '  ',
+    false,
+    null,
+    false,
+    null,
+    null,
+    null,
+    ['digit', 'letter'],
+    [true, true],
+    new Map([
+      ['left', 'digit'],
+      ['right', 'letter'],
+      ['missing', 'unknown'],
+    ]),
+  );
+  const parser = new ParserImpl({ parser_nodes: [] });
+  parser.initParse({ src: '5a', pos: 0 });
+
+  const result = parser.parsePatternSeq(seq);
+
+  assert(parser.isSuccess());
+  assert(result !== null);
+  const expected_raw_value = [
+    {
+      parser_nodes: [Digit],
+      range: [0, 1],
+      value: '5',
+      raw_value: '5',
+      seps: [],
+      enclosure: null,
+    },
+    {
+      parser_nodes: [Letter],
+      range: [1, 2],
+      value: 'a',
+      raw_value: 'a',
+      seps: [],
+      enclosure: null,
+    },
+  ];
+  assert.deepStrictEqual(result.value, {
+    left: expected_raw_value[0],
+    right: expected_raw_value[1],
+  });
+  assert.deepStrictEqual(result.raw_value, expected_raw_value);
+}
+
+function test_parsePatternSeq_binding_non_isolated_scope_not_implemented(): void {
+  const seq = mkPatternSeq(
+    [Digit],
+    ' ',
+    false,
+    null,
+    false,
+    null,
+    null,
+    null,
+    ['digit'],
+    [false],
+    new Map([['digit', 'digit']]),
+  );
+  const parser = new ParserImpl({ parser_nodes: [] });
+  parser.initParse({ src: '5', pos: 0 });
+
+  assert.throws(
+    () => parser.parsePatternSeq(seq),
+    /non-isolated PatternSeq binding scope is not implemented yet/,
+  );
+}
+
 function runAllTests(): void {
   console.log('Running parsePatternSeq tests...\n');
   test_mkPatternSeq_validates_shape();
@@ -1422,6 +1506,8 @@ function runAllTests(): void {
   test_parsePatternSeq_enclosure();
   test_parsePatternSeq_enclosure_ignores_before_left();
   test_parsePatternSeq_enclosure_end_applies_to_last_nongreedy_child();
+  test_parsePatternSeq_binding_assignment_isolated_scope();
+  test_parsePatternSeq_binding_non_isolated_scope_not_implemented();
   console.log('\nAll parsePatternSeq tests passed!');
 }
 

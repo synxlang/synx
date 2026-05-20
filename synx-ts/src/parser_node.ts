@@ -274,7 +274,7 @@ export function mkPatternSeq(
     enclosure,
     sub_node_bindings: sub_node_bindings?.slice() ?? null,
     sub_node_isolated_scope_flags: sub_node_isolated_scope_flags?.slice()
-      ?? (sub_node_bindings !== null ? Array.from({ length: n }, () => false) : null),
+      ?? (sub_node_bindings !== null ? Array.from({ length: n }, () => true) : null),
     assignment_map: assignment_map !== null ? new Map(assignment_map) : null,
   };
 }
