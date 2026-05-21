@@ -105,7 +105,7 @@ function mkChildAST(node: CharMatchNode, value: string, range: [number, number])
     range,
     value,
     raw_value: value,
-    seps: [], enclosure: null,
+    seps: [], enclosure: null, bindings: {},
   };
 }
 
@@ -115,7 +115,7 @@ function mkCharSeqAST(n: CharSeq, value: string, range: [number, number]): ASTNo
     range,
     value,
     raw_value: value,
-    seps: [], enclosure: null,
+    seps: [], enclosure: null, bindings: {},
   };
 }
 
@@ -155,7 +155,7 @@ function mkSeqAST(
     value: normalized,
     raw_value: normalized,
     seps,
-    enclosure: null,
+    enclosure: null, bindings: {},
   };
 }
 
@@ -176,6 +176,17 @@ function test_mkPatternSeq_validates_shape(): void {
     () => mkPatternSeq([Digit], '  '),
     /sub_quantifiers length must match sub_nodes length/,
   );
+  assert.throws(
+    () => mkPatternSeq([Digit, Letter], '  ', false, null, false, null, null, null, ['digit']),
+    /sub_node_bindings length must match sub_nodes length/,
+  );
+  assert.throws(
+    () => mkPatternSeq([Digit, Letter], '  ', false, null, false, null, null, null, null, [true]),
+    /sub_node_isolated_scope_flags length must match sub_nodes length/,
+  );
+
+  const seq = mkPatternSeq([Digit], ' ', false, null, false, null, null, null, ['digit']);
+  assert.deepStrictEqual(seq.sub_node_isolated_scope_flags, [true]);
 }
 
 /** parsePatternSeq: multiple inputs covering sequence matching, various quantifier combinations, and failure scenarios */
@@ -1293,7 +1304,7 @@ function test_parsePatternSeq_enclosure(): void {
       value: 'abc',
       raw_value: 'abc',
       seps: [],
-      enclosure: null,
+      enclosure: null, bindings: {},
     }],
     seps: [],
     enclosure: [
@@ -1303,7 +1314,7 @@ function test_parsePatternSeq_enclosure(): void {
         value: '"',
         raw_value: '"',
         seps: [],
-        enclosure: null,
+        enclosure: null, bindings: {},
       },
       {
         parser_nodes: [Quote],
@@ -1311,9 +1322,10 @@ function test_parsePatternSeq_enclosure(): void {
         value: '"',
         raw_value: '"',
         seps: [],
-        enclosure: null,
+        enclosure: null, bindings: {},
       },
     ],
+    bindings: {},
   });
 }
 
@@ -1337,7 +1349,7 @@ function test_parsePatternSeq_enclosure_ignores_before_left(): void {
       value: 'abc',
       raw_value: 'abc',
       seps: [],
-      enclosure: null,
+      enclosure: null, bindings: {},
     }]],
     seps: [],
     enclosure: [
@@ -1347,7 +1359,7 @@ function test_parsePatternSeq_enclosure_ignores_before_left(): void {
         value: '"',
         raw_value: '"',
         seps: [],
-        enclosure: null,
+        enclosure: null, bindings: {},
       },
       {
         parser_nodes: [Quote],
@@ -1355,9 +1367,10 @@ function test_parsePatternSeq_enclosure_ignores_before_left(): void {
         value: '"',
         raw_value: '"',
         seps: [],
-        enclosure: null,
+        enclosure: null, bindings: {},
       },
     ],
+    bindings: {},
   });
 }
 
@@ -1382,7 +1395,7 @@ function test_parsePatternSeq_enclosure_end_applies_to_last_nongreedy_child(): v
         value: 'x',
         raw_value: 'x',
         seps: [],
-        enclosure: null,
+        enclosure: null, bindings: {},
       },
       {
         parser_nodes: [AnyChar],
@@ -1390,7 +1403,7 @@ function test_parsePatternSeq_enclosure_end_applies_to_last_nongreedy_child(): v
         value: 'abc',
         raw_value: 'abc',
         seps: [],
-        enclosure: null,
+        enclosure: null, bindings: {},
       },
     ],
     seps: [],
@@ -1401,7 +1414,7 @@ function test_parsePatternSeq_enclosure_end_applies_to_last_nongreedy_child(): v
         value: '"',
         raw_value: '"',
         seps: [],
-        enclosure: null,
+        enclosure: null, bindings: {},
       },
       {
         parser_nodes: [Quote],
@@ -1409,10 +1422,140 @@ function test_parsePatternSeq_enclosure_end_applies_to_last_nongreedy_child(): v
         value: '"',
         raw_value: '"',
         seps: [],
-        enclosure: null,
+        enclosure: null, bindings: {},
       },
     ],
+    bindings: {},
   });
+}
+
+function test_parsePatternSeq_binding_assignment_isolated_scope(): void {
+  const seq = mkPatternSeq(
+    [Digit, Letter],
+    '  ',
+    false,
+    null,
+    false,
+    null,
+    null,
+    null,
+    ['digit', 'letter'],
+    [true, true],
+    new Map([
+      ['left', 'digit'],
+      ['right', 'letter'],
+      ['missing', 'unknown'],
+    ]),
+  );
+  const parser = new ParserImpl({ parser_nodes: [] });
+  parser.initParse({ src: '5a', pos: 0 });
+
+  const result = parser.parsePatternSeq(seq);
+
+  assert(parser.isSuccess());
+  assert(result !== null);
+  const expected_raw_value = [
+    {
+      parser_nodes: [Digit],
+      range: [0, 1],
+      value: '5',
+      raw_value: '5',
+      seps: [],
+      enclosure: null, bindings: {},
+    },
+    {
+      parser_nodes: [Letter],
+      range: [1, 2],
+      value: 'a',
+      raw_value: 'a',
+      seps: [],
+      enclosure: null, bindings: {},
+    },
+  ];
+  assert.deepStrictEqual(result.value, {
+    left: expected_raw_value[0],
+    right: expected_raw_value[1],
+  });
+  assert.deepStrictEqual(result.raw_value, expected_raw_value);
+}
+
+function test_parsePatternSeq_binding_assignment_direct_value(): void {
+  const seq = mkPatternSeq(
+    [Digit, Letter],
+    '  ',
+    false,
+    null,
+    false,
+    null,
+    null,
+    null,
+    ['digit', 'comment'],
+    [true, true],
+    'comment',
+  );
+  const parser = new ParserImpl({ parser_nodes: [] });
+  parser.initParse({ src: '5a', pos: 0 });
+
+  const result = parser.parsePatternSeq(seq);
+
+  assert(parser.isSuccess());
+  assert(result !== null);
+  assert.deepStrictEqual(result.value, {
+    parser_nodes: [Letter],
+    range: [1, 2],
+    value: 'a',
+    raw_value: 'a',
+    seps: [],
+    enclosure: null,
+    bindings: {},
+  });
+}
+
+function test_parsePatternSeq_binding_non_isolated_scope(): void {
+  const inner = mkPatternSeq(
+    [Digit],
+    ' ',
+    false,
+    null,
+    false,
+    null,
+    null,
+    null,
+    ['digit'],
+    [false],
+  );
+  const outer = mkPatternSeq(
+    [inner, Letter],
+    '  ',
+    false,
+    null,
+    false,
+    null,
+    null,
+    null,
+    ['inner', 'letter'],
+    [false, true],
+    new Map([
+      ['digit_value', 'digit'],
+      ['inner_value', 'inner'],
+      ['letter_value', 'letter'],
+    ]),
+  );
+  const parser = new ParserImpl({ parser_nodes: [] });
+  parser.initParse({ src: '5a', pos: 0 });
+
+  const result = parser.parsePatternSeq(outer);
+
+  assert(parser.isSuccess());
+  assert(result !== null);
+  const inner_ast = (result.raw_value as ASTNode[])[0];
+  const letter_ast = (result.raw_value as ASTNode[])[1];
+  assert.deepStrictEqual(result.value, {
+    digit_value: (inner_ast.raw_value as ASTNode[])[0],
+    inner_value: inner_ast,
+    letter_value: letter_ast,
+  });
+  assert.deepStrictEqual(Object.keys(result.bindings!), ['digit', 'inner', 'letter']);
 }
 
 function runAllTests(): void {
@@ -1422,6 +1565,9 @@ function runAllTests(): void {
   test_parsePatternSeq_enclosure();
   test_parsePatternSeq_enclosure_ignores_before_left();
   test_parsePatternSeq_enclosure_end_applies_to_last_nongreedy_child();
+  test_parsePatternSeq_binding_assignment_isolated_scope();
+  test_parsePatternSeq_binding_assignment_direct_value();
+  test_parsePatternSeq_binding_non_isolated_scope();
   console.log('\nAll parsePatternSeq tests passed!');
 }
 

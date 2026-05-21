@@ -64,6 +64,24 @@ export interface CharSeq {
  *
  * `enclosure` (when non-null): boundary pair corresponding to `\enclosedby`, requiring that the input matched by `sep` and the right closing delimiter do not overlap; otherwise the result is undefined.
  *
+ * `sub_node_bindings` (when non-null, same length as `sub_nodes`): binding names for child parse results.
+ * A non-null entry binds the corresponding child AST value into this PatternSeq's local context.
+ * Duplicate binding names are not allowed in the same scope.
+ *
+ * `sub_node_isolated_scope_flags` (when non-null, same length as `sub_nodes`): controls whether each child
+ * parses in an isolated binding scope.
+ *
+ * Referenced child nodes parse in isolated scope; inplace child nodes parse in non-isolated scope.
+ * For example, `Wrapper=(pair:Pair)=>[.pair=pair]` cannot see bindings created inside `Pair`,
+ * while `Wrapper=((left:Symbol, ":", right:Symbol))=>[.left=left, .right=right]` can see
+ * `left` and `right` because the child node is inplace.
+ *
+ * `assignment_map` (when non-null):
+ * - A string assigns the corresponding context variable directly to AST `value`, e.g. `=>comment` makes `value = comment`.
+ * - A Map maps AST `value` keys to names in the parse context.
+ *   For each entry, `value[key]` is assigned from the corresponding context variable; keys absent from the map are not assigned.
+ * `raw_value` is not affected by binding-related rules.
+ *
  * ============================== 中文 ==============================
  *
  * `sub_nodes` 为子节点序列；`sub_quantifiers` 为量词序列，与子节点序列逐项对应。
@@ -85,6 +103,23 @@ export interface CharSeq {
  * 规范化（由 {@link mkPatternSeq} 施加）：{@link AnyChar} 且量词为 `*` 或 `+` 时**必须**为非贪婪；量词为 `' '`（单次必配）的槽**必须**为贪婪；二者均覆盖与之冲突的显式 `greedy_flags`。
  *
  * `enclosure`（非 null 时）：对应 `\enclosedby` 的边界对，要求sep和右闭合符匹配到的输入没有交集，否则结果未定义。
+ *
+ * `sub_node_bindings`（非 null 时，与 `sub_nodes` 等长）：子节点解析结果的绑定名。
+ * 非 null 项会把对应子节点 AST 的 value 绑定到当前 PatternSeq 的局部上下文。
+ * 同一作用域中不允许出现同名变量。
+ *
+ * `sub_node_isolated_scope_flags`（非 null 时，与 `sub_nodes` 等长）：控制每个子节点是否在独立作用域中解析。
+ *
+ * 引用的子节点使用独立作用域；原地的子节点使用非独立作用域。
+ * 例如 `Wrapper=(pair:Pair)=>[.pair=pair]` 看不到 `Pair` 内部创建的绑定；
+ * 而 `Wrapper=((left:Symbol, ":", right:Symbol))=>[.left=left, .right=right]`
+ * 可以看到 `left`、`right`，因为该子节点是原地的。
+ *
+ * `assignment_map`（非 null 时）：
+ * - string 会把对应上下文变量直接赋值给 AST `value`，例如 `=>comment` 使 `value = comment`。
+ * - Map 会将 AST `value` 的 key 映射到上下文变量名。
+ *   对每个映射项，`value[key]` 会从对应上下文变量赋值；map 中不存在的 key 不会被赋值。
+ * `raw_value` 不受 binding 相关规则影响。
  */
 export interface PatternSeq {
     kind: ParserNodeKind.PatternSeq;
@@ -96,6 +131,9 @@ export interface PatternSeq {
     ignore: ParserNode | null;
     greedy_flags: boolean[];
     enclosure: [ParserNode, ParserNode] | null;
+    sub_node_bindings: (string | null)[] | null;
+    sub_node_isolated_scope_flags: boolean[] | null;
+    assignment_map: Map<string, string> | string | null;
 }
 
 /**
@@ -201,10 +239,19 @@ export function mkPatternSeq(
   ignore: ParserNode | null = null,
   greedy_flags: boolean[] | null = null,
   enclosure: [ParserNode, ParserNode] | null = null,
+  sub_node_bindings: (string | null)[] | null = null,
+  sub_node_isolated_scope_flags: boolean[] | null = null,
+  assignment_map: Map<string, string> | string | null = null,
 ): PatternSeq {
   const n = sub_nodes.length;
   if (sub_quantifiers.length !== n) {
     throw new Error("mkPatternSeq: sub_quantifiers length must match sub_nodes length");
+  }
+  if (sub_node_bindings !== null && sub_node_bindings.length !== n) {
+    throw new Error("mkPatternSeq: sub_node_bindings length must match sub_nodes length");
+  }
+  if (sub_node_isolated_scope_flags !== null && sub_node_isolated_scope_flags.length !== n) {
+    throw new Error("mkPatternSeq: sub_node_isolated_scope_flags length must match sub_nodes length");
   }
   const flags =
     greedy_flags !== null
@@ -231,6 +278,10 @@ export function mkPatternSeq(
     ignore,
     greedy_flags: flags,
     enclosure,
+    sub_node_bindings: sub_node_bindings?.slice() ?? null,
+    sub_node_isolated_scope_flags: sub_node_isolated_scope_flags?.slice()
+      ?? (sub_node_bindings !== null ? Array.from({ length: n }, () => true) : null),
+    assignment_map: assignment_map instanceof Map ? new Map(assignment_map) : assignment_map,
   };
 }
 

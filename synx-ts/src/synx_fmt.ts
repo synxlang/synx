@@ -126,6 +126,7 @@ function stringifyASTNode(node: ASTNode, seen: SeenState): string {
         `raw_value: ${stringifyValue(node.raw_value, seen)},`,
         `seps: ${stringifyArray(node.seps, seen)},`,
         `enclosure: ${stringifyNullableTuple(node.enclosure, seen)},`,
+        `bindings: ${stringifyPlainObject(node.bindings, seen)},`,
       ]),
       ")",
     ].join("\n");
@@ -220,6 +221,7 @@ function isASTNode(value: unknown): value is ASTNode {
     "value" in value &&
     "raw_value" in value &&
     "seps" in value &&
-    "enclosure" in value
+    "enclosure" in value &&
+    "bindings" in value
   );
 }

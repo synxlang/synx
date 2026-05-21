@@ -125,14 +125,14 @@ function test_parsePatternSeq_embedsCharSeq(): void {
         range: [0, 2],
         value: '=>',
         raw_value: '=>',
-        seps: [], enclosure: null,
+        seps: [], enclosure: null, bindings: {},
       },
       {
         parser_nodes: [letter],
         range: [2, 3],
         value: 'b',
         raw_value: 'b',
-        seps: [], enclosure: null,
+        seps: [], enclosure: null, bindings: {},
       },
     ],
     raw_value: [
@@ -141,17 +141,17 @@ function test_parsePatternSeq_embedsCharSeq(): void {
         range: [0, 2],
         value: '=>',
         raw_value: '=>',
-        seps: [], enclosure: null,
+        seps: [], enclosure: null, bindings: {},
       },
       {
         parser_nodes: [letter],
         range: [2, 3],
         value: 'b',
         raw_value: 'b',
-        seps: [], enclosure: null,
+        seps: [], enclosure: null, bindings: {},
       },
     ],
-    seps: [], enclosure: null,
+    seps: [], enclosure: null, bindings: {},
   });
   assert.strictEqual(parser.getError(), null);
 }

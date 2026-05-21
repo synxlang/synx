@@ -552,6 +552,11 @@ export class ParserImpl implements Parser {
         const seps: ASTNode[] = [];
         let left_enclosure: ASTNode | null = null;
         let right_enclosure: ASTNode | null = null;
+        const bindings: Record<string, any> = {};
+
+        const push_child = (child: ASTNode[] | ASTNode | null): void => {
+            children.push(child);
+        };
 
         if (node.enclosure !== null) {
             const left = this.parseSingleNode(node.enclosure[0], node.ignore);
@@ -588,13 +593,13 @@ export class ParserImpl implements Parser {
             }
 
             seps.push(...parse_res.seps);
-            children.push(ast_res);
+            push_child(ast_res);
             let next_i = i;
             if (parse_res.end_idx >= 0) {
                 const end_node_idx = i + 1 + parse_res.end_idx;
                 for (let j = i + 1; j < end_node_idx; j++) {
                     const qj = node.sub_quantifiers[j] as Quantifier;
-                    children.push(qj === "*" ? [] : null);
+                    push_child(qj === "*" ? [] : null);
                 }
                 next_i = end_node_idx - 1;
             }
@@ -630,9 +635,42 @@ export class ParserImpl implements Parser {
             right_enclosure = right;
         }
 
-        const value = node.raw
+        if (node.sub_node_bindings !== null) {
+            for (let i = 0; i < node.sub_node_bindings.length; i++) {
+                const binding = node.sub_node_bindings[i];
+                const isolated = node.sub_node_isolated_scope_flags?.[i] ?? true;
+                if (!isolated) {
+                    const child = children[i];
+                    assert.ok(!Array.isArray(child), "non-isolated repeated PatternSeq binding scope is not implemented yet");
+                    if (child !== null) {
+                        Object.assign(bindings, child.bindings);
+                    }
+                }
+                if (binding === null) {
+                    continue;
+                }
+                assert.ok(!Object.prototype.hasOwnProperty.call(bindings, binding), `duplicate PatternSeq binding: ${binding}`);
+                bindings[binding] = children[i];
+            }
+        }
+
+        let value: any = node.raw
             ? this.input.src.slice(body_start, body_end)
             : children;
+        if (node.assignment_map !== null) {
+            if (typeof node.assignment_map === "string") {
+                if (Object.prototype.hasOwnProperty.call(bindings, node.assignment_map)) {
+                    value = bindings[node.assignment_map];
+                }
+            } else {
+                value = {};
+                for (const [target, source] of node.assignment_map) {
+                    if (Object.prototype.hasOwnProperty.call(bindings, source)) {
+                        value[target] = bindings[source];
+                    }
+                }
+            }
+        }
 
         this.setSuccess();
         return {
@@ -644,6 +682,7 @@ export class ParserImpl implements Parser {
             enclosure: node.enclosure !== null
                 ? [left_enclosure!, right_enclosure!]
                 : null,
+            bindings: bindings,
         };
     }
 
@@ -667,6 +706,7 @@ export class ParserImpl implements Parser {
                 raw_value: this.input.src.slice(start, end),
                 seps: [],
                 enclosure: null,
+                bindings: {},
             };
         }
 
@@ -737,6 +777,7 @@ export class ParserImpl implements Parser {
                 raw_value: this.input.src.slice(start, end),
                 seps: [],
                 enclosure: null,
+                bindings: {},
             };
         }
 
@@ -904,6 +945,7 @@ export class ParserImpl implements Parser {
             raw_value: this.input.src.slice(start, end),
             seps: [],
             enclosure: null,
+            bindings: {},
         };
     }
 

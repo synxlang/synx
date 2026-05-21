@@ -39,7 +39,7 @@ function mkCharSeqAST(n: CharSeq, value: string, range: [number, number]): ASTNo
     range,
     value,
     raw_value: value,
-    seps: [], enclosure: null,
+    seps: [], enclosure: null, bindings: {},
   };
 }
 
@@ -49,7 +49,7 @@ function mkCharRangeAST(n: CharMatchNode, value: string, range: [number, number]
     range,
     value,
     raw_value: value,
-    seps: [], enclosure: null,
+    seps: [], enclosure: null, bindings: {},
   };
 }
 
@@ -59,7 +59,7 @@ function mkAnyCharAST(value: string, range: [number, number]): ASTNode {
     range,
     value,
     raw_value: value,
-    seps: [], enclosure: null,
+    seps: [], enclosure: null, bindings: {},
   };
 }
 
@@ -70,7 +70,7 @@ function mkSeqAST(seq: PatternSeq, range: [number, number], parts: (ASTNode | AS
     value: parts,
     raw_value: parts,
     seps,
-    enclosure: null,
+    enclosure: null, bindings: {},
   };
 }
 
