@@ -638,11 +638,17 @@ export class ParserImpl implements Parser {
         if (node.sub_node_bindings !== null) {
             for (let i = 0; i < node.sub_node_bindings.length; i++) {
                 const binding = node.sub_node_bindings[i];
+                const isolated = node.sub_node_isolated_scope_flags?.[i] ?? true;
+                if (!isolated) {
+                    const child = children[i];
+                    assert.ok(!Array.isArray(child), "non-isolated repeated PatternSeq binding scope is not implemented yet");
+                    if (child !== null && child.bindings !== null) {
+                        Object.assign(bindings, child.bindings);
+                    }
+                }
                 if (binding === null) {
                     continue;
                 }
-                const isolated = node.sub_node_isolated_scope_flags?.[i] ?? true;
-                assert.ok(isolated, "non-isolated PatternSeq binding scope is not implemented yet");
                 assert.ok(!Object.prototype.hasOwnProperty.call(bindings, binding), `duplicate PatternSeq binding: ${binding}`);
                 bindings[binding] = children[i];
             }

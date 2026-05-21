@@ -1479,8 +1479,8 @@ function test_parsePatternSeq_binding_assignment_isolated_scope(): void {
   assert.deepStrictEqual(result.raw_value, expected_raw_value);
 }
 
-function test_parsePatternSeq_binding_non_isolated_scope_not_implemented(): void {
-  const seq = mkPatternSeq(
+function test_parsePatternSeq_binding_non_isolated_scope(): void {
+  const inner = mkPatternSeq(
     [Digit],
     ' ',
     false,
@@ -1491,15 +1491,39 @@ function test_parsePatternSeq_binding_non_isolated_scope_not_implemented(): void
     null,
     ['digit'],
     [false],
-    new Map([['digit', 'digit']]),
+  );
+  const outer = mkPatternSeq(
+    [inner, Letter],
+    '  ',
+    false,
+    null,
+    false,
+    null,
+    null,
+    null,
+    ['inner', 'letter'],
+    [false, true],
+    new Map([
+      ['digit_value', 'digit'],
+      ['inner_value', 'inner'],
+      ['letter_value', 'letter'],
+    ]),
   );
   const parser = new ParserImpl({ parser_nodes: [] });
-  parser.initParse({ src: '5', pos: 0 });
+  parser.initParse({ src: '5a', pos: 0 });
 
-  assert.throws(
-    () => parser.parsePatternSeq(seq),
-    /non-isolated PatternSeq binding scope is not implemented yet/,
-  );
+  const result = parser.parsePatternSeq(outer);
+
+  assert(parser.isSuccess());
+  assert(result !== null);
+  const inner_ast = (result.raw_value as ASTNode[])[0];
+  const letter_ast = (result.raw_value as ASTNode[])[1];
+  assert.deepStrictEqual(result.value, {
+    digit_value: (inner_ast.raw_value as ASTNode[])[0],
+    inner_value: inner_ast,
+    letter_value: letter_ast,
+  });
+  assert.deepStrictEqual(Object.keys(result.bindings!), ['digit', 'inner', 'letter']);
 }
 
 function runAllTests(): void {
@@ -1510,7 +1534,7 @@ function runAllTests(): void {
   test_parsePatternSeq_enclosure_ignores_before_left();
   test_parsePatternSeq_enclosure_end_applies_to_last_nongreedy_child();
   test_parsePatternSeq_binding_assignment_isolated_scope();
-  test_parsePatternSeq_binding_non_isolated_scope_not_implemented();
+  test_parsePatternSeq_binding_non_isolated_scope();
   console.log('\nAll parsePatternSeq tests passed!');
 }
 
