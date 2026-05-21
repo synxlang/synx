@@ -642,7 +642,7 @@ export class ParserImpl implements Parser {
                 if (!isolated) {
                     const child = children[i];
                     assert.ok(!Array.isArray(child), "non-isolated repeated PatternSeq binding scope is not implemented yet");
-                    if (child !== null && child.bindings !== null) {
+                    if (child !== null) {
                         Object.assign(bindings, child.bindings);
                     }
                 }
@@ -706,7 +706,7 @@ export class ParserImpl implements Parser {
                 raw_value: this.input.src.slice(start, end),
                 seps: [],
                 enclosure: null,
-                bindings: null,
+                bindings: {},
             };
         }
 
@@ -777,7 +777,7 @@ export class ParserImpl implements Parser {
                 raw_value: this.input.src.slice(start, end),
                 seps: [],
                 enclosure: null,
-                bindings: null,
+                bindings: {},
             };
         }
 
@@ -945,7 +945,7 @@ export class ParserImpl implements Parser {
             raw_value: this.input.src.slice(start, end),
             seps: [],
             enclosure: null,
-            bindings: null,
+            bindings: {},
         };
     }
 

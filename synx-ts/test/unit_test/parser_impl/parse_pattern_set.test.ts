@@ -21,7 +21,7 @@ function test_parsePatternSet_basic(): void {
         range: [0, 2],
         value: 'ab',
         raw_value: 'ab',
-        seps: [], enclosure: null, bindings: null,
+        seps: [], enclosure: null, bindings: {},
       },
       expected_error: false,
     },
@@ -33,7 +33,7 @@ function test_parsePatternSet_basic(): void {
         range: [0, 1],
         value: 'a',
         raw_value: 'a',
-        seps: [], enclosure: null, bindings: null,
+        seps: [], enclosure: null, bindings: {},
       },
       expected_error: false,
     },
@@ -109,14 +109,14 @@ function test_parsePatternSet_nested_seq_and_set(): void {
         range: [0, 2],
         value: 'ab',
         raw_value: 'ab',
-        seps: [], enclosure: null, bindings: null,
+        seps: [], enclosure: null, bindings: {},
       },
       {
         parser_nodes: [bang],
         range: [2, 3],
         value: '!',
         raw_value: '!',
-        seps: [], enclosure: null, bindings: null,
+        seps: [], enclosure: null, bindings: {},
       },
     ],
     raw_value: [
@@ -125,14 +125,14 @@ function test_parsePatternSet_nested_seq_and_set(): void {
         range: [0, 2],
         value: 'ab',
         raw_value: 'ab',
-        seps: [], enclosure: null, bindings: null,
+        seps: [], enclosure: null, bindings: {},
       },
       {
         parser_nodes: [bang],
         range: [2, 3],
         value: '!',
         raw_value: '!',
-        seps: [], enclosure: null, bindings: null,
+        seps: [], enclosure: null, bindings: {},
       },
     ],
     seps: [], enclosure: null, bindings: {},
@@ -201,7 +201,7 @@ function test_parsePatternSet_left_recursive_plus_chain(): void {
     range: [0, 1],
     value: '1',
     raw_value: '1',
-    seps: [], enclosure: null, bindings: null,
+    seps: [], enclosure: null, bindings: {},
   });
 
   const parser2 = new ParserImpl({ parser_nodes: [] });
@@ -212,14 +212,14 @@ function test_parsePatternSet_left_recursive_plus_chain(): void {
     parser_nodes: [seq, expr],
     range: [0, 3],
     value: [
-      { parser_nodes: [one, expr], range: [0, 1], value: '1', raw_value: '1', seps: [], enclosure: null, bindings: null },
-      { parser_nodes: [plus], range: [1, 2], value: '+', raw_value: '+', seps: [], enclosure: null, bindings: null },
-      { parser_nodes: [one], range: [2, 3], value: '1', raw_value: '1', seps: [], enclosure: null, bindings: null },
+      { parser_nodes: [one, expr], range: [0, 1], value: '1', raw_value: '1', seps: [], enclosure: null, bindings: {} },
+      { parser_nodes: [plus], range: [1, 2], value: '+', raw_value: '+', seps: [], enclosure: null, bindings: {} },
+      { parser_nodes: [one], range: [2, 3], value: '1', raw_value: '1', seps: [], enclosure: null, bindings: {} },
     ],
     raw_value: [
-      { parser_nodes: [one, expr], range: [0, 1], value: '1', raw_value: '1', seps: [], enclosure: null, bindings: null },
-      { parser_nodes: [plus], range: [1, 2], value: '+', raw_value: '+', seps: [], enclosure: null, bindings: null },
-      { parser_nodes: [one], range: [2, 3], value: '1', raw_value: '1', seps: [], enclosure: null, bindings: null },
+      { parser_nodes: [one, expr], range: [0, 1], value: '1', raw_value: '1', seps: [], enclosure: null, bindings: {} },
+      { parser_nodes: [plus], range: [1, 2], value: '+', raw_value: '+', seps: [], enclosure: null, bindings: {} },
+      { parser_nodes: [one], range: [2, 3], value: '1', raw_value: '1', seps: [], enclosure: null, bindings: {} },
     ],
     seps: [], enclosure: null, bindings: {},
   });
@@ -255,7 +255,7 @@ function test_parsePatternSet_left_recursive_expr_plus_expr(): void {
     range: [lo, hi],
     value: '1',
     raw_value: '1',
-    seps: [], enclosure: null, bindings: null,
+    seps: [], enclosure: null, bindings: {},
   });
 
   const p1 = new ParserImpl({ parser_nodes: [] });
@@ -267,7 +267,7 @@ function test_parsePatternSet_left_recursive_expr_plus_expr(): void {
     range: [0, 1],
     value: '1',
     raw_value: '1',
-    seps: [], enclosure: null, bindings: null,
+    seps: [], enclosure: null, bindings: {},
   });
 
   const p2 = new ParserImpl({ parser_nodes: [] });
@@ -277,8 +277,8 @@ function test_parsePatternSet_left_recursive_expr_plus_expr(): void {
   assert.deepStrictEqual(r2, {
     parser_nodes: [seq, expr],
     range: [0, 3],
-    value: [leafAt(0, 1), { parser_nodes: [plus], range: [1, 2], value: '+', raw_value: '+', seps: [], enclosure: null, bindings: null }, leafAt(2, 3)],
-    raw_value: [leafAt(0, 1), { parser_nodes: [plus], range: [1, 2], value: '+', raw_value: '+', seps: [], enclosure: null, bindings: null }, leafAt(2, 3)],
+    value: [leafAt(0, 1), { parser_nodes: [plus], range: [1, 2], value: '+', raw_value: '+', seps: [], enclosure: null, bindings: {} }, leafAt(2, 3)],
+    raw_value: [leafAt(0, 1), { parser_nodes: [plus], range: [1, 2], value: '+', raw_value: '+', seps: [], enclosure: null, bindings: {} }, leafAt(2, 3)],
     seps: [], enclosure: null, bindings: {},
   });
 
@@ -293,7 +293,7 @@ function test_parsePatternSet_left_recursive_expr_plus_expr(): void {
   assert.ok(Array.isArray(right.value) && right.value.length === 3);
   const inner = right.value as ASTNode[];
   assert.deepStrictEqual(inner[0], leafAt(2, 3));
-  assert.deepStrictEqual(inner[1], { parser_nodes: [plus], range: [3, 4], value: '+', raw_value: '+', seps: [], enclosure: null, bindings: null });
+  assert.deepStrictEqual(inner[1], { parser_nodes: [plus], range: [3, 4], value: '+', raw_value: '+', seps: [], enclosure: null, bindings: {} });
   assert.deepStrictEqual(inner[2], leafAt(4, 5));
 
   const pBad = new ParserImpl({ parser_nodes: [] });
@@ -322,7 +322,7 @@ function test_parsePatternSet_left_recursive_list_ab(): void {
     range: [0, 1],
     value: 'a',
     raw_value: 'a',
-    seps: [], enclosure: null, bindings: null,
+    seps: [], enclosure: null, bindings: {},
   });
 
   const pAB = new ParserImpl({ parser_nodes: [] });
@@ -333,12 +333,12 @@ function test_parsePatternSet_left_recursive_list_ab(): void {
     parser_nodes: [pair, list],
     range: [0, 2],
     value: [
-      { parser_nodes: [a, list], range: [0, 1], value: 'a', raw_value: 'a', seps: [], enclosure: null, bindings: null },
-      { parser_nodes: [b], range: [1, 2], value: 'b', raw_value: 'b', seps: [], enclosure: null, bindings: null },
+      { parser_nodes: [a, list], range: [0, 1], value: 'a', raw_value: 'a', seps: [], enclosure: null, bindings: {} },
+      { parser_nodes: [b], range: [1, 2], value: 'b', raw_value: 'b', seps: [], enclosure: null, bindings: {} },
     ],
     raw_value: [
-      { parser_nodes: [a, list], range: [0, 1], value: 'a', raw_value: 'a', seps: [], enclosure: null, bindings: null },
-      { parser_nodes: [b], range: [1, 2], value: 'b', raw_value: 'b', seps: [], enclosure: null, bindings: null },
+      { parser_nodes: [a, list], range: [0, 1], value: 'a', raw_value: 'a', seps: [], enclosure: null, bindings: {} },
+      { parser_nodes: [b], range: [1, 2], value: 'b', raw_value: 'b', seps: [], enclosure: null, bindings: {} },
     ],
     seps: [], enclosure: null, bindings: {},
   });
@@ -377,12 +377,12 @@ function test_parsePatternSet_synx_shape_ABC(): void {
     parser_nodes: [B, A],
     range: [0, 4],
     value: [
-      { parser_nodes: [B.sub_nodes[0] as ParserNode], range: [0, 2], value: 'ab', raw_value: 'ab', seps: [], enclosure: null, bindings: null },
-      { parser_nodes: [C.sub_nodes[0] as ParserNode, C], range: [2, 4], value: '12', raw_value: '12', seps: [], enclosure: null, bindings: null },
+      { parser_nodes: [B.sub_nodes[0] as ParserNode], range: [0, 2], value: 'ab', raw_value: 'ab', seps: [], enclosure: null, bindings: {} },
+      { parser_nodes: [C.sub_nodes[0] as ParserNode, C], range: [2, 4], value: '12', raw_value: '12', seps: [], enclosure: null, bindings: {} },
     ],
     raw_value: [
-      { parser_nodes: [B.sub_nodes[0] as ParserNode], range: [0, 2], value: 'ab', raw_value: 'ab', seps: [], enclosure: null, bindings: null },
-      { parser_nodes: [C.sub_nodes[0] as ParserNode, C], range: [2, 4], value: '12', raw_value: '12', seps: [], enclosure: null, bindings: null },
+      { parser_nodes: [B.sub_nodes[0] as ParserNode], range: [0, 2], value: 'ab', raw_value: 'ab', seps: [], enclosure: null, bindings: {} },
+      { parser_nodes: [C.sub_nodes[0] as ParserNode, C], range: [2, 4], value: '12', raw_value: '12', seps: [], enclosure: null, bindings: {} },
     ],
     seps: [], enclosure: null, bindings: {},
   });
@@ -404,7 +404,7 @@ function test_parsePatternSet_neg_flags(): void {
     range: [0, 1],
     value: 'b',
     raw_value: 'b',
-    seps: [], enclosure: null, bindings: null,
+    seps: [], enclosure: null, bindings: {},
   });
 
   const p2 = new ParserImpl({ parser_nodes: [] });
@@ -433,7 +433,7 @@ function test_parsePatternSet_neg_flags(): void {
     range: [0, 1],
     value: 'b',
     raw_value: 'b',
-    seps: [], enclosure: null, bindings: null,
+    seps: [], enclosure: null, bindings: {},
   });
 }
 
@@ -451,7 +451,7 @@ function test_parsePatternSet_charset_flag_char_match_contract(): void {
     range: [0, 1],
     value: 'm',
     raw_value: 'm',
-    seps: [], enclosure: null, bindings: null,
+    seps: [], enclosure: null, bindings: {},
   });
 
   const p2 = new ParserImpl({ parser_nodes: [] });
@@ -474,7 +474,7 @@ function test_parsePatternSet_charset_flag_reject_patterns(): void {
     range: [0, 1],
     value: 'x',
     raw_value: 'x',
-    seps: [], enclosure: null, bindings: null,
+    seps: [], enclosure: null, bindings: {},
   });
 
   const p2 = new ParserImpl({ parser_nodes: [] });
@@ -506,7 +506,7 @@ function test_parsePatternSet_charset_flag_multichar_reject_pattern(): void {
     range: [0, 2],
     value: '😀',
     raw_value: '😀',
-    seps: [], enclosure: null, bindings: null,
+    seps: [], enclosure: null, bindings: {},
   });
 }
 
@@ -528,14 +528,14 @@ function test_parsePatternSet_charset_flag_repetition_merges_like_char_match_set
       range: [0, 3],
       value: 'abc',
       raw_value: 'abc',
-      seps: [], enclosure: null, bindings: null,
+      seps: [], enclosure: null, bindings: {},
     }],
     raw_value: [{
       parser_nodes: [notQuote],
       range: [0, 3],
       value: 'abc',
       raw_value: 'abc',
-      seps: [], enclosure: null, bindings: null,
+      seps: [], enclosure: null, bindings: {},
     }],
     seps: [], enclosure: null, bindings: {},
   });
