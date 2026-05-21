@@ -1479,6 +1479,38 @@ function test_parsePatternSeq_binding_assignment_isolated_scope(): void {
   assert.deepStrictEqual(result.raw_value, expected_raw_value);
 }
 
+function test_parsePatternSeq_binding_assignment_direct_value(): void {
+  const seq = mkPatternSeq(
+    [Digit, Letter],
+    '  ',
+    false,
+    null,
+    false,
+    null,
+    null,
+    null,
+    ['digit', 'comment'],
+    [true, true],
+    'comment',
+  );
+  const parser = new ParserImpl({ parser_nodes: [] });
+  parser.initParse({ src: '5a', pos: 0 });
+
+  const result = parser.parsePatternSeq(seq);
+
+  assert(parser.isSuccess());
+  assert(result !== null);
+  assert.deepStrictEqual(result.value, {
+    parser_nodes: [Letter],
+    range: [1, 2],
+    value: 'a',
+    raw_value: 'a',
+    seps: [],
+    enclosure: null,
+    bindings: null,
+  });
+}
+
 function test_parsePatternSeq_binding_non_isolated_scope(): void {
   const inner = mkPatternSeq(
     [Digit],
@@ -1534,6 +1566,7 @@ function runAllTests(): void {
   test_parsePatternSeq_enclosure_ignores_before_left();
   test_parsePatternSeq_enclosure_end_applies_to_last_nongreedy_child();
   test_parsePatternSeq_binding_assignment_isolated_scope();
+  test_parsePatternSeq_binding_assignment_direct_value();
   test_parsePatternSeq_binding_non_isolated_scope();
   console.log('\nAll parsePatternSeq tests passed!');
 }

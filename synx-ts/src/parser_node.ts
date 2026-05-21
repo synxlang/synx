@@ -76,8 +76,10 @@ export interface CharSeq {
  * while `Wrapper=((left:Symbol, ":", right:Symbol))=>[.left=left, .right=right]` can see
  * `left` and `right` because the child node is inplace.
  *
- * `assignment_map` (when non-null): maps AST `value` keys to names in the parse context.
- * For each entry, `value[key]` is assigned from the corresponding context variable; keys absent from the map are not assigned.
+ * `assignment_map` (when non-null):
+ * - A string assigns the corresponding context variable directly to AST `value`, e.g. `=>comment` makes `value = comment`.
+ * - A Map maps AST `value` keys to names in the parse context.
+ *   For each entry, `value[key]` is assigned from the corresponding context variable; keys absent from the map are not assigned.
  * `raw_value` is not affected by binding-related rules.
  *
  * ============================== 中文 ==============================
@@ -113,8 +115,10 @@ export interface CharSeq {
  * 而 `Wrapper=((left:Symbol, ":", right:Symbol))=>[.left=left, .right=right]`
  * 可以看到 `left`、`right`，因为该子节点是原地的。
  *
- * `assignment_map`（非 null 时）：将 AST `value` 的 key 映射到上下文变量名。
- * 对每个映射项，`value[key]` 会从对应上下文变量赋值；map 中不存在的 key 不会被赋值。
+ * `assignment_map`（非 null 时）：
+ * - string 会把对应上下文变量直接赋值给 AST `value`，例如 `=>comment` 使 `value = comment`。
+ * - Map 会将 AST `value` 的 key 映射到上下文变量名。
+ *   对每个映射项，`value[key]` 会从对应上下文变量赋值；map 中不存在的 key 不会被赋值。
  * `raw_value` 不受 binding 相关规则影响。
  */
 export interface PatternSeq {
@@ -129,7 +133,7 @@ export interface PatternSeq {
     enclosure: [ParserNode, ParserNode] | null;
     sub_node_bindings: (string | null)[] | null;
     sub_node_isolated_scope_flags: boolean[] | null;
-    assignment_map: Map<string, string> | null;
+    assignment_map: Map<string, string> | string | null;
 }
 
 /**
@@ -237,7 +241,7 @@ export function mkPatternSeq(
   enclosure: [ParserNode, ParserNode] | null = null,
   sub_node_bindings: (string | null)[] | null = null,
   sub_node_isolated_scope_flags: boolean[] | null = null,
-  assignment_map: Map<string, string> | null = null,
+  assignment_map: Map<string, string> | string | null = null,
 ): PatternSeq {
   const n = sub_nodes.length;
   if (sub_quantifiers.length !== n) {
@@ -277,7 +281,7 @@ export function mkPatternSeq(
     sub_node_bindings: sub_node_bindings?.slice() ?? null,
     sub_node_isolated_scope_flags: sub_node_isolated_scope_flags?.slice()
       ?? (sub_node_bindings !== null ? Array.from({ length: n }, () => true) : null),
-    assignment_map: assignment_map !== null ? new Map(assignment_map) : null,
+    assignment_map: assignment_map instanceof Map ? new Map(assignment_map) : assignment_map,
   };
 }
 

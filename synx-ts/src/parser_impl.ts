@@ -658,10 +658,16 @@ export class ParserImpl implements Parser {
             ? this.input.src.slice(body_start, body_end)
             : children;
         if (node.assignment_map !== null) {
-            value = {};
-            for (const [target, source] of node.assignment_map) {
-                if (Object.prototype.hasOwnProperty.call(bindings, source)) {
-                    value[target] = bindings[source];
+            if (typeof node.assignment_map === "string") {
+                if (Object.prototype.hasOwnProperty.call(bindings, node.assignment_map)) {
+                    value = bindings[node.assignment_map];
+                }
+            } else {
+                value = {};
+                for (const [target, source] of node.assignment_map) {
+                    if (Object.prototype.hasOwnProperty.call(bindings, source)) {
+                        value[target] = bindings[source];
+                    }
                 }
             }
         }
