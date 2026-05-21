@@ -24,10 +24,20 @@ const Quote = mkCharSeq("\"");
 
 /**
  * EscapeChar = ("\\", c:AnyChar) => c
- * `StringLiteral` semantic return is not applied here; this script observes raw parser nodes.
- * 这里不执行 `StringLiteral` 的语义返回，只观察底层解析节点。
  */
-const EscapeChar: PatternSeq = mkPatternSeq([Backslash, AnyChar], "  ");
+const EscapeChar: PatternSeq = mkPatternSeq(
+  [Backslash, AnyChar],
+  "  ",
+  false,
+  null,
+  false,
+  null,
+  null,
+  null,
+  [null, "c"],
+  [true, true],
+  "c",
+);
 
 /**
  * {-EscapeChar; -"\""; AnyChar}
@@ -41,7 +51,19 @@ const NonEscapeText: PatternSeq = mkPatternSeq([NonEscapeChar], "+");
  * StringLiteral = (text:{EscapeChar; {-EscapeChar; -"\""; AnyChar}+}* \enclosedby "\"\"") => text
  */
 const StringTextPiece = mkPatternSet([EscapeChar, NonEscapeText]);
-const StringLiteral: PatternSeq = mkPatternSeq([StringTextPiece], "*", false, null, false, null, null, [Quote, Quote]);
+const StringLiteral: PatternSeq = mkPatternSeq(
+  [StringTextPiece],
+  "*",
+  false,
+  null,
+  false,
+  null,
+  null,
+  [Quote, Quote],
+  ["text"],
+  [true],
+  "text",
+);
 const MutiStringLiterals: PatternSeq = mkPatternSeq([StringLiteral], "*", false, null, false, AnyChar);
 
 interface CaseDef {
@@ -67,6 +89,9 @@ function isAstNode(value: unknown): value is ASTNode {
 function astText(node: ASTNode): string {
   if (typeof node.value === "string") {
     return node.value;
+  }
+  if (isAstNode(node.value)) {
+    return astText(node.value);
   }
   if (Array.isArray(node.value)) {
     return node.value.map(slotText).join("");
@@ -114,62 +139,16 @@ function parseCaseRoot(src: string, root: PatternSeq): { parser: ParserImpl; res
   };
 }
 
-function pieceKind(piece: ASTNode): string {
-  const nodes = piece.parser_nodes;
-  if (nodes.includes(EscapeChar)) {
-    return "EscapeChar";
-  }
-  if (nodes.includes(NonEscapeText)) {
-    return "NonEscapeText";
-  }
-  if (nodes.includes(NonEscapeChar)) {
-    return "NonEscapeChar";
-  }
-  return "Unknown";
-}
-
-function pieceView(piece: ASTNode): object {
-  return {
-    kind: pieceKind(piece),
-    range: piece.range,
-    text: astText(piece),
-    raw_value: piece.raw_value,
-  };
-}
-
-function stringLiteralView(node: ASTNode): object {
-  const slots = node.value as Array<ASTNode[] | ASTNode | null>;
-  const textSlot = slots[0];
-  const pieces = Array.isArray(textSlot)
-    ? textSlot
-    : textSlot === null
-      ? []
-      : [textSlot];
-
-  return {
-    range: node.range,
-    left_quote: node.enclosure?.[0]?.value ?? null,
-    left_quote_range: node.enclosure?.[0]?.range ?? null,
-    text: slotText(textSlot),
-    text_range: slotRange(textSlot),
-    right_quote: node.enclosure?.[1]?.value ?? null,
-    right_quote_range: node.enclosure?.[1]?.range ?? null,
-    piece_count: pieces.length,
-    pieces: pieces.map(pieceView),
-  };
-}
-
 function stringLiteralNodes(rootName: CaseDef["root"] | "StringLiteral", result: ASTNode): ASTNode[] {
   if (rootName !== "MutiStringLiterals") {
     return [result];
   }
-  const slots = result.value as Array<ASTNode[] | ASTNode | null>;
-  const stringLiteralsSlot = slots[0];
-  return Array.isArray(stringLiteralsSlot)
-    ? stringLiteralsSlot
-    : stringLiteralsSlot === null
+  const string_literals = result.raw_value[0] as ASTNode[] | ASTNode | null;
+  return Array.isArray(string_literals)
+    ? string_literals
+    : string_literals === null
       ? []
-      : [stringLiteralsSlot];
+      : [string_literals];
 }
 
 function simpleStringLiteralView(src: string, node: ASTNode): object {
@@ -220,20 +199,13 @@ function runCase(c: CaseDef): void {
     return;
   }
 
-  const slots = result.value as Array<ASTNode[] | ASTNode | null>;
-
   if (rootName === "MutiStringLiterals") {
-    const stringLiteralsSlot = slots[0];
-    const stringLiterals = Array.isArray(stringLiteralsSlot)
-      ? stringLiteralsSlot
-      : stringLiteralsSlot === null
-        ? []
-        : [stringLiteralsSlot];
+    const stringLiterals = stringLiteralNodes(rootName, result);
 
-    console.log("\n--- MutiStringLiterals semantic view ---");
+    console.log("\n--- MutiStringLiterals AST nodes ---");
     console.log(SynxFmt.stringify({
       string_literal_count: stringLiterals.length,
-      string_literals: stringLiterals.map(stringLiteralView),
+      string_literals: stringLiterals,
     }));
 
     console.log("\n--- raw AST ---");
@@ -241,21 +213,7 @@ function runCase(c: CaseDef): void {
     return;
   }
 
-  console.log("\n--- StringLiteral semantic view ---");
-  console.log(SynxFmt.stringify(stringLiteralView(result)));
-
-  console.log("\n--- slot summary ---");
-  console.log(
-    SynxFmt.stringify(
-      slots.map((slot, i) => ({
-        slot: i,
-        text: slotText(slot),
-        range: slotRange(slot),
-      })),
-    ),
-  );
-
-  console.log("\n--- raw AST ---");
+  console.log("\n--- StringLiteral AST ---");
   console.log(SynxFmt.stringify(result));
 }
 
@@ -366,10 +324,10 @@ good3="final";`,
 
 const AllTestCaseIds = cases.map((c) => c.id);
 let TestCaseIds = AllTestCaseIds;
-// TestCaseIds = [12];
+TestCaseIds = [12];
 const simple_print = false;
 
-console.log("Manual StringLiteral parser observation: inspect text pieces/ranges/tail/raw AST.");
+console.log("Manual StringLiteral parser observation: inspect ranges/tail/AST.");
 for (const id of TestCaseIds) {
   const c = cases.find((item) => item.id === id);
   if (c === undefined) {
