@@ -105,7 +105,7 @@ function mkChildAST(node: CharMatchNode, value: string, range: [number, number])
     range,
     value,
     raw_value: value,
-    seps: [], enclosure: null, bindings: {},
+    seps: [], enclosure: null, associate_enclosures: null, bindings: {},
   };
 }
 
@@ -115,7 +115,7 @@ function mkCharSeqAST(n: CharSeq, value: string, range: [number, number]): ASTNo
     range,
     value,
     raw_value: value,
-    seps: [], enclosure: null, bindings: {},
+    seps: [], enclosure: null, associate_enclosures: null, bindings: {},
   };
 }
 
@@ -155,7 +155,7 @@ function mkSeqAST(
     value: normalized,
     raw_value: normalized,
     seps,
-    enclosure: null, bindings: {},
+    enclosure: null, associate_enclosures: null, bindings: {},
   };
 }
 
@@ -1304,7 +1304,7 @@ function test_parsePatternSeq_enclosure(): void {
       value: 'abc',
       raw_value: 'abc',
       seps: [],
-      enclosure: null, bindings: {},
+      enclosure: null, associate_enclosures: null, bindings: {},
     }],
     seps: [],
     enclosure: [
@@ -1314,7 +1314,7 @@ function test_parsePatternSeq_enclosure(): void {
         value: '"',
         raw_value: '"',
         seps: [],
-        enclosure: null, bindings: {},
+        enclosure: null, associate_enclosures: null, bindings: {},
       },
       {
         parser_nodes: [Quote],
@@ -1322,9 +1322,10 @@ function test_parsePatternSeq_enclosure(): void {
         value: '"',
         raw_value: '"',
         seps: [],
-        enclosure: null, bindings: {},
+        enclosure: null, associate_enclosures: null, bindings: {},
       },
     ],
+    associate_enclosures: null,
     bindings: {},
   });
 }
@@ -1349,7 +1350,7 @@ function test_parsePatternSeq_enclosure_ignores_before_left(): void {
       value: 'abc',
       raw_value: 'abc',
       seps: [],
-      enclosure: null, bindings: {},
+      enclosure: null, associate_enclosures: null, bindings: {},
     }]],
     seps: [],
     enclosure: [
@@ -1359,7 +1360,7 @@ function test_parsePatternSeq_enclosure_ignores_before_left(): void {
         value: '"',
         raw_value: '"',
         seps: [],
-        enclosure: null, bindings: {},
+        enclosure: null, associate_enclosures: null, bindings: {},
       },
       {
         parser_nodes: [Quote],
@@ -1367,9 +1368,10 @@ function test_parsePatternSeq_enclosure_ignores_before_left(): void {
         value: '"',
         raw_value: '"',
         seps: [],
-        enclosure: null, bindings: {},
+        enclosure: null, associate_enclosures: null, bindings: {},
       },
     ],
+    associate_enclosures: null,
     bindings: {},
   });
 }
@@ -1395,7 +1397,7 @@ function test_parsePatternSeq_enclosure_end_applies_to_last_nongreedy_child(): v
         value: 'x',
         raw_value: 'x',
         seps: [],
-        enclosure: null, bindings: {},
+        enclosure: null, associate_enclosures: null, bindings: {},
       },
       {
         parser_nodes: [AnyChar],
@@ -1403,7 +1405,7 @@ function test_parsePatternSeq_enclosure_end_applies_to_last_nongreedy_child(): v
         value: 'abc',
         raw_value: 'abc',
         seps: [],
-        enclosure: null, bindings: {},
+        enclosure: null, associate_enclosures: null, bindings: {},
       },
     ],
     seps: [],
@@ -1414,7 +1416,7 @@ function test_parsePatternSeq_enclosure_end_applies_to_last_nongreedy_child(): v
         value: '"',
         raw_value: '"',
         seps: [],
-        enclosure: null, bindings: {},
+        enclosure: null, associate_enclosures: null, bindings: {},
       },
       {
         parser_nodes: [Quote],
@@ -1422,9 +1424,10 @@ function test_parsePatternSeq_enclosure_end_applies_to_last_nongreedy_child(): v
         value: '"',
         raw_value: '"',
         seps: [],
-        enclosure: null, bindings: {},
+        enclosure: null, associate_enclosures: null, bindings: {},
       },
     ],
+    associate_enclosures: null,
     bindings: {},
   });
 }
@@ -1461,7 +1464,7 @@ function test_parsePatternSeq_binding_assignment_isolated_scope(): void {
       value: '5',
       raw_value: '5',
       seps: [],
-      enclosure: null, bindings: {},
+      enclosure: null, associate_enclosures: null, bindings: {},
     },
     {
       parser_nodes: [Letter],
@@ -1469,7 +1472,7 @@ function test_parsePatternSeq_binding_assignment_isolated_scope(): void {
       value: 'a',
       raw_value: 'a',
       seps: [],
-      enclosure: null, bindings: {},
+      enclosure: null, associate_enclosures: null, bindings: {},
     },
   ];
   assert.deepStrictEqual(result.value, {
@@ -1507,6 +1510,7 @@ function test_parsePatternSeq_binding_assignment_direct_value(): void {
     raw_value: 'a',
     seps: [],
     enclosure: null,
+    associate_enclosures: null,
     bindings: {},
   });
 }

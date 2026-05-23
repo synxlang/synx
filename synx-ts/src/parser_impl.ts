@@ -682,6 +682,7 @@ export class ParserImpl implements Parser {
             enclosure: node.enclosure !== null
                 ? [left_enclosure!, right_enclosure!]
                 : null,
+            associate_enclosures: null,
             bindings: bindings,
         };
     }
@@ -706,6 +707,7 @@ export class ParserImpl implements Parser {
                 raw_value: this.input.src.slice(start, end),
                 seps: [],
                 enclosure: null,
+                associate_enclosures: null,
                 bindings: {},
             };
         }
@@ -777,6 +779,7 @@ export class ParserImpl implements Parser {
                 raw_value: this.input.src.slice(start, end),
                 seps: [],
                 enclosure: null,
+                associate_enclosures: null,
                 bindings: {},
             };
         }
@@ -945,6 +948,7 @@ export class ParserImpl implements Parser {
             raw_value: this.input.src.slice(start, end),
             seps: [],
             enclosure: null,
+            associate_enclosures: null,
             bindings: {},
         };
     }
