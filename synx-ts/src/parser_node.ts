@@ -131,6 +131,7 @@ export interface PatternSeq {
     ignore: ParserNode | null;
     greedy_flags: boolean[];
     enclosure: [ParserNode, ParserNode] | null;
+    associateby: [ParserNode, ParserNode] | null;
     sub_node_bindings: (string | null)[] | null;
     sub_node_isolated_scope_flags: boolean[] | null;
     assignment_map: Map<string, string> | string | null;
