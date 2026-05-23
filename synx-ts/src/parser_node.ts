@@ -278,7 +278,7 @@ function validatePartialCharRange(partial: Partial<CharMatchRange>): void {
  */
 export function completeCharRange(partial: Partial<CharMatchRange>): CharMatchRange {
   validatePartialCharRange(partial);
-  return {
+  return Object.assign(partial, {
     kind: ParserNodeKind.CharMatchRange,
     name: partial.name ?? "",
     start: partial.start === undefined || partial.start === ''
@@ -287,7 +287,7 @@ export function completeCharRange(partial: Partial<CharMatchRange>): CharMatchRa
     end: partial.end === undefined || partial.end === ''
       ? String.fromCodePoint(0x10ffff)
       : partial.end,
-  };
+  }) as CharMatchRange;
 }
 
 function validatePartialCharSet(partial: Partial<CharMatchSet>): void {
@@ -307,11 +307,11 @@ export function completeCharSet(
   partial: Partial<CharMatchSet>,
 ): CharMatchSet {
   validatePartialCharSet(partial);
-  return {
+  return Object.assign(partial, {
     kind: ParserNodeKind.CharMatchSet,
     name: partial.name ?? "",
     sub_nodes: partial.sub_nodes!,
-  };
+  }) as CharMatchSet;
 }
 
 function validatePartialPatternSeq(partial: Partial<PatternSeq> & { sub_nodes: ParserNode[]; sub_quantifiers: string }): void {
@@ -390,7 +390,7 @@ export function completePatternSeq(
   const sub_node_bindings = normalizeSubNodeBindings(n, partial.sub_node_bindings);
   const sub_node_isolated_scope_flags = normalizeSubNodeIsolatedScopeFlags(n, partial.sub_node_isolated_scope_flags, sub_node_bindings);
   const assignment_map = normalizeAssignmentMap(partial.assignment_map);
-  return {
+  return Object.assign(partial, {
     kind: ParserNodeKind.PatternSeq,
     name: partial.name ?? "",
     sub_nodes: partial.sub_nodes,
@@ -404,7 +404,7 @@ export function completePatternSeq(
     sub_node_bindings,
     sub_node_isolated_scope_flags,
     assignment_map,
-  };
+  }) as PatternSeq;
 }
 
 function validatePartialCharSeq(partial: Partial<CharSeq> & { literal: string }): void {
@@ -420,7 +420,11 @@ function validatePartialCharSeq(partial: Partial<CharSeq> & { literal: string })
  */
 export function completeCharSeq(partial: Partial<CharSeq> & { literal: string }): CharSeq {
   validatePartialCharSeq(partial);
-  return { kind: ParserNodeKind.CharSeq, name: partial.name ?? "", literal: partial.literal };
+  return Object.assign(partial, {
+    kind: ParserNodeKind.CharSeq,
+    name: partial.name ?? "",
+    literal: partial.literal,
+  }) as CharSeq;
 }
 
 function validatePartialPatternSet(partial: Partial<PatternSet> & { sub_nodes: ParserNode[] }): void {
@@ -453,7 +457,7 @@ export function completePatternSet(
   const n = partial.sub_nodes.length;
   const neg_flags = normalizeNegFlags(n, partial.neg_flags);
   const charset_flag = inferPatternSetCharsetFlag(partial.sub_nodes, neg_flags);
-  return {
+  return Object.assign(partial, {
     kind: ParserNodeKind.PatternSet,
     name: partial.name ?? "",
     sub_nodes: partial.sub_nodes,
@@ -461,7 +465,7 @@ export function completePatternSet(
     charset_flag,
     associateby: partial.associateby ?? null,
     ignore: partial.ignore ?? null,
-  };
+  }) as PatternSet;
 }
 
 function isPatternSetCharsetMember(node: ParserNode): boolean {
