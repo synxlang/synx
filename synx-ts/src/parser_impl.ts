@@ -498,8 +498,15 @@ export class ParserImpl implements Parser {
                 assert.ok(!this.isSuccess());
                 return null;
             };
-
-            return parse_alternative();
+            do {
+                let child = parse_alternative();
+                if (this.isSuccess()) {
+                    // TODO: 添加已匹配associate_enclosures返回child
+                }
+                if (!this.isSuccess()) {
+                    // TODO: 尝试匹配括号
+                }
+            } while (this.isSuccess());
         } finally {
             this.pattern_set_node_parse_stack.pop();
         }
