@@ -96,8 +96,8 @@ function test_parsePatternSet_associateby(): void {
       expected: {
         ...leaf([A, set, set, set], 0, 5, 'a'),
         associate_enclosures: [
-          [leaf([Left], 0, 1, '('), leaf([Left], 1, 2, '(')],
-          [leaf([Right], 4, 5, ')'), leaf([Right], 3, 4, ')')],
+          [leaf([Left], 1, 2, '('), leaf([Left], 0, 1, '(')],
+          [leaf([Right], 3, 4, ')'), leaf([Right], 4, 5, ')')],
         ],
       },
       expected_pos: 5,
@@ -120,6 +120,33 @@ function test_parsePatternSet_associateby(): void {
     assert.strictEqual(parser.input.pos, c.expected_pos, `case ${c.id} pos mismatch`);
     assert.strictEqual(parser.isSuccess(), c.expected_success, `case ${c.id} success mismatch`);
   }
+}
+
+function test_parsePatternSet_associateby_ignore(): void {
+  const A = mkCharSeq('a');
+  const Left = mkCharSeq('(');
+  const Right = mkCharSeq(')');
+  const Space = mkCharSeq(' ');
+  const set: PatternSet = mkPatternSet([A], undefined, [Left, Right], Space);
+
+  const leaf = (parser_nodes: ParserNode[], start: number, end: number, value: string): ASTNode => ({
+    parser_nodes,
+    range: [start, end],
+    value,
+    raw_value: value,
+    seps: [], enclosure: null, associate_enclosures: null, bindings: {},
+  });
+
+  const parser = new ParserImpl({ parser_nodes: [] });
+  parser.initParse({ src: ' (a )', pos: 0 });
+  const result = parser.parseSingleNode(set);
+
+  assert(parser.isSuccess());
+  assert.strictEqual(parser.input.pos, 5);
+  assert.deepStrictEqual(result, {
+    ...leaf([A, set, set], 0, 5, 'a'),
+    associate_enclosures: [[leaf([Left], 1, 2, '(')], [leaf([Right], 4, 5, ')')]],
+  });
 }
 
 function test_parsePatternSet_infinite_recursion_self(): void {
@@ -615,6 +642,7 @@ function runAllTests(): void {
   console.log('Running parsePatternSet tests...\n');
   test_parsePatternSet_basic();
   test_parsePatternSet_associateby();
+  test_parsePatternSet_associateby_ignore();
   test_parsePatternSet_infinite_recursion_self();
   test_parsePatternSet_infinite_recursion_cycle();
   test_parsePatternSet_nested_seq_and_set();

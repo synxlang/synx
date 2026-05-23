@@ -467,10 +467,9 @@ export class ParserImpl implements Parser {
     }
 
     parsePatternSet(node: PatternSet): ASTNode | null {
-        let start = this.input.pos;
-        const node_start = start;
-        let alt_idx = this.getPatternSetNextAltIdx(node, start);
-        this.pattern_set_node_parse_stack.push({ node, pos: start, alt_idx });
+        const node_start = this.input.pos;
+        let alt_idx = this.getPatternSetNextAltIdx(node, node_start);
+        this.pattern_set_node_parse_stack.push({ node, pos: node_start, alt_idx });
 
         try {
             if (alt_idx >= node.sub_nodes.length) {
@@ -478,7 +477,7 @@ export class ParserImpl implements Parser {
                 return null;
             }
 
-            const parse_alternative = (): ASTNode | null => {
+            const parse_alternative = (start:number): ASTNode | null => {
                 for (let i = alt_idx; i < node.sub_nodes.length; i++) {
                     const child = this.parseSingleNode(node.sub_nodes[i]);
                     if (!this.isSuccess()) {
@@ -500,59 +499,51 @@ export class ParserImpl implements Parser {
                 return null;
             };
 
-            if (alt_idx !== 0 || node.associateby === null) {
-                return parse_alternative();
+            if (node.associateby === null || alt_idx !== 0) {
+                return parse_alternative(node_start);
             }
 
-            const associateby = node.associateby;
-            const left_associate_enclosures: ASTNode[] = [];
-            do {
-                let child = parse_alternative();
-                if (this.isSuccess()) {
-                    child = child!;
-                    if (left_associate_enclosures.length > 0) {
-                        const right_associate_enclosures: ASTNode[] = [];
-                        for (let i = left_associate_enclosures.length - 1; i >= 0; i--) {
-                            const right = this.parseSingleNode(associateby[1]);
-                            if (!this.isSuccess()) {
-                                this.input.pos = node_start;
-                                return null;
-                            }
-                            right_associate_enclosures.push(right!);
-                        }
-                        const child_associate_enclosures = child.associate_enclosures;
-                        const outer_right_associate_enclosures = right_associate_enclosures.reverse();
-                        child.range = [node_start, this.input.pos];
-                        child.associate_enclosures = child_associate_enclosures === null
-                            ? [left_associate_enclosures, outer_right_associate_enclosures]
-                            : [
-                                [...left_associate_enclosures, ...child_associate_enclosures[0]],
-                                [...outer_right_associate_enclosures, ...child_associate_enclosures[1]],
-                            ];
-                        for (let i = 0; i < left_associate_enclosures.length; i++) {
-                            child.parser_nodes.push(node);
-                        }
-                    }
-                    return child;
-                }
-                if (!this.isSuccess()) {
-                    const left_start = this.input.pos;
-                    const left = this.parseSingleNode(associateby[0]);
-                    if (!this.isSuccess()) {
-                        this.input.pos = node_start;
-                        return null;
-                    }
-                    if (this.input.pos === left_start) {
-                        this.input.pos = node_start;
-                        this.setError(this.input.pos, "associateby left delimiter matched empty input");
-                        return null;
-                    }
-                    left_associate_enclosures.push(left!);
-                    start = this.input.pos;
-                }
-            } while (this.isSuccess());
+            const direct = parse_alternative(node_start);
+            if (this.isSuccess()) {
+                return direct;
+            }
+
             this.input.pos = node_start;
-            return null;
+            const left = this.parseSingleNode(node.associateby[0], node.ignore);
+            if (!this.isSuccess()) {
+                this.input.pos = node_start;
+                return null;
+            }
+            if (this.input.pos === node_start) {
+                this.setError(this.input.pos, "associateby left boundary matched empty");
+                this.input.pos = node_start;
+                return null;
+            }
+
+            const inner = this.parseSingleNode(node);
+            if (!this.isSuccess()) {
+                this.input.pos = node_start;
+                return null;
+            }
+
+            const right = this.parseSingleNode(node.associateby[1], node.ignore);
+            if (!this.isSuccess()) {
+                this.input.pos = node_start;
+                return null;
+            }
+            assert.ok(left !== null && inner !== null && right !== null);
+
+            inner.parser_nodes.push(node);
+            inner.range = [node_start, this.input.pos];
+            if (inner.associate_enclosures === null) {
+                inner.associate_enclosures = [[left], [right]];
+            } else {
+                inner.associate_enclosures[0].push(left);
+                inner.associate_enclosures[1].push(right);
+            }
+            this.setSuccess();
+            return inner;
+
         } finally {
             this.pattern_set_node_parse_stack.pop();
         }
