@@ -467,7 +467,8 @@ export class ParserImpl implements Parser {
     }
 
     parsePatternSet(node: PatternSet): ASTNode | null {
-        const start = this.input.pos;
+        let start = this.input.pos;
+        const node_start = start;
         let alt_idx = this.getPatternSetNextAltIdx(node, start);
         this.pattern_set_node_parse_stack.push({ node, pos: start, alt_idx });
 
@@ -498,15 +499,60 @@ export class ParserImpl implements Parser {
                 assert.ok(!this.isSuccess());
                 return null;
             };
+
+            if (alt_idx !== 0 || node.associateby === null) {
+                return parse_alternative();
+            }
+
+            const associateby = node.associateby;
+            const left_associate_enclosures: ASTNode[] = [];
             do {
                 let child = parse_alternative();
                 if (this.isSuccess()) {
-                    // TODO: 添加已匹配associate_enclosures返回child
+                    child = child!;
+                    if (left_associate_enclosures.length > 0) {
+                        const right_associate_enclosures: ASTNode[] = [];
+                        for (let i = left_associate_enclosures.length - 1; i >= 0; i--) {
+                            const right = this.parseSingleNode(associateby[1]);
+                            if (!this.isSuccess()) {
+                                this.input.pos = node_start;
+                                return null;
+                            }
+                            right_associate_enclosures.push(right!);
+                        }
+                        const child_associate_enclosures = child.associate_enclosures;
+                        const outer_right_associate_enclosures = right_associate_enclosures.reverse();
+                        child.range = [node_start, this.input.pos];
+                        child.associate_enclosures = child_associate_enclosures === null
+                            ? [left_associate_enclosures, outer_right_associate_enclosures]
+                            : [
+                                [...left_associate_enclosures, ...child_associate_enclosures[0]],
+                                [...outer_right_associate_enclosures, ...child_associate_enclosures[1]],
+                            ];
+                        for (let i = 0; i < left_associate_enclosures.length; i++) {
+                            child.parser_nodes.push(node);
+                        }
+                    }
+                    return child;
                 }
                 if (!this.isSuccess()) {
-                    // TODO: 尝试匹配括号
+                    const left_start = this.input.pos;
+                    const left = this.parseSingleNode(associateby[0]);
+                    if (!this.isSuccess()) {
+                        this.input.pos = node_start;
+                        return null;
+                    }
+                    if (this.input.pos === left_start) {
+                        this.input.pos = node_start;
+                        this.setError(this.input.pos, "associateby left delimiter matched empty input");
+                        return null;
+                    }
+                    left_associate_enclosures.push(left!);
+                    start = this.input.pos;
                 }
             } while (this.isSuccess());
+            this.input.pos = node_start;
+            return null;
         } finally {
             this.pattern_set_node_parse_stack.pop();
         }
