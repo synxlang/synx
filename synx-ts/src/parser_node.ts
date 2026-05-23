@@ -197,6 +197,7 @@ export interface PatternSet {
     neg_flags: boolean[];
     charset_flag: boolean;
     associateby: [ParserNode, ParserNode] | null;
+    ignore: ParserNode | null;
 }
 
 /**

@@ -32,6 +32,7 @@ CharSet = {
     GeneralCharSet;
     \resolved_symbol;
     \associateby "()";
+    \ignore Space;
 };
 
 Option=(pattern:Pattern, "?")=>pattern;
@@ -43,7 +44,9 @@ AssociateByPart=("\\associateby", pattern:Pattern \ignore Space)=>pattern;
 NegPattern=("-", pattern:Pattern \ignore Space)=>[.pattern=pattern]; \\ reject if match, only can be used in PatternSet
 NonGreedyPattern=(pattern:Pattern, "^")=>pattern;
 PatternSet=((patterns:Pattern* \sep ";" \ignore Space), 
-    associateby_part:AssociateByPart? \ignore Space \enclosedby "{}")=>[.patterns=patterns, .associateby=associateby_part];
+    associateby_part:AssociateByPart?, 
+    ignore_part:IgnorePart? 
+    \ignore Space \enclosedby "{}")=>[.patterns=patterns, .associateby=associateby_part, .ignore=ignore_part];
 
 sepPart=("\\sep", pattern:Pattern \ignore Space)=>pattern;
 IgnorePart=("\\ignore", pattern:Pattern \ignore Space)=>pattern;
@@ -58,7 +61,8 @@ ConditionPattern=(pattern:Pattern, "\\where", condition:ConditionExpr \ignore Sp
 PatternBinding=(symbol:Symbol,":",pattern:Pattern)=>[.symbol=symbol, .pattern=pattern];
 Rule=(pattern:PatternSeq,"=>",returned:Expr)=>[.pattern=pattern, .returned=returned];
 
-Pattern={NegPattern;CharSet;StringLiteral;Option;OneOrMany;Many;RawPattern;PatternSeq;PatternSet;PatternBinding;ConditionPattern;Rule;\resolved_symbol \associateby "()"};
+Pattern={NegPattern;CharSet;StringLiteral;Option;OneOrMany;Many;RawPattern;
+    PatternSeq;PatternSet;PatternBinding;ConditionPattern;Rule;\resolved_symbol \associateby "()" \ignore Space};
 
 List=(exprs:Expr* \sep "," \ignore Space \enclosedby "[]")=>exprs;
 
