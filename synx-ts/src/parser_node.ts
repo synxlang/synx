@@ -400,8 +400,8 @@ function normalizeParserNodePair(
   }
   const chars = Array.from(value);
   return [
-    completeCharSeq({ name: JSON.stringify(chars[0]!), literal: chars[0]! }),
-    completeCharSeq({ name: JSON.stringify(chars[1]!), literal: chars[1]! }),
+    completeCharSeq({ literal: chars[0]! }),
+    completeCharSeq({ literal: chars[1]! }),
   ];
 }
 
@@ -459,7 +459,7 @@ export function completeCharSeq(partial: Partial<CharSeq> & { literal: string })
   validatePartialCharSeq(partial);
   return Object.assign(partial, {
     kind: ParserNodeKind.CharSeq,
-    name: partial.name ?? "",
+    name: partial.name ?? partial.literal,
     literal: partial.literal,
   }) as CharSeq;
 }

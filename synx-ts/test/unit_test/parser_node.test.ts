@@ -22,7 +22,7 @@ function test_complete_functions_mutate_input(): void {
   const literalPartial = { literal: "x" };
   const literal = completeCharSeq(literalPartial);
   assert.strictEqual(literal, literalPartial);
-  assert.strictEqual(literal.name, "");
+  assert.strictEqual(literal.name, "x");
 
   const seqPartial = { sub_nodes: [literal], sub_quantifiers: " " };
   const seq = completePatternSeq(seqPartial);
