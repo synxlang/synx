@@ -400,8 +400,8 @@ function normalizeParserNodePair(
   }
   const chars = Array.from(value);
   return [
-    completeCharSeq({ literal: chars[0]! }),
-    completeCharSeq({ literal: chars[1]! }),
+    completeCharSeq({ name: JSON.stringify(chars[0]!), literal: chars[0]! }),
+    completeCharSeq({ name: JSON.stringify(chars[1]!), literal: chars[1]! }),
   ];
 }
 
