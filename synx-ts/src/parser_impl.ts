@@ -467,9 +467,9 @@ export class ParserImpl implements Parser {
     }
 
     parsePatternSet(node: PatternSet): ASTNode | null {
-        const start = this.input.pos;
-        let alt_idx = this.getPatternSetNextAltIdx(node, start);
-        this.pattern_set_node_parse_stack.push({ node, pos: start, alt_idx });
+        const node_start = this.input.pos;
+        let alt_idx = this.getPatternSetNextAltIdx(node, node_start);
+        this.pattern_set_node_parse_stack.push({ node, pos: node_start, alt_idx });
 
         try {
             if (alt_idx >= node.sub_nodes.length) {
@@ -477,25 +477,73 @@ export class ParserImpl implements Parser {
                 return null;
             }
 
-            for (let i = alt_idx; i < node.sub_nodes.length; i++) {
-                const child = this.parseSingleNode(node.sub_nodes[i]);
-                if (!this.isSuccess()) {
-                    this.input.pos = start;
-                    continue;
+            const parse_alternative = (start:number): ASTNode | null => {
+                for (let i = alt_idx; i < node.sub_nodes.length; i++) {
+                    const child = this.parseSingleNode(node.sub_nodes[i]);
+                    if (!this.isSuccess()) {
+                        this.input.pos = start;
+                        continue;
+                    }
+                    if (node.neg_flags[i]) {
+                        this.input.pos = start;
+                        this.setError(this.input.pos, "negated alternative matched");
+                        return null;
+                    }
+                    if (child === null) {
+                        return null;
+                    }
+                    child.parser_nodes.push(node);
+                    return child;
                 }
-                if (node.neg_flags[i]) {
-                    this.input.pos = start;
-                    this.setError(this.input.pos, "negated alternative matched");
-                    return null;
-                }
-                if (child === null) {
-                    return null;
-                }
-                child.parser_nodes.push(node);
-                return child;
+                assert.ok(!this.isSuccess());
+                return null;
+            };
+
+            if (node.associateby === null || alt_idx !== 0) {
+                return parse_alternative(node_start);
             }
-            assert.ok(!this.isSuccess());
-            return null;
+
+            const direct = parse_alternative(node_start);
+            if (this.isSuccess()) {
+                return direct;
+            }
+
+            this.input.pos = node_start;
+            const left = this.parseSingleNode(node.associateby[0], node.ignore);
+            if (!this.isSuccess()) {
+                this.input.pos = node_start;
+                return null;
+            }
+            if (this.input.pos === node_start) {
+                this.setError(this.input.pos, "associateby left boundary matched empty");
+                this.input.pos = node_start;
+                return null;
+            }
+
+            const inner = this.parseSingleNode(node);
+            if (!this.isSuccess()) {
+                this.input.pos = node_start;
+                return null;
+            }
+
+            const right = this.parseSingleNode(node.associateby[1], node.ignore);
+            if (!this.isSuccess()) {
+                this.input.pos = node_start;
+                return null;
+            }
+            assert.ok(left !== null && inner !== null && right !== null);
+
+            inner.parser_nodes.push(node);
+            inner.range = [node_start, this.input.pos];
+            if (inner.associate_enclosures === null) {
+                inner.associate_enclosures = [[left], [right]];
+            } else {
+                inner.associate_enclosures[0].push(left);
+                inner.associate_enclosures[1].push(right);
+            }
+            this.setSuccess();
+            return inner;
+
         } finally {
             this.pattern_set_node_parse_stack.pop();
         }
@@ -682,6 +730,7 @@ export class ParserImpl implements Parser {
             enclosure: node.enclosure !== null
                 ? [left_enclosure!, right_enclosure!]
                 : null,
+            associate_enclosures: null,
             bindings: bindings,
         };
     }
@@ -706,6 +755,7 @@ export class ParserImpl implements Parser {
                 raw_value: this.input.src.slice(start, end),
                 seps: [],
                 enclosure: null,
+                associate_enclosures: null,
                 bindings: {},
             };
         }
@@ -777,6 +827,7 @@ export class ParserImpl implements Parser {
                 raw_value: this.input.src.slice(start, end),
                 seps: [],
                 enclosure: null,
+                associate_enclosures: null,
                 bindings: {},
             };
         }
@@ -945,6 +996,7 @@ export class ParserImpl implements Parser {
             raw_value: this.input.src.slice(start, end),
             seps: [],
             enclosure: null,
+            associate_enclosures: null,
             bindings: {},
         };
     }

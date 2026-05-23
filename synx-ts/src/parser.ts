@@ -10,6 +10,7 @@ import { ParserImpl } from "./parser_impl";
  * - `raw_value`: Raw AST payload: for `CharMatchNode` it is a string; for other kinds it is `ASTNode[]`, with each entry in one-to-one correspondence with `sub_nodes`.
  * - `seps`: Separator matches for `PatternSeq` (see `PatternSeq.sep`); empty array for other node kinds.
  * - `enclosure`: See `PatternSeq` definition.
+ * - `associate_enclosures`: Matched association boundary pairs produced by `PatternSet.associateby`; null when absent.
  * - `bindings`: Binding context produced by this AST node; empty object when no binding context is produced.
  *
  * ============================== 中文 ==============================
@@ -20,6 +21,7 @@ import { ParserImpl } from "./parser_impl";
  * - `raw_value`：原始 AST 值，对于CharMatchNode为字符串，其它为ASTNode[]，每个节点和sub_nodes一一对应。
  * - `seps`：`PatternSeq` 的分隔符匹配（见 `PatternSeq.sep`）；其它节点类型为空数组。
  * - `enclosure`：见PatternSeq定义。
+ * - `associate_enclosures`：由 `PatternSet.associateby` 产生的结合边界匹配对；不存在时为 null。
  * - `bindings`：该 AST 节点生成的绑定上下文；没有生成绑定上下文时为空对象。
  */
 export interface ASTNode {
@@ -29,6 +31,7 @@ export interface ASTNode {
     raw_value: any;
     seps: ASTNode[];
     enclosure: [ASTNode, ASTNode] | null;
+    associate_enclosures: [ASTNode[], ASTNode[]] | null;
     bindings: Record<string, any>;
 }
 

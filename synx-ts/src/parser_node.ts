@@ -159,6 +159,15 @@ export interface PatternSeq {
  * For left-recursion limits and other authoring shapes, see the JSDoc for
  * `pattern_set_node_parse_stack` in `ParserImpl`.
  *
+ * `associateby` (when non-null): boundary pair corresponding to `\associateby`.
+ * It is similar to `PatternSeq.enclosure`, but may match zero or more pairs around the selected alternative
+ * and has the lowest matching priority.
+ * Only PatternSet nodes whose `charset_flag` is false may have `associateby`.
+ *
+ * `ignore` (when non-null, only valid when `associateby` is also non-null): lowest priority.
+ * Only applies to the `associateby` delimiters — it is used when matching the left and right boundary
+ * nodes of `associateby`, with the same semantics as `PatternSeq.ignore`.
+ *
  * ============================== 中文 ==============================
  *
  * `PatternSet`：有序分支（从左到右尝试 `sub_nodes`）。
@@ -180,12 +189,23 @@ export interface PatternSeq {
  * 长中缀链：在 synx 中优先用 `\sep` 收列表，再结合性在后续阶段处理。
  * 左递归能力边界及其它写法见
  * `ParserImpl` 中 `pattern_set_node_parse_stack` 的 JSDoc。
+ *
+ * `associateby`（非 null 时）：对应 `\associateby` 的边界对。
+ * 它类似于 `PatternSeq.enclosure`，但允许在选中的分支外匹配 0 个或多个边界对，
+ * 且匹配优先级最低。
+ * 只有 `charset_flag` 为 false 的 PatternSet 可以拥有 `associateby`。
+ *
+ * `ignore`（非 null 时，仅在 `associateby` 也非 null 时有效）：优先级最低。
+ * 仅对 `associateby` 的边界符生效——在匹配 `associateby` 的左右边界节点时使用，
+ * 语义与 `PatternSeq.ignore` 相同。
  */
 export interface PatternSet {
     kind: ParserNodeKind.PatternSet;
     sub_nodes: ParserNode[];
     neg_flags: boolean[];
     charset_flag: boolean;
+    associateby: [ParserNode, ParserNode] | null;
+    ignore: ParserNode | null;
 }
 
 /**
@@ -300,17 +320,28 @@ export function mkCharSeq(literal: string): CharSeq {
 export function mkPatternSet(
   patterns: ParserNode[],
   neg_flags?: boolean[],
+  associateby: [ParserNode, ParserNode] | null = null,
+  ignore: ParserNode | null = null,
 ): PatternSet {
   const n = patterns.length;
   const flags = neg_flags ?? Array.from({ length: n }, () => false);
   if (flags.length !== n) {
     throw new Error("mkPatternSet: neg_flags length must match patterns length");
   }
+  const charset_flag = inferPatternSetCharsetFlag(patterns, flags);
+  if (charset_flag && associateby !== null) {
+    throw new Error("mkPatternSet: associateby is only allowed when charset_flag is false");
+  }
+  if (ignore !== null && associateby === null) {
+    throw new Error("mkPatternSet: ignore is only allowed when associateby is also non-null");
+  }
   return {
     kind: ParserNodeKind.PatternSet,
     sub_nodes: patterns,
     neg_flags: flags,
-    charset_flag: inferPatternSetCharsetFlag(patterns, flags),
+    charset_flag,
+    associateby,
+    ignore,
   };
 }
 
