@@ -60,7 +60,7 @@ export interface CharSeq {
  * When `raw` is true, `value` is the original matched source text for the sequence body; `raw_value` remains the structured child payload.
  * 
  * `greedy_flags` (same length as `sub_nodes`): `true` means greedy semantics for `*` / `+` / `?` on that slot.
- * Normalization (via {@link mkPatternSeq}): {@link AnyChar} with `*` or `+` **must** be non-greedy; quantifier `' '` (single mandatory match) **must** be greedy; both override conflicting explicit `greedy_flags`.
+ * Normalization (via {@link completePatternSeq}): {@link AnyChar} with `*` or `+` **must** be non-greedy; quantifier `' '` (single mandatory match) **must** be greedy; both override conflicting explicit `greedy_flags`.
  *
  * `enclosure` (when non-null): boundary pair corresponding to `\enclosedby`, requiring that the input matched by `sep` and the right closing delimiter do not overlap; otherwise the result is undefined.
  *
@@ -100,7 +100,7 @@ export interface CharSeq {
  * `raw` 为 true 时，`value` 是序列主体匹配到的原始源文本；`raw_value` 仍是结构化的子节点结果。
  *
  * `greedy_flags`（与 `sub_nodes` 等长）：`true` 表示该子槽量词 `*` / `+` / `?` 按贪婪语义解析。
- * 规范化（由 {@link mkPatternSeq} 施加）：{@link AnyChar} 且量词为 `*` 或 `+` 时**必须**为非贪婪；量词为 `' '`（单次必配）的槽**必须**为贪婪；二者均覆盖与之冲突的显式 `greedy_flags`。
+ * 规范化（由 {@link completePatternSeq} 施加）：{@link AnyChar} 且量词为 `*` 或 `+` 时**必须**为非贪婪；量词为 `' '`（单次必配）的槽**必须**为贪婪；二者均覆盖与之冲突的显式 `greedy_flags`。
  *
  * `enclosure`（非 null 时）：对应 `\enclosedby` 的边界对，要求sep和右闭合符匹配到的输入没有交集，否则结果未定义。
  *

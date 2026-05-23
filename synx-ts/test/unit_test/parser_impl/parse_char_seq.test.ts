@@ -1,169 +1,168 @@
-﻿import { ParserImpl } from '../../../src/parser_impl';
-import { mkCharSeq, mkCharRange, mkCharSet, mkPatternSeq } from '../../../src/parser_node';
+import { ParserImpl } from '../../../src/parser_impl';
+import { completeCharSeq, completeCharRange, completeCharSet, completePatternSeq } from '../../../src/parser_node';
 import type { Quantifier } from '../../../src/parser_node';
 import type { ASTNode, ParserInput } from '../../../src/parser';
 import { ParserNodeKind } from '../../../src/parser_node';
 import { strict as assert } from 'assert';
-
 function parse_node_result_count(parse_res: ASTNode[] | ASTNode | null): number {
-  if (parse_res === null) return 0;
-  if (Array.isArray(parse_res)) return parse_res.length;
-  return 1;
+    if (parse_res === null)
+        return 0;
+    if (Array.isArray(parse_res))
+        return parse_res.length;
+    return 1;
 }
-
 /** parseCharSeq: single match only; no setError, no quantifier */
 function test_parseCharSeq(): void {
-  const cases: Array<{
-    id: number;
-    literal: string;
-    input: ParserInput;
-    expected_value: string | null;
-  }> = [
-    { id: 1, literal: 'hi', input: { src: 'hi', pos: 0 }, expected_value: 'hi' },
-    { id: 2, literal: 'hi', input: { src: 'ha', pos: 0 }, expected_value: null },
-    { id: 3, literal: '5😀', input: { src: '5😀z', pos: 0 }, expected_value: '5😀' },
-  ];
-  for (const c of cases) {
-    const node = mkCharSeq(c.literal);
-    const parser = new ParserImpl({ parser_nodes: [] });
-    parser.initParse(c.input);
-    const result = parser.parseCharSeq(node);
-    if (c.expected_value === null) {
-      if (result !== null) {
-        throw new Error(`[case ${c.id}] expected null, got ${(result as ASTNode).value}`);
-      }
-    } else {
-      if (result === null) {
-        throw new Error(`[case ${c.id}] expected value, got null`);
-      }
-      if (result.value !== c.expected_value) {
-        throw new Error(`[case ${c.id}] expected value ${JSON.stringify(c.expected_value)}, got ${JSON.stringify(result.value)}`);
-      }
-      if (result.parser_nodes[0]!.kind !== ParserNodeKind.CharSeq) {
-        throw new Error(`[case ${c.id}] wrong parser node kind`);
-      }
+    const cases: Array<{
+        id: number;
+        literal: string;
+        input: ParserInput;
+        expected_value: string | null;
+    }> = [
+        { id: 1, literal: 'hi', input: { src: 'hi', pos: 0 }, expected_value: 'hi' },
+        { id: 2, literal: 'hi', input: { src: 'ha', pos: 0 }, expected_value: null },
+        { id: 3, literal: '5😀', input: { src: '5😀z', pos: 0 }, expected_value: '5😀' },
+    ];
+    for (const c of cases) {
+        const node = completeCharSeq({ literal: c.literal });
+        const parser = new ParserImpl({ parser_nodes: [] });
+        parser.initParse(c.input);
+        const result = parser.parseCharSeq(node);
+        if (c.expected_value === null) {
+            if (result !== null) {
+                throw new Error(`[case ${c.id}] expected null, got ${(result as ASTNode).value}`);
+            }
+        }
+        else {
+            if (result === null) {
+                throw new Error(`[case ${c.id}] expected value, got null`);
+            }
+            if (result.value !== c.expected_value) {
+                throw new Error(`[case ${c.id}] expected value ${JSON.stringify(c.expected_value)}, got ${JSON.stringify(result.value)}`);
+            }
+            if (result.parser_nodes[0]!.kind !== ParserNodeKind.CharSeq) {
+                throw new Error(`[case ${c.id}] wrong parser node kind`);
+            }
+        }
+        if (c.expected_value === null) {
+            if (parser.isSuccess()) {
+                throw new Error(`[case ${c.id}] expected parse failure (no literal match)`);
+            }
+        }
+        else if (!parser.isSuccess()) {
+            throw new Error(`[case ${c.id}] parseCharSeq success expected, got error ${parser.getError()}`);
+        }
     }
-    if (c.expected_value === null) {
-      if (parser.isSuccess()) {
-        throw new Error(`[case ${c.id}] expected parse failure (no literal match)`);
-      }
-    } else if (!parser.isSuccess()) {
-      throw new Error(`[case ${c.id}] parseCharSeq success expected, got error ${parser.getError()}`);
-    }
-  }
 }
-
 /** CharSeq quantifiers via a single-child PatternSeq (production uses `parsePatternSeq` → `parseNode`). */
 function test_parsePatternSeq_byteSeq_quantifiers(): void {
-  const ab = mkCharSeq('ab');
-  const cases: Array<{
-    id: number;
-    quantifier: Quantifier;
-    input: ParserInput;
-    expected_values: string[] | null;
-    expected_error: boolean;
-  }> = [
-    { id: 10, quantifier: ' ', input: { src: 'ab', pos: 0 }, expected_values: ['ab'], expected_error: false },
-    { id: 11, quantifier: ' ', input: { src: 'xx', pos: 0 }, expected_values: null, expected_error: true },
-    { id: 12, quantifier: '?', input: { src: 'xx', pos: 0 }, expected_values: [], expected_error: false },
-    { id: 13, quantifier: '?', input: { src: 'ab', pos: 0 }, expected_values: ['ab'], expected_error: false },
-    { id: 14, quantifier: '*', input: { src: 'xx', pos: 0 }, expected_values: [], expected_error: false },
-    { id: 15, quantifier: '*', input: { src: 'abab', pos: 0 }, expected_values: ['ab', 'ab'], expected_error: false },
-    { id: 16, quantifier: '+', input: { src: 'xx', pos: 0 }, expected_values: null, expected_error: true },
-    { id: 17, quantifier: '+', input: { src: 'abab', pos: 0 }, expected_values: ['ab', 'ab'], expected_error: false },
-  ];
-  for (const c of cases) {
-    const parser = new ParserImpl({ parser_nodes: [] });
-    parser.initParse(c.input);
-    const seq = mkPatternSeq([ab], c.quantifier, false, null, false, null);
-    const top = parser.parsePatternSeq(seq);
-    if (top === null) {
-      if (c.expected_error !== (parser.getError() !== null)) {
-        throw new Error(`[case ${c.id}] expected_error=${c.expected_error}, last_error=${parser.getError()}`);
-      }
-      continue;
-    }
-    const v = top.value;
-    if (!Array.isArray(v) || v.length === 0) {
-      throw new Error(`[case ${c.id}] expected one child slot in PatternSeq value`);
-    }
-    const slot = v[0] as ASTNode[] | ASTNode | null;
-    const count = parse_node_result_count(slot);
-    if (c.expected_values === null) {
-      if (count !== 0) {
-        throw new Error(`[case ${c.id}] expected 0 nodes, got ${count}`);
-      }
-    } else {
-      if (count !== c.expected_values.length) {
-        throw new Error(`[case ${c.id}] expected ${c.expected_values.length} nodes, got ${count}`);
-      }
-      const arr = Array.isArray(slot) ? slot : slot === null ? [] : [slot];
-      for (let i = 0; i < arr.length; i++) {
-        if (arr[i]!.value !== c.expected_values[i]) {
-          throw new Error(`[case ${c.id}] node ${i} value mismatch`);
+    const ab = completeCharSeq({ literal: 'ab' });
+    const cases: Array<{
+        id: number;
+        quantifier: Quantifier;
+        input: ParserInput;
+        expected_values: string[] | null;
+        expected_error: boolean;
+    }> = [
+        { id: 10, quantifier: ' ', input: { src: 'ab', pos: 0 }, expected_values: ['ab'], expected_error: false },
+        { id: 11, quantifier: ' ', input: { src: 'xx', pos: 0 }, expected_values: null, expected_error: true },
+        { id: 12, quantifier: '?', input: { src: 'xx', pos: 0 }, expected_values: [], expected_error: false },
+        { id: 13, quantifier: '?', input: { src: 'ab', pos: 0 }, expected_values: ['ab'], expected_error: false },
+        { id: 14, quantifier: '*', input: { src: 'xx', pos: 0 }, expected_values: [], expected_error: false },
+        { id: 15, quantifier: '*', input: { src: 'abab', pos: 0 }, expected_values: ['ab', 'ab'], expected_error: false },
+        { id: 16, quantifier: '+', input: { src: 'xx', pos: 0 }, expected_values: null, expected_error: true },
+        { id: 17, quantifier: '+', input: { src: 'abab', pos: 0 }, expected_values: ['ab', 'ab'], expected_error: false },
+    ];
+    for (const c of cases) {
+        const parser = new ParserImpl({ parser_nodes: [] });
+        parser.initParse(c.input);
+        const seq = completePatternSeq({ sub_nodes: [ab], sub_quantifiers: c.quantifier, raw: false, sep: null, accept_trailing_sep: false, ignore: null });
+        const top = parser.parsePatternSeq(seq);
+        if (top === null) {
+            if (c.expected_error !== (parser.getError() !== null)) {
+                throw new Error(`[case ${c.id}] expected_error=${c.expected_error}, last_error=${parser.getError()}`);
+            }
+            continue;
         }
-      }
+        const v = top.value;
+        if (!Array.isArray(v) || v.length === 0) {
+            throw new Error(`[case ${c.id}] expected one child slot in PatternSeq value`);
+        }
+        const slot = v[0] as ASTNode[] | ASTNode | null;
+        const count = parse_node_result_count(slot);
+        if (c.expected_values === null) {
+            if (count !== 0) {
+                throw new Error(`[case ${c.id}] expected 0 nodes, got ${count}`);
+            }
+        }
+        else {
+            if (count !== c.expected_values.length) {
+                throw new Error(`[case ${c.id}] expected ${c.expected_values.length} nodes, got ${count}`);
+            }
+            const arr = Array.isArray(slot) ? slot : slot === null ? [] : [slot];
+            for (let i = 0; i < arr.length; i++) {
+                if (arr[i]!.value !== c.expected_values[i]) {
+                    throw new Error(`[case ${c.id}] node ${i} value mismatch`);
+                }
+            }
+        }
     }
-  }
 }
-
 /** CharSeq as a child of PatternSeq (e.g. synx `=>` before a symbol) */
 function test_parsePatternSeq_embedsCharSeq(): void {
-  const lit = mkCharSeq('=>');
-  const letter = mkCharSet([mkCharRange('a', 'z')]);
-  const seq = mkPatternSeq([lit, letter], '  ');
-  const parser = new ParserImpl({ parser_nodes: [] });
-  parser.initParse({ src: '=>b', pos: 0 });
-  const result = parser.parsePatternSeq(seq);
-  assert(result !== null);
-  assert.deepStrictEqual(result, {
-    parser_nodes: [seq],
-    range: [0, 3],
-    value: [
-      {
-        parser_nodes: [lit],
-        range: [0, 2],
-        value: '=>',
-        raw_value: '=>',
+    const lit = completeCharSeq({ literal: '=>' });
+    const letter = completeCharSet({ sub_nodes: [completeCharRange({ start: 'a', end: 'z' })] });
+    const seq = completePatternSeq({ sub_nodes: [lit, letter], sub_quantifiers: '  ' });
+    const parser = new ParserImpl({ parser_nodes: [] });
+    parser.initParse({ src: '=>b', pos: 0 });
+    const result = parser.parsePatternSeq(seq);
+    assert(result !== null);
+    assert.deepStrictEqual(result, {
+        parser_nodes: [seq],
+        range: [0, 3],
+        value: [
+            {
+                parser_nodes: [lit],
+                range: [0, 2],
+                value: '=>',
+                raw_value: '=>',
+                seps: [], enclosure: null, associate_enclosures: null, bindings: {},
+            },
+            {
+                parser_nodes: [letter],
+                range: [2, 3],
+                value: 'b',
+                raw_value: 'b',
+                seps: [], enclosure: null, associate_enclosures: null, bindings: {},
+            },
+        ],
+        raw_value: [
+            {
+                parser_nodes: [lit],
+                range: [0, 2],
+                value: '=>',
+                raw_value: '=>',
+                seps: [], enclosure: null, associate_enclosures: null, bindings: {},
+            },
+            {
+                parser_nodes: [letter],
+                range: [2, 3],
+                value: 'b',
+                raw_value: 'b',
+                seps: [], enclosure: null, associate_enclosures: null, bindings: {},
+            },
+        ],
         seps: [], enclosure: null, associate_enclosures: null, bindings: {},
-      },
-      {
-        parser_nodes: [letter],
-        range: [2, 3],
-        value: 'b',
-        raw_value: 'b',
-        seps: [], enclosure: null, associate_enclosures: null, bindings: {},
-      },
-    ],
-    raw_value: [
-      {
-        parser_nodes: [lit],
-        range: [0, 2],
-        value: '=>',
-        raw_value: '=>',
-        seps: [], enclosure: null, associate_enclosures: null, bindings: {},
-      },
-      {
-        parser_nodes: [letter],
-        range: [2, 3],
-        value: 'b',
-        raw_value: 'b',
-        seps: [], enclosure: null, associate_enclosures: null, bindings: {},
-      },
-    ],
-    seps: [], enclosure: null, associate_enclosures: null, bindings: {},
-  });
-  assert.strictEqual(parser.getError(), null);
+    });
+    assert.strictEqual(parser.getError(), null);
 }
-
 function runAllTests(): void {
-  console.log('Running parseCharSeq tests...\n');
-  test_parseCharSeq();
-  test_parsePatternSeq_byteSeq_quantifiers();
-  test_parsePatternSeq_embedsCharSeq();
-  console.log('\nAll parseCharSeq tests passed!');
+    console.log('Running parseCharSeq tests...\n');
+    test_parseCharSeq();
+    test_parsePatternSeq_byteSeq_quantifiers();
+    test_parsePatternSeq_embedsCharSeq();
+    console.log('\nAll parseCharSeq tests passed!');
 }
-
 if (require.main === module) {
-  runAllTests();
+    runAllTests();
 }
