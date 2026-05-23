@@ -29,6 +29,7 @@ export interface ASTNode {
     raw_value: any;
     seps: ASTNode[];
     enclosure: [ASTNode, ASTNode] | null;
+    associate_enclosures: [ASTNode[], ASTNode[]] | null;
     bindings: Record<string, any>;
 }
 
