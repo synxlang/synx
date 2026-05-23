@@ -99,6 +99,7 @@ function stringifyPatternSeq(node: PatternSeq, id: number, seen: SeenState): str
       `ignore: ${stringifyNullable(node.ignore, seen)},`,
       `greedy_flags: ${stringifyArray(node.greedy_flags, seen)},`,
       `enclosure: ${stringifyNullableTuple(node.enclosure, seen)},`,
+      `associateby: ${stringifyNullableTuple(node.associateby, seen)},`,
     ]),
     ")",
   ].join("\n");
@@ -126,6 +127,7 @@ function stringifyASTNode(node: ASTNode, seen: SeenState): string {
         `raw_value: ${stringifyValue(node.raw_value, seen)},`,
         `seps: ${stringifyArray(node.seps, seen)},`,
         `enclosure: ${stringifyNullableTuple(node.enclosure, seen)},`,
+        `associate_enclosures: ${stringifyNullableTupleArray(node.associate_enclosures, seen)},`,
         `bindings: ${stringifyPlainObject(node.bindings, seen)},`,
       ]),
       ")",
@@ -189,6 +191,10 @@ function stringifyNullableTuple<T extends unknown>(value: [T, T] | null, seen: S
   return value === null ? "null" : stringifyArray(value, seen);
 }
 
+function stringifyNullableTupleArray<T extends unknown>(value: [T[], T[]] | null, seen: SeenState): string {
+  return value === null ? "null" : stringifyArray(value, seen);
+}
+
 function indentLines(lines: string[]): string {
   return lines
     .join("\n")
@@ -222,6 +228,7 @@ function isASTNode(value: unknown): value is ASTNode {
     "raw_value" in value &&
     "seps" in value &&
     "enclosure" in value &&
+    "associate_enclosures" in value &&
     "bindings" in value
   );
 }

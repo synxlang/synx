@@ -64,6 +64,10 @@ export interface CharSeq {
  *
  * `enclosure` (when non-null): boundary pair corresponding to `\enclosedby`, requiring that the input matched by `sep` and the right closing delimiter do not overlap; otherwise the result is undefined.
  *
+ * `associateby` (when non-null): boundary pair corresponding to `\associateby`.
+ * It describes enclosure pairs that may wrap expressions for association.
+ * The pair may match zero or any number of nested enclosure layers around the associated expression.
+ *
  * `sub_node_bindings` (when non-null, same length as `sub_nodes`): binding names for child parse results.
  * A non-null entry binds the corresponding child AST value into this PatternSeq's local context.
  * Duplicate binding names are not allowed in the same scope.
@@ -103,6 +107,10 @@ export interface CharSeq {
  * 规范化（由 {@link mkPatternSeq} 施加）：{@link AnyChar} 且量词为 `*` 或 `+` 时**必须**为非贪婪；量词为 `' '`（单次必配）的槽**必须**为贪婪；二者均覆盖与之冲突的显式 `greedy_flags`。
  *
  * `enclosure`（非 null 时）：对应 `\enclosedby` 的边界对，要求sep和右闭合符匹配到的输入没有交集，否则结果未定义。
+ *
+ * `associateby`（非 null 时）：对应 `\associateby` 的边界对。
+ * 它描述可包裹表达式并参与结合的括号。
+ * 该括号对可以在被结合表达式外匹配 0 层或任意多层嵌套。
  *
  * `sub_node_bindings`（非 null 时，与 `sub_nodes` 等长）：子节点解析结果的绑定名。
  * 非 null 项会把对应子节点 AST 的 value 绑定到当前 PatternSeq 的局部上下文。
@@ -243,6 +251,7 @@ export function mkPatternSeq(
   sub_node_bindings: (string | null)[] | null = null,
   sub_node_isolated_scope_flags: boolean[] | null = null,
   assignment_map: Map<string, string> | string | null = null,
+  associateby: [ParserNode, ParserNode] | null = null,
 ): PatternSeq {
   const n = sub_nodes.length;
   if (sub_quantifiers.length !== n) {
@@ -279,6 +288,7 @@ export function mkPatternSeq(
     ignore,
     greedy_flags: flags,
     enclosure,
+    associateby,
     sub_node_bindings: sub_node_bindings?.slice() ?? null,
     sub_node_isolated_scope_flags: sub_node_isolated_scope_flags?.slice()
       ?? (sub_node_bindings !== null ? Array.from({ length: n }, () => true) : null),
