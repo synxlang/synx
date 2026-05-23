@@ -17,6 +17,7 @@ export type Quantifier = '?' | '*' | '+' | ' ';
  */
 export interface CharMatchRange {
     kind: ParserNodeKind.CharMatchRange;
+    name: string;
     start: string;
     end: string;
 }
@@ -28,6 +29,7 @@ export interface CharMatchRange {
  */
 export interface CharMatchSet {
     kind: ParserNodeKind.CharMatchSet;
+    name: string;
     sub_nodes: CharMatchNode[] | string;
 }
 
@@ -38,6 +40,7 @@ export interface CharMatchSet {
  */
 export interface CharSeq {
   kind: ParserNodeKind.CharSeq;
+  name: string;
   literal: string;
 }
 
@@ -123,6 +126,7 @@ export interface CharSeq {
  */
 export interface PatternSeq {
     kind: ParserNodeKind.PatternSeq;
+    name: string;
     sub_nodes: ParserNode[];
     sub_quantifiers: string;
     raw: boolean;
@@ -201,6 +205,7 @@ export interface PatternSeq {
  */
 export interface PatternSet {
     kind: ParserNodeKind.PatternSet;
+    name: string;
     sub_nodes: ParserNode[];
     neg_flags: boolean[];
     charset_flag: boolean;
@@ -213,7 +218,7 @@ export interface PatternSet {
  *
  * 匹配任意单个字符（Unicode 标量值或错误码点）。对于`*`和`+`量词总是非贪婪匹配。
  */
-export const AnyChar = { kind: ParserNodeKind.AnyChar } as const;
+export const AnyChar = { kind: ParserNodeKind.AnyChar, name: "AnyChar" } as const;
 
 /**
  * Single character match node.
@@ -275,6 +280,7 @@ export function completeCharRange(partial: Partial<CharMatchRange>): CharMatchRa
   validatePartialCharRange(partial);
   return {
     kind: ParserNodeKind.CharMatchRange,
+    name: partial.name ?? "",
     start: partial.start === undefined || partial.start === ''
       ? String.fromCodePoint(0)
       : partial.start,
@@ -303,6 +309,7 @@ export function completeCharSet(
   validatePartialCharSet(partial);
   return {
     kind: ParserNodeKind.CharMatchSet,
+    name: partial.name ?? "",
     sub_nodes: partial.sub_nodes!,
   };
 }
@@ -385,6 +392,7 @@ export function completePatternSeq(
   const assignment_map = normalizeAssignmentMap(partial.assignment_map);
   return {
     kind: ParserNodeKind.PatternSeq,
+    name: partial.name ?? "",
     sub_nodes: partial.sub_nodes,
     sub_quantifiers: partial.sub_quantifiers,
     raw: partial.raw ?? false,
@@ -412,7 +420,7 @@ function validatePartialCharSeq(partial: Partial<CharSeq> & { literal: string })
  */
 export function completeCharSeq(partial: Partial<CharSeq> & { literal: string }): CharSeq {
   validatePartialCharSeq(partial);
-  return { kind: ParserNodeKind.CharSeq, literal: partial.literal };
+  return { kind: ParserNodeKind.CharSeq, name: partial.name ?? "", literal: partial.literal };
 }
 
 function validatePartialPatternSet(partial: Partial<PatternSet> & { sub_nodes: ParserNode[] }): void {
@@ -447,6 +455,7 @@ export function completePatternSet(
   const charset_flag = inferPatternSetCharsetFlag(partial.sub_nodes, neg_flags);
   return {
     kind: ParserNodeKind.PatternSet,
+    name: partial.name ?? "",
     sub_nodes: partial.sub_nodes,
     neg_flags,
     charset_flag,

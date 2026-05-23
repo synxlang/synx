@@ -6,6 +6,7 @@ import type { ASTNode, ParserInput } from '../../../src/parser';
 function incompletePatternSet(): PatternSet {
     return {
         kind: ParserNodeKind.PatternSet,
+        name: "",
         sub_nodes: [],
         neg_flags: [],
         charset_flag: false,

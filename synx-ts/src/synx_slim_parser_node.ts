@@ -18,6 +18,7 @@ import type {
 function incompletePatternSet(overrides: Partial<PatternSet> = {}): PatternSet {
   return {
     kind: ParserNodeKind.PatternSet,
+    name: "",
     sub_nodes: [],
     neg_flags: [],
     charset_flag: false,
