@@ -1,6 +1,5 @@
 import {
   AnyChar,
-  ParserNodeKind,
   completeCharRange,
   completeCharSeq,
   completeCharSet,
@@ -14,19 +13,6 @@ import type {
   PatternSeq,
   PatternSet,
 } from "./parser_node";
-
-function incompletePatternSet(overrides: Partial<PatternSet> = {}): PatternSet {
-  return {
-    kind: ParserNodeKind.PatternSet,
-    name: "",
-    sub_nodes: [],
-    neg_flags: [],
-    charset_flag: false,
-    associateby: null,
-    ignore: null,
-    ...overrides,
-  };
-}
 
 function literal(value: string) {
   return completeCharSeq({ literal: value });
@@ -122,15 +108,19 @@ export const Ignorable: PatternSet = completePatternSet({
 });
 
 // Recursive grammar placeholders.
-export const Expr: PatternSet = incompletePatternSet();
-export const Pattern: PatternSet = incompletePatternSet({
+export const Expr = { sub_nodes: [], neg_flags: [] } as unknown as PatternSet;
+export const Pattern = {
+  sub_nodes: [],
+  neg_flags: [],
   associateby: pair("()"),
   ignore: Ignorable,
-});
-export const CharSet: PatternSet = incompletePatternSet({
+} as unknown as PatternSet;
+export const CharSet = {
+  sub_nodes: [],
+  neg_flags: [],
   associateby: pair("()"),
   ignore: Ignorable,
-});
+} as unknown as PatternSet;
 // EscapeChar=("\\", c:AnyChar)=>c;
 export const EscapeChar: PatternSeq = completePatternSeq({
   sub_nodes: [StringEscapePrefix, AnyChar],
@@ -428,6 +418,7 @@ export const Keyword: PatternSet = completePatternSet({
 // CharSet = { CharRange; ("\\oneof", string:StringLiteral \sep Space)=>string; GeneralSymbol; \associateby "()"; \ignore Ignorable; };
 CharSet.sub_nodes.push(CharRange, OneOfCharSet, GeneralSymbol);
 CharSet.neg_flags.push(false, false, false);
+completePatternSet(CharSet);
 
 // Pattern={NegPattern;Option;OneOrMany;Many;RawPattern;Rule;PatternBinding; PatternSeq;PatternSet;CharSet;StringLiteral \associateby "()" \ignore Ignorable};
 Pattern.sub_nodes.push(
@@ -444,6 +435,7 @@ Pattern.sub_nodes.push(
   StringLiteral,
 );
 Pattern.neg_flags.push(false, false, false, false, false, false, false, false, false, false, false);
+completePatternSet(Pattern);
 
 // Expr={ Assignment; FuncCallExpr; List; Struct; Pattern; FuncCallArgsList; GeneralSymbol; };
 Expr.sub_nodes.push(
@@ -456,6 +448,7 @@ Expr.sub_nodes.push(
   GeneralSymbol,
 );
 Expr.neg_flags.push(false, false, false, false, false, false, false);
+completePatternSet(Expr);
 
 // Synx=(expr:Expr* \sep ";" \ignore Ignorable);
 export const Synx: PatternSeq = completePatternSeq({

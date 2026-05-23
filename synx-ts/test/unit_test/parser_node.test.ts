@@ -34,8 +34,13 @@ function test_complete_functions_mutate_input(): void {
   assert.strictEqual(patternSet.name, "");
 }
 
+function test_completePatternSet_validates_non_empty(): void {
+  assert.throws(() => completePatternSet({ sub_nodes: [] }), /sub_nodes must not be empty/);
+}
+
 function runAllTests(): void {
   test_complete_functions_mutate_input();
+  test_completePatternSet_validates_non_empty();
   console.log("All parser_node tests passed!");
 }
 
