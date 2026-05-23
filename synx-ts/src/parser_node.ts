@@ -164,6 +164,10 @@ export interface PatternSeq {
  * and has the lowest matching priority.
  * Only PatternSet nodes whose `charset_flag` is false may have `associateby`.
  *
+ * `ignore` (when non-null, only valid when `associateby` is also non-null): lowest priority.
+ * Only applies to the `associateby` delimiters — it is used when matching the left and right boundary
+ * nodes of `associateby`, with the same semantics as `PatternSeq.ignore`.
+ *
  * ============================== 中文 ==============================
  *
  * `PatternSet`：有序分支（从左到右尝试 `sub_nodes`）。
@@ -190,6 +194,10 @@ export interface PatternSeq {
  * 它类似于 `PatternSeq.enclosure`，但允许在选中的分支外匹配 0 个或多个边界对，
  * 且匹配优先级最低。
  * 只有 `charset_flag` 为 false 的 PatternSet 可以拥有 `associateby`。
+ *
+ * `ignore`（非 null 时，仅在 `associateby` 也非 null 时有效）：优先级最低。
+ * 仅对 `associateby` 的边界符生效——在匹配 `associateby` 的左右边界节点时使用，
+ * 语义与 `PatternSeq.ignore` 相同。
  */
 export interface PatternSet {
     kind: ParserNodeKind.PatternSet;
@@ -313,6 +321,7 @@ export function mkPatternSet(
   patterns: ParserNode[],
   neg_flags?: boolean[],
   associateby: [ParserNode, ParserNode] | null = null,
+  ignore: ParserNode | null = null,
 ): PatternSet {
   const n = patterns.length;
   const flags = neg_flags ?? Array.from({ length: n }, () => false);
@@ -323,12 +332,16 @@ export function mkPatternSet(
   if (charset_flag && associateby !== null) {
     throw new Error("mkPatternSet: associateby is only allowed when charset_flag is false");
   }
+  if (ignore !== null && associateby === null) {
+    throw new Error("mkPatternSet: ignore is only allowed when associateby is also non-null");
+  }
   return {
     kind: ParserNodeKind.PatternSet,
     sub_nodes: patterns,
     neg_flags: flags,
     charset_flag,
     associateby,
+    ignore,
   };
 }
 
