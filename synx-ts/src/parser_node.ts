@@ -11,9 +11,9 @@
 export type Quantifier = '?' | '*' | '+' | ' ';
 
 /**
- * Range lower bound and upper bound: each is a single logical character, potentially composed of multiple UTF-16 code units (e.g., emoji).
+ * Range lower bound and upper bound: each is a single logical character, potentially composed of multiple UTF-16 code units (e.g., emoji). Must not be empty.
  *
- * 范围下界与上界：各为一个逻辑字符，可能由多个 UTF-16 码元组成（如 emoji）。
+ * 范围下界与上界：各为一个逻辑字符，可能由多个 UTF-16 码元组成（如 emoji）。不可为空。
  */
 export interface CharMatchRange {
     kind: ParserNodeKind.CharMatchRange;
@@ -22,9 +22,9 @@ export interface CharMatchRange {
 }
 
 /**
- * Array of child nodes, or a string (indicating matching any logical character in the string, each character may consist of multiple code units).
+ * Array of child nodes, or a string (indicating matching any logical character in the string, each character may consist of multiple code units). Must not be empty.
  *
- * 子节点数组，或字符串（表示匹配串中任意逻辑字符，每个字符可由多个码元组成）。
+ * 子节点数组，或字符串（表示匹配串中任意逻辑字符，每个字符可由多个码元组成）。不可为空。
  */
 export interface CharMatchSet {
     kind: ParserNodeKind.CharMatchSet;
@@ -32,9 +32,9 @@ export interface CharMatchSet {
 }
 
 /**
- * `literal`: non-empty string to match.
+ * `literal`: non-empty string to match. Must not be empty.
  * 
- * `literal`：待匹配的字符串。
+ * `literal`：待匹配的字符串。不可为空。
  */
 export interface CharSeq {
   kind: ParserNodeKind.CharSeq;
@@ -44,7 +44,7 @@ export interface CharSeq {
 /**
  * ============================== EN ==============================
  *
- * `sub_nodes` — child sequence; `sub_quantifiers` — quantifier sequence, one entry per child in order.
+ * `sub_nodes` — child sequence; `sub_quantifiers` — quantifier sequence, one entry per child in order. Must not be empty (at least one sub-node).
  *
  * `sep` (when non-null):
  * - Separator node used to delimit the sub-node sequence; when `accept_trailing_sep` is true, a trailing separator at the end of the sequence is allowed.
@@ -60,7 +60,7 @@ export interface CharSeq {
  * When `raw` is true, `value` is the original matched source text for the sequence body; `raw_value` remains the structured child payload.
  * 
  * `greedy_flags` (same length as `sub_nodes`): `true` means greedy semantics for `*` / `+` / `?` on that slot.
- * Normalization (via {@link mkPatternSeq}): {@link AnyChar} with `*` or `+` **must** be non-greedy; quantifier `' '` (single mandatory match) **must** be greedy; both override conflicting explicit `greedy_flags`.
+ * Normalization (via {@link completePatternSeq}): {@link AnyChar} with `*` or `+` **must** be non-greedy; quantifier `' '` (single mandatory match) **must** be greedy; both override conflicting explicit `greedy_flags`.
  *
  * `enclosure` (when non-null): boundary pair corresponding to `\enclosedby`, requiring that the input matched by `sep` and the right closing delimiter do not overlap; otherwise the result is undefined.
  *
@@ -84,7 +84,7 @@ export interface CharSeq {
  *
  * ============================== 中文 ==============================
  *
- * `sub_nodes` 为子节点序列；`sub_quantifiers` 为量词序列，与子节点序列逐项对应。
+ * `sub_nodes` 为子节点序列；`sub_quantifiers` 为量词序列，与子节点序列逐项对应。不可为空（至少一个子节点）。
  *
  * `sep` （非 null 时）：
  * - 分隔符节点，用于分隔子节点序列，`accept_trailing_sep` 为 true 时，允许序列末尾出现分隔符。
@@ -100,7 +100,7 @@ export interface CharSeq {
  * `raw` 为 true 时，`value` 是序列主体匹配到的原始源文本；`raw_value` 仍是结构化的子节点结果。
  *
  * `greedy_flags`（与 `sub_nodes` 等长）：`true` 表示该子槽量词 `*` / `+` / `?` 按贪婪语义解析。
- * 规范化（由 {@link mkPatternSeq} 施加）：{@link AnyChar} 且量词为 `*` 或 `+` 时**必须**为非贪婪；量词为 `' '`（单次必配）的槽**必须**为贪婪；二者均覆盖与之冲突的显式 `greedy_flags`。
+ * 规范化（由 {@link completePatternSeq} 施加）：{@link AnyChar} 且量词为 `*` 或 `+` 时**必须**为非贪婪；量词为 `' '`（单次必配）的槽**必须**为贪婪；二者均覆盖与之冲突的显式 `greedy_flags`。
  *
  * `enclosure`（非 null 时）：对应 `\enclosedby` 的边界对，要求sep和右闭合符匹配到的输入没有交集，否则结果未定义。
  *
@@ -139,7 +139,7 @@ export interface PatternSeq {
 /**
  * ============================== EN ==============================
  *
- * `PatternSet`: ordered alternatives (try `sub_nodes` from left to right).
+ * `PatternSet`: ordered alternatives (try `sub_nodes` from left to right). Must not be empty (at least one alternative).
  *
  * Conventions:
  * - Parsing prefers the first alternative that matches.
@@ -170,7 +170,7 @@ export interface PatternSeq {
  *
  * ============================== 中文 ==============================
  *
- * `PatternSet`：有序分支（从左到右尝试 `sub_nodes`）。
+ * `PatternSet`：有序分支（从左到右尝试 `sub_nodes`）。不可为空（至少一个分支）。
  *
  * 约定：
  * - 解析时优先采用第一个匹配成功的分支。
@@ -240,46 +240,102 @@ export function isGeneralCharMatchNode(node: ParserNode): node is GeneralCharMat
     || (node.kind === ParserNodeKind.PatternSet && (node as PatternSet).charset_flag);
 }
 
-export function mkCharRange(start: string, end: string): CharMatchRange {
-  return { kind: ParserNodeKind.CharMatchRange, start, end };
+function validatePartialCharRange(partial: Partial<CharMatchRange>): void {
+  const start = partial.start ?? '';
+  const end = partial.end ?? '';
+  const startCp = start === '' ? 0 : (start.codePointAt(0) ?? 0);
+  const endCp = end === '' ? 0x10ffff : (end.codePointAt(0) ?? 0x10ffff);
+  if (startCp > endCp) {
+    throw new Error(`completeCharRange: start (${JSON.stringify(start)}, U+${startCp.toString(16).toUpperCase()}) must not be greater than end (${JSON.stringify(end)}, U+${endCp.toString(16).toUpperCase()})`);
+  }
 }
 
-export function mkCharSet(
-  chars_or_nodes: string | CharMatchNode[],
+/**
+ * ============================== EN ==============================
+ *
+ * Complete a `CharMatchRange` from a partial input.
+ *
+ * - `start` and `end` can be empty strings:
+ *   - Empty `start` means the minimum possible character (U+0000).
+ *   - Empty `end` means the maximum possible character (U+10FFFF).
+ * - The range `[start, end]` must contain at least one character.
+ *   When both `start` and `end` are non-empty, `start` must be <= `end` (by code point).
+ *
+ * ============================== 中文 ==============================
+ *
+ * 从部分输入补全 `CharMatchRange`。
+ *
+ * - `start` 和 `end` 可以为空字符串：
+ *   - `start` 为空表示最小字符（U+0000）。
+ *   - `end` 为空表示最大字符（U+10FFFF）。
+ * - 区间 `[start, end]` 必须至少包含一个字符。
+ *   当 `start` 和 `end` 均非空时，`start` 必须 <= `end`（按码点比较）。
+ */
+export function completeCharRange(partial: Partial<CharMatchRange>): CharMatchRange {
+  validatePartialCharRange(partial);
+  return {
+    kind: ParserNodeKind.CharMatchRange,
+    start: partial.start === undefined || partial.start === ''
+      ? String.fromCodePoint(0)
+      : partial.start,
+    end: partial.end === undefined || partial.end === ''
+      ? String.fromCodePoint(0x10ffff)
+      : partial.end,
+  };
+}
+
+function validatePartialCharSet(partial: Partial<CharMatchSet>): void {
+  const sub_nodes = partial.sub_nodes;
+  if (sub_nodes === undefined || sub_nodes === null) {
+    throw new Error("completeCharSet: sub_nodes must not be empty");
+  }
+  if (typeof sub_nodes !== 'string' && !Array.isArray(sub_nodes)) {
+    throw new Error("completeCharSet: sub_nodes must be a string or an array");
+  }
+  if (sub_nodes.length === 0) {
+    throw new Error("completeCharSet: sub_nodes must not be empty");
+  }
+}
+
+export function completeCharSet(
+  partial: Partial<CharMatchSet>,
 ): CharMatchSet {
-  return { kind: ParserNodeKind.CharMatchSet, sub_nodes: chars_or_nodes };
+  validatePartialCharSet(partial);
+  return {
+    kind: ParserNodeKind.CharMatchSet,
+    sub_nodes: partial.sub_nodes!,
+  };
 }
 
-export function mkPatternSeq(
-  sub_nodes: ParserNode[],
+function validatePartialPatternSeq(partial: Partial<PatternSeq> & { sub_nodes: ParserNode[]; sub_quantifiers: string }): void {
+  if (partial.sub_nodes.length === 0) {
+    throw new Error("completePatternSeq: sub_nodes must not be empty");
+  }
+  const n = partial.sub_nodes.length;
+  if (partial.sub_quantifiers.length !== n) {
+    throw new Error("completePatternSeq: sub_quantifiers length must match sub_nodes length");
+  }
+  if (partial.sub_node_bindings !== undefined && partial.sub_node_bindings !== null && partial.sub_node_bindings.length !== n) {
+    throw new Error("completePatternSeq: sub_node_bindings length must match sub_nodes length");
+  }
+  if (partial.sub_node_isolated_scope_flags !== undefined && partial.sub_node_isolated_scope_flags !== null && partial.sub_node_isolated_scope_flags.length !== n) {
+    throw new Error("completePatternSeq: sub_node_isolated_scope_flags length must match sub_nodes length");
+  }
+  if (partial.greedy_flags !== undefined && partial.greedy_flags !== null && partial.greedy_flags.length !== n) {
+    throw new Error("completePatternSeq: greedy_flags length must match sub_nodes length");
+  }
+}
+
+function normalizeGreedyFlags(
+  n: number,
   sub_quantifiers: string,
-  raw: boolean = false,
-  sep: ParserNode | null = null,
-  accept_trailing_sep: boolean = false,
-  ignore: ParserNode | null = null,
-  greedy_flags: boolean[] | null = null,
-  enclosure: [ParserNode, ParserNode] | null = null,
-  sub_node_bindings: (string | null)[] | null = null,
-  sub_node_isolated_scope_flags: boolean[] | null = null,
-  assignment_map: Map<string, string> | string | null = null,
-): PatternSeq {
-  const n = sub_nodes.length;
-  if (sub_quantifiers.length !== n) {
-    throw new Error("mkPatternSeq: sub_quantifiers length must match sub_nodes length");
-  }
-  if (sub_node_bindings !== null && sub_node_bindings.length !== n) {
-    throw new Error("mkPatternSeq: sub_node_bindings length must match sub_nodes length");
-  }
-  if (sub_node_isolated_scope_flags !== null && sub_node_isolated_scope_flags.length !== n) {
-    throw new Error("mkPatternSeq: sub_node_isolated_scope_flags length must match sub_nodes length");
-  }
+  sub_nodes: ParserNode[],
+  greedy_flags: boolean[] | undefined | null,
+): boolean[] {
   const flags =
-    greedy_flags !== null
+    greedy_flags !== undefined && greedy_flags !== null
       ? greedy_flags.slice()
       : Array.from({ length: n }, () => true);
-  if (flags.length !== n) {
-    throw new Error("mkPatternSeq: greedy_flags length must match sub_nodes length");
-  }
   for (let i = 0; i < n; i++) {
     const q = sub_quantifiers[i];
     if (q === " ") {
@@ -288,21 +344,65 @@ export function mkPatternSeq(
       flags[i] = false;
     }
   }
+  return flags;
+}
+
+function normalizeSubNodeBindings(
+  n: number,
+  sub_node_bindings: (string | null)[] | undefined | null,
+): (string | null)[] | null {
+  return sub_node_bindings !== undefined ? sub_node_bindings?.slice() ?? null : null;
+}
+
+function normalizeSubNodeIsolatedScopeFlags(
+  n: number,
+  sub_node_isolated_scope_flags: boolean[] | undefined | null,
+  sub_node_bindings: (string | null)[] | null,
+): boolean[] | null {
+  if (sub_node_isolated_scope_flags !== undefined) {
+    return sub_node_isolated_scope_flags?.slice() ?? null;
+  }
+  return sub_node_bindings !== null ? Array.from({ length: n }, () => true) : null;
+}
+
+function normalizeAssignmentMap(
+  assignment_map: Map<string, string> | string | undefined | null,
+): Map<string, string> | string | null {
+  if (assignment_map === undefined) {
+    return null;
+  }
+  return assignment_map instanceof Map ? new Map(assignment_map) : assignment_map;
+}
+
+export function completePatternSeq(
+  partial: Partial<PatternSeq> & { sub_nodes: ParserNode[]; sub_quantifiers: string },
+): PatternSeq {
+  validatePartialPatternSeq(partial);
+  const n = partial.sub_nodes.length;
+  const greedy_flags = normalizeGreedyFlags(n, partial.sub_quantifiers, partial.sub_nodes, partial.greedy_flags);
+  const sub_node_bindings = normalizeSubNodeBindings(n, partial.sub_node_bindings);
+  const sub_node_isolated_scope_flags = normalizeSubNodeIsolatedScopeFlags(n, partial.sub_node_isolated_scope_flags, sub_node_bindings);
+  const assignment_map = normalizeAssignmentMap(partial.assignment_map);
   return {
     kind: ParserNodeKind.PatternSeq,
-    sub_nodes,
-    sub_quantifiers,
-    raw,
-    sep,
-    accept_trailing_sep,
-    ignore,
-    greedy_flags: flags,
-    enclosure,
-    sub_node_bindings: sub_node_bindings?.slice() ?? null,
-    sub_node_isolated_scope_flags: sub_node_isolated_scope_flags?.slice()
-      ?? (sub_node_bindings !== null ? Array.from({ length: n }, () => true) : null),
-    assignment_map: assignment_map instanceof Map ? new Map(assignment_map) : assignment_map,
+    sub_nodes: partial.sub_nodes,
+    sub_quantifiers: partial.sub_quantifiers,
+    raw: partial.raw ?? false,
+    sep: partial.sep ?? null,
+    accept_trailing_sep: partial.accept_trailing_sep ?? false,
+    ignore: partial.ignore ?? null,
+    greedy_flags,
+    enclosure: partial.enclosure ?? null,
+    sub_node_bindings,
+    sub_node_isolated_scope_flags,
+    assignment_map,
   };
+}
+
+function validatePartialCharSeq(partial: Partial<CharSeq> & { literal: string }): void {
+  if (partial.literal.length === 0) {
+    throw new Error("CharSeq.literal must be non-empty");
+  }
 }
 
 /**
@@ -310,38 +410,48 @@ export function mkPatternSeq(
  *
  * 构造 `CharSeq`；若 `literal` 为空则抛出。
  */
-export function mkCharSeq(literal: string): CharSeq {
-  if (literal.length === 0) {
-    throw new Error("CharSeq.literal must be non-empty");
-  }
-  return { kind: ParserNodeKind.CharSeq, literal };
+export function completeCharSeq(partial: Partial<CharSeq> & { literal: string }): CharSeq {
+  validatePartialCharSeq(partial);
+  return { kind: ParserNodeKind.CharSeq, literal: partial.literal };
 }
 
-export function mkPatternSet(
-  patterns: ParserNode[],
-  neg_flags?: boolean[],
-  associateby: [ParserNode, ParserNode] | null = null,
-  ignore: ParserNode | null = null,
-): PatternSet {
-  const n = patterns.length;
-  const flags = neg_flags ?? Array.from({ length: n }, () => false);
-  if (flags.length !== n) {
-    throw new Error("mkPatternSet: neg_flags length must match patterns length");
+function validatePartialPatternSet(partial: Partial<PatternSet> & { sub_nodes: ParserNode[] }): void {
+  if (partial.sub_nodes.length === 0) {
+    throw new Error("completePatternSet: sub_nodes must not be empty");
   }
-  const charset_flag = inferPatternSetCharsetFlag(patterns, flags);
+  const n = partial.sub_nodes.length;
+  if (partial.neg_flags !== undefined && partial.neg_flags.length !== n) {
+    throw new Error("completePatternSet: neg_flags length must match patterns length");
+  }
+  const charset_flag = inferPatternSetCharsetFlag(partial.sub_nodes, partial.neg_flags ?? Array.from({ length: n }, () => false));
+  const associateby = partial.associateby ?? null;
   if (charset_flag && associateby !== null) {
-    throw new Error("mkPatternSet: associateby is only allowed when charset_flag is false");
+    throw new Error("completePatternSet: associateby is only allowed when charset_flag is false");
   }
+  const ignore = partial.ignore ?? null;
   if (ignore !== null && associateby === null) {
-    throw new Error("mkPatternSet: ignore is only allowed when associateby is also non-null");
+    throw new Error("completePatternSet: ignore is only allowed when associateby is also non-null");
   }
+}
+
+function normalizeNegFlags(n: number, neg_flags: boolean[] | undefined): boolean[] {
+  return neg_flags !== undefined ? neg_flags.slice() : Array.from({ length: n }, () => false);
+}
+
+export function completePatternSet(
+  partial: Partial<PatternSet> & { sub_nodes: ParserNode[] },
+): PatternSet {
+  validatePartialPatternSet(partial);
+  const n = partial.sub_nodes.length;
+  const neg_flags = normalizeNegFlags(n, partial.neg_flags);
+  const charset_flag = inferPatternSetCharsetFlag(partial.sub_nodes, neg_flags);
   return {
     kind: ParserNodeKind.PatternSet,
-    sub_nodes: patterns,
-    neg_flags: flags,
+    sub_nodes: partial.sub_nodes,
+    neg_flags,
     charset_flag,
-    associateby,
-    ignore,
+    associateby: partial.associateby ?? null,
+    ignore: partial.ignore ?? null,
   };
 }
 

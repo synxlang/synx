@@ -1,31 +1,27 @@
-﻿/**
- *   npm run build && node dist/test/manual_test/draft/parser_manual_sample.js
- *
- * If a TypeScript runner is installed:
- *   npx tsx test/manual_test/draft/parser_manual_sample.ts
- */
+/**
+*   npm run build && node dist/test/manual_test/draft/parser_manual_sample.js
+*
+* If a TypeScript runner is installed:
+*   npx tsx test/manual_test/draft/parser_manual_sample.ts
+*/
 import { inspect } from "node:util";
 import { type ASTNode, mkParser, ParseResultKind } from "../../../src/parser";
-import { mkCharSeq, mkCharRange, mkCharSet, mkPatternSeq } from "../../../src/parser_node";
+import { completeCharSeq, completeCharRange, completeCharSet, completePatternSeq } from "../../../src/parser_node";
 import { AnyChar } from "../../../src/parser_node";
 import { exit } from "node:process";
 import { ParserImpl } from "../../../src/parser_impl";
-
-
 function isAstNode(x: unknown): x is ASTNode {
-    return (
-        typeof x === "object" &&
+    return (typeof x === "object" &&
         x !== null &&
         "parser_nodes" in x &&
         "range" in x &&
         "value" in x &&
         "raw_value" in x &&
-        "seps" in x
-    );
+        "seps" in x);
 }
-
 function extractAstValue(node: ASTNode | null): any {
-    if (node === null) return null;
+    if (node === null)
+        return null;
     const peel = (v: any): any => {
         if (v === null || typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
             return v;
@@ -40,35 +36,26 @@ function extractAstValue(node: ASTNode | null): any {
     };
     return peel(node.value);
 }
-
 const inspectOpts = { depth: null, colors: true } as const;
 const ignore_pattern = AnyChar;
-
-
 const input = { src: "  22  00fda20023dfs00 2", pos: 0 };
 const parser = new ParserImpl({ parser_nodes: [] });
 parser.initParse(input);
-const res1 = parser.parseSingleNode(mkPatternSeq([mkCharSeq("0")], "?"), AnyChar);
+const res1 = parser.parseSingleNode(completePatternSeq({ sub_nodes: [completeCharSeq({ literal: "0" })], sub_quantifiers: "?" }), AnyChar);
 input.pos = 0;
 parser.initParse(input);
-const res2 = parser.parseSingleNode(mkPatternSeq([mkCharSeq("0")], "*"), AnyChar);
-
+const res2 = parser.parseSingleNode(completePatternSeq({ sub_nodes: [completeCharSeq({ literal: "0" })], sub_quantifiers: "*" }), AnyChar);
 console.log("---raw result---");
 console.log(inspect(res1, inspectOpts));
 console.log(inspect(res2, inspectOpts));
 console.log("--- extractAstValue ---");
 console.log(inspect(extractAstValue(res1), inspectOpts));
 console.log(inspect(extractAstValue(res2), inspectOpts));
-
-
-
 // const result = parser.parse({ ...input }, root);
 // console.log("input:", input);
 // console.log("kind:", ParseResultKind[result.kind], "| end_pos:", result.end_pos);
-
 // console.log("---raw result---");
 // console.log(inspect(result, inspectOpts));
-
 // console.log("--- extractAstValue ---");
 // console.log(
 //     inspect(
