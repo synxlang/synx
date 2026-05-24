@@ -371,6 +371,9 @@ export class ParserImpl implements Parser {
         }
 
         ret.ast_node_res = [] as ASTNode[];
+        if (quantifier === "+" && !this.isSuccess()) {
+            return ret;
+        }
         let push_node = (ast_node: ASTNode | null) => {
             if (ast_node !== null) {
                 (ret.ast_node_res as ASTNode[]).push(ast_node);
@@ -518,7 +521,7 @@ export class ParserImpl implements Parser {
                 return null;
             }
 
-            const parse_alternative = (start:number): ASTNode | null => {
+            const parse_alternative = (start: number): ASTNode | null => {
                 for (let i = alt_idx; i < node.sub_nodes.length; i++) {
                     const child = this.parseSingleNode(node.sub_nodes[i]);
                     if (!this.isSuccess()) {
