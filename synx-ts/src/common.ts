@@ -49,6 +49,7 @@ export interface ParseResult {
     kind: ParseResultKind;
     ast_nodes: ASTNode[];
     end_pos: number;    // not inclusive
+    error?: string;
 }
 
 export interface ParseSingleNodeProfiling {
@@ -70,6 +71,7 @@ export interface PatternSetAlternativeProfiling {
 }
 
 export interface ParseProfiling {
+    parse_elapsed_s: number;
     parse_single_node_enter_count: number;
     parse_single_node_max_depth: number;
     parse_single_node_by_node_pos: Map<string, ParseSingleNodeProfiling>;

@@ -46,6 +46,7 @@ function printProfiling(): void {
   const profiling = parser.getParseProfiling();
   console.log("\n=== profiling ===");
   console.log(JSON.stringify({
+    parse_elapsed_s: profiling.parse_elapsed_s,
     parse_single_node_enter_count: profiling.parse_single_node_enter_count,
     parse_single_node_max_depth: profiling.parse_single_node_max_depth,
   }, null, 2));
@@ -83,6 +84,7 @@ console.log(JSON.stringify({
   kind: ParseResultKind[result.kind],
   success,
   end_pos: result.end_pos,
+  error: result.error,
   len: src.length,
   fully_consumed: success && result.end_pos === src.length,
   next: src.slice(result.end_pos, result.end_pos + 160),
