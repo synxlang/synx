@@ -32,6 +32,25 @@ class ParseTimeoutError extends Error {
     }
 }
 
+
+interface ParseStep{
+    parser_node: ParserNode;
+    value_idx: number;              // 赋值的对应数组，-1为不赋值
+    empty_success_to_idx: number; // 空成功后下一步索引，-1为退出
+    success_to_idx: number;      // 成功后下一步索引，-1为退出
+    fail_to_idx: number;         // 失败后下一步索引，-1为退出
+}
+
+interface ParseStepGraph{
+    steps: ParseStep[];
+}
+
+interface ParseStepGraphResult{
+    parsed_step_idxs: number[];
+    // TODO: 根据SlotKind赋值
+    values:(ASTNode | null)[][]
+}
+
 /**
  * ============================== EN ==============================
  *
