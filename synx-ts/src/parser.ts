@@ -55,6 +55,7 @@ export interface ParseResult {
 /** Parser configuration: parser_nodes is the set of optional entry nodes. The root passed to parse() must be one of them. */
 export interface ParserConfig {
     parser_nodes: ParserNode[];
+    debug?: boolean;
 }
 
 export interface Parser {

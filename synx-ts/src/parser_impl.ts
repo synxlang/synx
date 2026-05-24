@@ -130,6 +130,7 @@ export class ParserImpl implements Parser {
     private error: string | null = null;
     private error_pos: number = 0;
     private parse_records: ASTNode[][] = [];
+    private parse_single_node_stack: Array<{ node: ParserNode; pos: number }> = [];
 
     /**
      * ============================== EN ==============================
@@ -182,11 +183,21 @@ export class ParserImpl implements Parser {
         return name !== "" ? `${kind_name}(${name})` : kind_name;
     }
 
+    private formatParseSingleNodeStack(): string {
+        if (this.config.debug !== true || this.parse_single_node_stack.length === 0) {
+            return "";
+        }
+        const lines = this.parse_single_node_stack.map((frame, idx) => {
+            return `${"  ".repeat(idx)}${idx}: ${this.parserNodeDebugName(frame.node)} @ ${frame.pos}`;
+        });
+        return `\nparseSingleNode stack:\n${lines.join("\n")}`;
+    }
+
     private assertConsumed(start: number, node: ParserNode): void {
         const near = this.input.src.slice(start, Math.min(this.input.src.length, start + 80));
         assert.ok(
             this.input.pos > start,
-            `parseSingleNode: ${this.parserNodeDebugName(node)} matched without consuming input at pos ${start}\n${near}\n^`,
+            `parseSingleNode: ${this.parserNodeDebugName(node)} matched without consuming input at pos ${start}\n${near}\n^${this.formatParseSingleNodeStack()}`,
         );
     }
 
@@ -245,6 +256,7 @@ export class ParserImpl implements Parser {
         this.input = input;
         this.clearError();
         this.pattern_set_node_parse_stack.length = 0;
+        this.parse_single_node_stack.length = 0;
         this.parse_records = Array.from({ length: input.src.length + 1 }, () => []);
     }
 
@@ -440,32 +452,41 @@ export class ParserImpl implements Parser {
      */
     parseSingleNode(node: ParserNode, ignored: ParserNode | null = null): ASTNode | null {
         const start = this.input.pos;
-        const assert_non_null_consumed = (ret: ASTNode | null): ASTNode | null => {
-            if (this.isSuccess() && ret !== null) {
-                this.assertConsumed(start, node);
-            }
-            return ret;
-        };
-        if (ignored === null) {
-            return assert_non_null_consumed(this.parseSingleNodeSimple(node));
+        if (this.config.debug === true) {
+            this.parse_single_node_stack.push({ node, pos: start });
         }
-        for (; ;) {
-            const retry_pos = this.input.pos;
-            const ret = this.parseSingleNodeSimple(node);
-            if (this.isSuccess()) {
-                return assert_non_null_consumed(ret);
+        try {
+            const assert_non_null_consumed = (ret: ASTNode | null): ASTNode | null => {
+                if (this.isSuccess() && ret !== null) {
+                    this.assertConsumed(start, node);
+                }
+                return ret;
+            };
+            if (ignored === null) {
+                return assert_non_null_consumed(this.parseSingleNodeSimple(node));
             }
+            for (; ;) {
+                const retry_pos = this.input.pos;
+                const ret = this.parseSingleNodeSimple(node);
+                if (this.isSuccess()) {
+                    return assert_non_null_consumed(ret);
+                }
 
-            this.input.pos = retry_pos;
-            this.parseSingleNodeSimple(ignored);
-            if (!this.isSuccess()) {
-                this.input.pos = start;
-                return ret;
+                this.input.pos = retry_pos;
+                this.parseSingleNodeSimple(ignored);
+                if (!this.isSuccess()) {
+                    this.input.pos = start;
+                    return ret;
+                }
+                if (this.input.pos === retry_pos) {
+                    this.setError(this.input.pos);
+                    this.input.pos = start;
+                    return ret;
+                }
             }
-            if (this.input.pos === retry_pos) {
-                this.setError(this.input.pos);
-                this.input.pos = start;
-                return ret;
+        } finally {
+            if (this.config.debug === true) {
+                this.parse_single_node_stack.pop();
             }
         }
     }
