@@ -32,6 +32,47 @@ class ParseTimeoutError extends Error {
     }
 }
 
+
+interface ParseStepAction {
+    // Next graph step. Negative values are exits: -1 success, -2 failure.
+    next_step_idx: number;
+    // Pop this many successful ParsedStep entries; popping also restores input.
+    pop_value_cnt: number;
+}
+
+function completeParseStepAction(
+    partial: Partial<ParseStepAction> & { next_step_idx: number },
+): ParseStepAction {
+    return Object.assign(partial, {
+        next_step_idx: partial.next_step_idx,
+        pop_value_cnt: partial.pop_value_cnt ?? 0,
+    }) as ParseStepAction;
+}
+
+interface ParseStep {
+    parser_node: ParserNode;
+    value_idx: number;              // 赋值的对应数组，-1为不赋值
+
+    empty_success_action: ParseStepAction;
+    non_empty_success_action: ParseStepAction;
+    fail_action: ParseStepAction;
+}
+
+interface ParseStepGraph {
+    steps: ParseStep[];
+}
+
+interface ParsedStep {
+    step_idx: number;
+    value_idx: number;
+}
+
+interface ParseStepGraphResult {
+    parsed_steps: ParsedStep[];
+    values: (ASTNode | null)[][];
+    exit_step_idx: number;
+}
+
 /**
  * ============================== EN ==============================
  *
