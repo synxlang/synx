@@ -176,6 +176,20 @@ export class ParserImpl implements Parser {
 
     constructor(public config: ParserConfig) { }
 
+    private parserNodeDebugName(node: ParserNode): string {
+        const kind_name = ParserNodeKind[node.kind] ?? `ParserNodeKind(${node.kind})`;
+        const name = "name" in node ? node.name : "";
+        return name !== "" ? `${kind_name}(${name})` : kind_name;
+    }
+
+    private assertConsumed(start: number, node: ParserNode): void {
+        const near = this.input.src.slice(start, Math.min(this.input.src.length, start + 80));
+        assert.ok(
+            this.input.pos > start,
+            `parseSingleNode: ${this.parserNodeDebugName(node)} matched without consuming input at pos ${start}\n${near}\n^`,
+        );
+    }
+
     clearError(): void {
         this.error = null;
     }
@@ -425,15 +439,21 @@ export class ParserImpl implements Parser {
      * 每次匹配失败时，尝试忽略一次 `ignored` 节点，直到匹配成功或即使忽略也不可能匹配成功
      */
     parseSingleNode(node: ParserNode, ignored: ParserNode | null = null): ASTNode | null {
-        if (ignored === null) {
-            return this.parseSingleNodeSimple(node);
-        }
         const start = this.input.pos;
+        const assert_non_null_consumed = (ret: ASTNode | null): ASTNode | null => {
+            if (this.isSuccess() && ret !== null) {
+                this.assertConsumed(start, node);
+            }
+            return ret;
+        };
+        if (ignored === null) {
+            return assert_non_null_consumed(this.parseSingleNodeSimple(node));
+        }
         for (; ;) {
             const retry_pos = this.input.pos;
             const ret = this.parseSingleNodeSimple(node);
             if (this.isSuccess()) {
-                return ret;
+                return assert_non_null_consumed(ret);
             }
 
             this.input.pos = retry_pos;
