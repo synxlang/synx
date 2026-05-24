@@ -9,6 +9,7 @@
 }
 
 export type Quantifier = '?' | '*' | '+' | ' ';
+type ParserNodePairInput = [ParserNode, ParserNode] | string | null;
 
 /**
  * Range lower bound and upper bound: each is a single logical character, potentially composed of multiple UTF-16 code units (e.g., emoji). Must not be empty.
@@ -17,6 +18,7 @@ export type Quantifier = '?' | '*' | '+' | ' ';
  */
 export interface CharMatchRange {
     kind: ParserNodeKind.CharMatchRange;
+    name: string;
     start: string;
     end: string;
 }
@@ -28,6 +30,7 @@ export interface CharMatchRange {
  */
 export interface CharMatchSet {
     kind: ParserNodeKind.CharMatchSet;
+    name: string;
     sub_nodes: CharMatchNode[] | string;
 }
 
@@ -38,6 +41,7 @@ export interface CharMatchSet {
  */
 export interface CharSeq {
   kind: ParserNodeKind.CharSeq;
+  name: string;
   literal: string;
 }
 
@@ -123,6 +127,7 @@ export interface CharSeq {
  */
 export interface PatternSeq {
     kind: ParserNodeKind.PatternSeq;
+    name: string;
     sub_nodes: ParserNode[];
     sub_quantifiers: string;
     raw: boolean;
@@ -201,6 +206,7 @@ export interface PatternSeq {
  */
 export interface PatternSet {
     kind: ParserNodeKind.PatternSet;
+    name: string;
     sub_nodes: ParserNode[];
     neg_flags: boolean[];
     charset_flag: boolean;
@@ -213,7 +219,7 @@ export interface PatternSet {
  *
  * 匹配任意单个字符（Unicode 标量值或错误码点）。对于`*`和`+`量词总是非贪婪匹配。
  */
-export const AnyChar = { kind: ParserNodeKind.AnyChar } as const;
+export const AnyChar = { kind: ParserNodeKind.AnyChar, name: "AnyChar" } as const;
 
 /**
  * Single character match node.
@@ -273,15 +279,16 @@ function validatePartialCharRange(partial: Partial<CharMatchRange>): void {
  */
 export function completeCharRange(partial: Partial<CharMatchRange>): CharMatchRange {
   validatePartialCharRange(partial);
-  return {
+  return Object.assign(partial, {
     kind: ParserNodeKind.CharMatchRange,
+    name: partial.name ?? "",
     start: partial.start === undefined || partial.start === ''
       ? String.fromCodePoint(0)
       : partial.start,
     end: partial.end === undefined || partial.end === ''
       ? String.fromCodePoint(0x10ffff)
       : partial.end,
-  };
+  }) as CharMatchRange;
 }
 
 function validatePartialCharSet(partial: Partial<CharMatchSet>): void {
@@ -301,13 +308,14 @@ export function completeCharSet(
   partial: Partial<CharMatchSet>,
 ): CharMatchSet {
   validatePartialCharSet(partial);
-  return {
+  return Object.assign(partial, {
     kind: ParserNodeKind.CharMatchSet,
+    name: partial.name ?? "",
     sub_nodes: partial.sub_nodes!,
-  };
+  }) as CharMatchSet;
 }
 
-function validatePartialPatternSeq(partial: Partial<PatternSeq> & { sub_nodes: ParserNode[]; sub_quantifiers: string }): void {
+function validatePartialPatternSeq(partial: PatternSeqInput): void {
   if (partial.sub_nodes.length === 0) {
     throw new Error("completePatternSeq: sub_nodes must not be empty");
   }
@@ -324,6 +332,7 @@ function validatePartialPatternSeq(partial: Partial<PatternSeq> & { sub_nodes: P
   if (partial.greedy_flags !== undefined && partial.greedy_flags !== null && partial.greedy_flags.length !== n) {
     throw new Error("completePatternSeq: greedy_flags length must match sub_nodes length");
   }
+  validateParserNodePairInput(partial.enclosure, "completePatternSeq: enclosure");
 }
 
 function normalizeGreedyFlags(
@@ -374,8 +383,42 @@ function normalizeAssignmentMap(
   return assignment_map instanceof Map ? new Map(assignment_map) : assignment_map;
 }
 
+type PatternSeqInput = Omit<Partial<PatternSeq>, "enclosure"> & {
+  sub_nodes: ParserNode[];
+  sub_quantifiers: string;
+  enclosure?: ParserNodePairInput;
+};
+
+function normalizeParserNodePair(
+  value: ParserNodePairInput | undefined,
+): [ParserNode, ParserNode] | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  if (typeof value !== "string") {
+    return value;
+  }
+  const chars = Array.from(value);
+  return [
+    completeCharSeq({ literal: chars[0]! }),
+    completeCharSeq({ literal: chars[1]! }),
+  ];
+}
+
+function validateParserNodePairInput(
+  value: ParserNodePairInput | undefined,
+  field_name: string,
+): void {
+  if (typeof value !== "string") {
+    return;
+  }
+  if (Array.from(value).length !== 2) {
+    throw new Error(`${field_name} string must contain exactly 2 characters`);
+  }
+}
+
 export function completePatternSeq(
-  partial: Partial<PatternSeq> & { sub_nodes: ParserNode[]; sub_quantifiers: string },
+  partial: PatternSeqInput,
 ): PatternSeq {
   validatePartialPatternSeq(partial);
   const n = partial.sub_nodes.length;
@@ -383,8 +426,10 @@ export function completePatternSeq(
   const sub_node_bindings = normalizeSubNodeBindings(n, partial.sub_node_bindings);
   const sub_node_isolated_scope_flags = normalizeSubNodeIsolatedScopeFlags(n, partial.sub_node_isolated_scope_flags, sub_node_bindings);
   const assignment_map = normalizeAssignmentMap(partial.assignment_map);
-  return {
+  const enclosure = normalizeParserNodePair(partial.enclosure);
+  return Object.assign(partial, {
     kind: ParserNodeKind.PatternSeq,
+    name: partial.name ?? "",
     sub_nodes: partial.sub_nodes,
     sub_quantifiers: partial.sub_quantifiers,
     raw: partial.raw ?? false,
@@ -392,11 +437,11 @@ export function completePatternSeq(
     accept_trailing_sep: partial.accept_trailing_sep ?? false,
     ignore: partial.ignore ?? null,
     greedy_flags,
-    enclosure: partial.enclosure ?? null,
+    enclosure,
     sub_node_bindings,
     sub_node_isolated_scope_flags,
     assignment_map,
-  };
+  }) as PatternSeq;
 }
 
 function validatePartialCharSeq(partial: Partial<CharSeq> & { literal: string }): void {
@@ -412,10 +457,19 @@ function validatePartialCharSeq(partial: Partial<CharSeq> & { literal: string })
  */
 export function completeCharSeq(partial: Partial<CharSeq> & { literal: string }): CharSeq {
   validatePartialCharSeq(partial);
-  return { kind: ParserNodeKind.CharSeq, literal: partial.literal };
+  return Object.assign(partial, {
+    kind: ParserNodeKind.CharSeq,
+    name: partial.name ?? partial.literal,
+    literal: partial.literal,
+  }) as CharSeq;
 }
 
-function validatePartialPatternSet(partial: Partial<PatternSet> & { sub_nodes: ParserNode[] }): void {
+type PatternSetInput = Omit<Partial<PatternSet>, "associateby"> & {
+  sub_nodes: ParserNode[];
+  associateby?: ParserNodePairInput;
+};
+
+function validatePartialPatternSet(partial: PatternSetInput): void {
   if (partial.sub_nodes.length === 0) {
     throw new Error("completePatternSet: sub_nodes must not be empty");
   }
@@ -424,7 +478,8 @@ function validatePartialPatternSet(partial: Partial<PatternSet> & { sub_nodes: P
     throw new Error("completePatternSet: neg_flags length must match patterns length");
   }
   const charset_flag = inferPatternSetCharsetFlag(partial.sub_nodes, partial.neg_flags ?? Array.from({ length: n }, () => false));
-  const associateby = partial.associateby ?? null;
+  validateParserNodePairInput(partial.associateby, "completePatternSet: associateby");
+  const associateby = normalizeParserNodePair(partial.associateby);
   if (charset_flag && associateby !== null) {
     throw new Error("completePatternSet: associateby is only allowed when charset_flag is false");
   }
@@ -439,20 +494,22 @@ function normalizeNegFlags(n: number, neg_flags: boolean[] | undefined): boolean
 }
 
 export function completePatternSet(
-  partial: Partial<PatternSet> & { sub_nodes: ParserNode[] },
+  partial: PatternSetInput,
 ): PatternSet {
   validatePartialPatternSet(partial);
   const n = partial.sub_nodes.length;
   const neg_flags = normalizeNegFlags(n, partial.neg_flags);
   const charset_flag = inferPatternSetCharsetFlag(partial.sub_nodes, neg_flags);
-  return {
+  const associateby = normalizeParserNodePair(partial.associateby);
+  return Object.assign(partial, {
     kind: ParserNodeKind.PatternSet,
+    name: partial.name ?? "",
     sub_nodes: partial.sub_nodes,
     neg_flags,
     charset_flag,
-    associateby: partial.associateby ?? null,
+    associateby,
     ignore: partial.ignore ?? null,
-  };
+  }) as PatternSet;
 }
 
 function isPatternSetCharsetMember(node: ParserNode): boolean {

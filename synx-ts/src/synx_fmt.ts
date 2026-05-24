@@ -52,6 +52,10 @@ function stringifyValue(value: unknown, seen: SeenState): string {
 }
 
 function stringifyParserNode(node: ParserNode, seen: SeenState): string {
+  const name = getParserNodeName(node);
+  if (name !== "") {
+    return `${getParserNodeKindName(node.kind)}(${name})`;
+  }
   return withObjectRef(node, seen.parser_nodes, seen, "ParserNode", (id) => {
     switch (node.kind) {
       case ParserNodeKind.AnyChar:
@@ -70,6 +74,14 @@ function stringifyParserNode(node: ParserNode, seen: SeenState): string {
         return `#${id} UnknownParserNode(${stringifyPlainObject(node as unknown as Record<string, unknown>, seen)})`;
     }
   });
+}
+
+function getParserNodeName(node: ParserNode): string {
+  return "name" in node ? node.name : "";
+}
+
+function getParserNodeKindName(kind: ParserNodeKind): string {
+  return ParserNodeKind[kind] ?? "UnknownParserNode";
 }
 
 function stringifyCharMatchRange(node: CharMatchRange, id: number): string {

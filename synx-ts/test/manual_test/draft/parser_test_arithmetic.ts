@@ -10,18 +10,7 @@
 import type { ASTNode } from "../../../src/parser";
 import { ParserImpl } from "../../../src/parser_impl";
 import { SynxFmt } from "../../../src/synx_fmt";
-import { completeCharRange, completeCharSeq, completePatternSeq, completePatternSet, ParserNodeKind, type ParserNode, type PatternSeq, type PatternSet } from "../../../src/parser_node";
-function incompletePatternSet(overrides: Partial<PatternSet> = {}): PatternSet {
-    return {
-        kind: ParserNodeKind.PatternSet,
-        sub_nodes: [],
-        neg_flags: [],
-        charset_flag: false,
-        associateby: null,
-        ignore: null,
-        ...overrides,
-    };
-}
+import { completeCharRange, completeCharSeq, completePatternSeq, completePatternSet, type ParserNode, type PatternSeq, type PatternSet } from "../../../src/parser_node";
 const Digit = completeCharRange({ start: "0", end: "9" });
 const Space = completeCharSeq({ literal: " " });
 const Plus = completeCharSeq({ literal: "+" });
@@ -33,16 +22,18 @@ const RightParen = completeCharSeq({ literal: ")" });
 const NumberLiteral: PatternSeq = completePatternSeq({ sub_nodes: [Digit], sub_quantifiers: "+", raw: true });
 const AddOp = completePatternSet({ sub_nodes: [Plus, Minus] });
 const MulOp = completePatternSet({ sub_nodes: [Star, Slash] });
-const Expr: PatternSet = incompletePatternSet({ associateby: [LeftParen, RightParen], ignore: Space });
-const Factor: PatternSet = incompletePatternSet();
+const Expr = { sub_nodes: [], neg_flags: [], associateby: [LeftParen, RightParen], ignore: Space } as unknown as PatternSet;
+const Factor = { sub_nodes: [], neg_flags: [] } as unknown as PatternSet;
 const ProductTail: PatternSeq = completePatternSeq({ sub_nodes: [MulOp, Factor], sub_quantifiers: "  ", raw: false, sep: null, accept_trailing_sep: false, ignore: Space });
 const Product: PatternSeq = completePatternSeq({ sub_nodes: [Factor, ProductTail], sub_quantifiers: " *", raw: false, sep: null, accept_trailing_sep: false, ignore: Space });
 const SumTail: PatternSeq = completePatternSeq({ sub_nodes: [AddOp, Product], sub_quantifiers: "  ", raw: false, sep: null, accept_trailing_sep: false, ignore: Space });
 const Sum: PatternSeq = completePatternSeq({ sub_nodes: [Product, SumTail], sub_quantifiers: " *", raw: false, sep: null, accept_trailing_sep: false, ignore: Space });
 Expr.sub_nodes.push(Sum as unknown as ParserNode);
 Expr.neg_flags.push(false);
+completePatternSet(Expr);
 Factor.sub_nodes.push(NumberLiteral as unknown as ParserNode, Expr as unknown as ParserNode);
 Factor.neg_flags.push(false, false);
+completePatternSet(Factor);
 interface CaseDef {
     id: number;
     name: string;

@@ -13,9 +13,24 @@ import {
     PatternSet,
     Quantifier,
 } from "./parser_node";
-import type { Parser, ParserConfig, ParseResult, ParserInput } from "./parser";
-import { ParseResultKind } from "./parser";
-import type { ASTNode } from "./parser";
+import type {
+    ParserConfig,
+    ParseProfiling,
+    ParseResult,
+    ParserInput,
+    ParseSingleNodeProfiling,
+    PatternSetAlternativeProfiling,
+    ASTNode,
+} from "./common";
+import { ParseResultKind } from "./common";
+import type { Parser } from "./parser";
+
+class ParseTimeoutError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = "ParseTimeoutError";
+    }
+}
 
 /**
  * ============================== EN ==============================
@@ -130,6 +145,16 @@ export class ParserImpl implements Parser {
     private error: string | null = null;
     private error_pos: number = 0;
     private parse_records: ASTNode[][] = [];
+    private parse_single_node_stack: Array<{ node: ParserNode; pos: number; profile_record?: ParseSingleNodeProfiling }> = [];
+    private profiling: ParseProfiling = this.profileCreate();
+    private parse_start_time_ms: number = 0;
+    private debug_next_report_time_ms: number = 0;
+    private debug_last_report_time_ms: number = 0;
+    private debug_last_report_enter_count: number = 0;
+    private readonly debug_report_interval_ms: number = 5000;
+    private readonly debug_check_interval: number = 1024;
+    private profile_node_ids = new WeakMap<ParserNode, number>();
+    private profile_next_node_id: number = 1;
 
     /**
      * ============================== EN ==============================
@@ -176,6 +201,255 @@ export class ParserImpl implements Parser {
 
     constructor(public config: ParserConfig) { }
 
+    private parserNodeDebugName(node: ParserNode): string {
+        const kind_name = ParserNodeKind[node.kind] ?? `ParserNodeKind(${node.kind})`;
+        const name = "name" in node ? node.name : "";
+        return name !== "" ? `${kind_name}(${name})` : kind_name;
+    }
+
+    private formatParseSingleNodeStack(): string {
+        if (this.config.debug !== true || this.parse_single_node_stack.length === 0) {
+            return "";
+        }
+        const lines = this.parse_single_node_stack.map((frame, idx) => {
+            return `${"  ".repeat(idx)}${idx}: ${this.parserNodeDebugName(frame.node)} @ ${frame.pos}`;
+        });
+        return `\nparseSingleNode stack:\n${lines.join("\n")}`;
+    }
+
+    private profileCreate(): ParseProfiling {
+        return {
+            parse_elapsed_s: 0,
+            parse_single_node_enter_count: 0,
+            parse_single_node_max_depth: 0,
+            parse_single_node_by_node_pos: new Map(),
+            pattern_set_alternative_by_node_pos_alt: new Map(),
+        };
+    }
+
+    getParseProfiling(): ParseProfiling {
+        return this.profiling;
+    }
+
+    private profileGetNodeId(node: ParserNode): number {
+        let id = this.profile_node_ids.get(node);
+        if (id === undefined) {
+            id = this.profile_next_node_id;
+            this.profile_next_node_id += 1;
+            this.profile_node_ids.set(node, id);
+        }
+        return id;
+    }
+
+    private profileParseSingleNodeKey(node: ParserNode, pos: number): string {
+        return `${this.profileGetNodeId(node)}:${pos}`;
+    }
+
+    private profilePatternSetAlternativeKey(node: PatternSet, pos: number, alt_idx: number): string {
+        return `${this.profileGetNodeId(node)}:${pos}:${alt_idx}`;
+    }
+
+    private profileGetOrCreateParseSingleNode(node: ParserNode, pos: number): ParseSingleNodeProfiling {
+        const key = this.profileParseSingleNodeKey(node, pos);
+        let record = this.profiling.parse_single_node_by_node_pos.get(key);
+        if (record === undefined) {
+            record = {
+                node,
+                pos,
+                enter_count: 0,
+                success_count: 0,
+                success_null_count: 0,
+                failure_count: 0,
+            };
+            this.profiling.parse_single_node_by_node_pos.set(key, record);
+        }
+        return record;
+    }
+
+    private profileGetOrCreatePatternSetAlternative(node: PatternSet, pos: number, alt_idx: number): PatternSetAlternativeProfiling {
+        const key = this.profilePatternSetAlternativeKey(node, pos, alt_idx);
+        let record = this.profiling.pattern_set_alternative_by_node_pos_alt.get(key);
+        if (record === undefined) {
+            record = {
+                node,
+                pos,
+                alt_idx,
+                enter_count: 0,
+                success_count: 0,
+                failure_count: 0,
+            };
+            this.profiling.pattern_set_alternative_by_node_pos_alt.set(key, record);
+        }
+        return record;
+    }
+
+    private profileRecordParseSingleNodeEnter(node: ParserNode, pos: number): void {
+        if (this.config.debug !== true) {
+            this.checkParseTimeout();
+            return;
+        }
+        this.profiling.parse_single_node_enter_count += 1;
+        this.profiling.parse_single_node_max_depth = Math.max(
+            this.profiling.parse_single_node_max_depth,
+            this.parse_single_node_stack.length,
+        );
+        const record = this.profileGetOrCreateParseSingleNode(node, pos);
+        record.enter_count += 1;
+        this.parse_single_node_stack[this.parse_single_node_stack.length - 1].profile_record = record;
+        if (this.profiling.parse_single_node_enter_count % this.debug_check_interval === 0) {
+            this.checkParseTimeoutAndMaybeReport();
+        }
+    }
+
+    private profileRecordParseSingleNodeExit(node: ParserNode, pos: number, ret: ASTNode | null): void {
+        if (this.config.debug !== true) {
+            return;
+        }
+        const stack_record = this.parse_single_node_stack[this.parse_single_node_stack.length - 1];
+        const record = stack_record?.profile_record ?? this.profileGetOrCreateParseSingleNode(node, pos);
+        if (this.isSuccess()) {
+            if (ret === null) {
+                record.success_null_count += 1;
+            } else {
+                record.success_count += 1;
+            }
+        } else {
+            record.failure_count += 1;
+        }
+    }
+
+    private profileRecordPatternSetAlternativeEnter(node: PatternSet, pos: number, alt_idx: number): void {
+        if (this.config.debug !== true) {
+            return;
+        }
+        this.profileGetOrCreatePatternSetAlternative(node, pos, alt_idx).enter_count += 1;
+    }
+
+    private profileRecordPatternSetAlternativeExit(node: PatternSet, pos: number, alt_idx: number, success: boolean): void {
+        if (this.config.debug !== true) {
+            return;
+        }
+        const record = this.profileGetOrCreatePatternSetAlternative(node, pos, alt_idx);
+        if (success) {
+            record.success_count += 1;
+        } else {
+            record.failure_count += 1;
+        }
+    }
+
+    private profileFormatTopParseSingleNode(limit: number): string {
+        const records = Array.from(this.profiling.parse_single_node_by_node_pos.values())
+            .sort((a, b) => b.enter_count - a.enter_count)
+            .slice(0, limit);
+        if (records.length === 0) {
+            return "";
+        }
+        const lines = records.map((record, idx) => {
+            return `${idx}: ${this.parserNodeDebugName(record.node)} @ ${record.pos}`
+                + ` enter=${record.enter_count}`
+                + ` success=${record.success_count}`
+                + ` success_null=${record.success_null_count}`
+                + ` failure=${record.failure_count}`;
+        });
+        return `\nparseSingleNode profiling top ${records.length}:\n${lines.join("\n")}`;
+    }
+
+    private profileFormatTopPatternSetAlternative(limit: number): string {
+        const records = Array.from(this.profiling.pattern_set_alternative_by_node_pos_alt.values())
+            .sort((a, b) => b.enter_count - a.enter_count)
+            .slice(0, limit);
+        if (records.length === 0) {
+            return "";
+        }
+        const lines = records.map((record, idx) => {
+            const alt = record.node.sub_nodes[record.alt_idx];
+            const alt_name = alt === undefined ? "<out-of-range>" : this.parserNodeDebugName(alt);
+            return `${idx}: ${this.parserNodeDebugName(record.node)} @ ${record.pos} alt=${record.alt_idx} ${alt_name}`
+                + ` enter=${record.enter_count}`
+                + ` success=${record.success_count}`
+                + ` failure=${record.failure_count}`;
+        });
+        return `\nPatternSet alternative profiling top ${records.length}:\n${lines.join("\n")}`;
+    }
+
+    private profileFormatSummary(): string {
+        if (this.config.debug !== true) {
+            return "";
+        }
+        return "\nparse profiling:"
+            + `\nparse elapsed_s: ${this.profiling.parse_elapsed_s.toFixed(3)}`
+            + `\nparseSingleNode enter count: ${this.profiling.parse_single_node_enter_count}`
+            + `\nparseSingleNode max depth: ${this.profiling.parse_single_node_max_depth}`
+            + this.profileFormatTopParseSingleNode(20)
+            + this.profileFormatTopPatternSetAlternative(20);
+    }
+
+    private formatDebugProgress(now_ms: number): string {
+        const elapsed_ms = Math.max(1, now_ms - this.parse_start_time_ms);
+        const recent_elapsed_ms = Math.max(1, now_ms - this.debug_last_report_time_ms);
+        const elapsed_s = elapsed_ms / 1000;
+        this.profileRecordElapsed(now_ms);
+        const total_entries = this.profiling.parse_single_node_enter_count;
+        const recent_entries = total_entries - this.debug_last_report_enter_count;
+        const total_rate = total_entries * 1000 / elapsed_ms;
+        const recent_rate = recent_entries * 1000 / recent_elapsed_ms;
+        return "\nparse debug progress:"
+            + `\nelapsed_s: ${elapsed_s.toFixed(3)}`
+            + `\nparseSingleNode enter count: ${total_entries}`
+            + `\nparseSingleNode enter/s: ${total_rate.toFixed(2)}`
+            + `\nrecent enter/s: ${recent_rate.toFixed(2)}`
+            + this.formatParseSingleNodeStack()
+            + this.profileFormatSummary();
+    }
+
+    private checkParseTimeout(now_ms: number = Date.now()): void {
+        if (this.config.timeout_s === undefined) {
+            return;
+        }
+        const elapsed_ms = now_ms - this.parse_start_time_ms;
+        const timeout_ms = this.config.timeout_s * 1000;
+        if (elapsed_ms <= timeout_ms) {
+            return;
+        }
+        const message = `parse timeout exceeded (${this.config.timeout_s}s)`
+            + this.formatDebugProgress(now_ms);
+        this.setError(this.input.pos, message);
+        throw new ParseTimeoutError(message);
+    }
+
+    private checkParseTimeoutAndMaybeReport(): void {
+        const now_ms = Date.now();
+        this.checkParseTimeout(now_ms);
+        if (this.config.debug !== true) {
+            return;
+        }
+        if (now_ms < this.debug_next_report_time_ms) {
+            return;
+        }
+        console.error(this.formatDebugProgress(now_ms));
+        this.debug_last_report_time_ms = now_ms;
+        this.debug_last_report_enter_count = this.profiling.parse_single_node_enter_count;
+        this.debug_next_report_time_ms = now_ms + this.debug_report_interval_ms;
+    }
+
+    private assertConsumed(start: number, node: ParserNode): void {
+        if (this.input.pos > start) {
+            return;
+        }
+        const near = this.input.src.slice(start, Math.min(this.input.src.length, start + 80));
+        assert.fail(
+            `parseSingleNode: ${this.parserNodeDebugName(node)} matched without consuming input at pos ${start}\n${near}\n^${this.formatParseSingleNodeStack()}${this.profileFormatSummary()}`,
+        );
+    }
+
+    private profileRecordElapsed(now_ms: number = Date.now()): void {
+        if (this.parse_start_time_ms === 0) {
+            this.profiling.parse_elapsed_s = 0;
+            return;
+        }
+        this.profiling.parse_elapsed_s = Math.max(0, now_ms - this.parse_start_time_ms) / 1000;
+    }
+
     clearError(): void {
         this.error = null;
     }
@@ -202,7 +476,7 @@ export class ParserImpl implements Parser {
      * 按解析结果的匹配起始位置缓存解析结果，避免重复解析。
      */
     recordParse(pos: number, ast_node: ASTNode): void {
-        this.parse_records[pos]!.push(ast_node);
+        this.parse_records[pos].push(ast_node);
     }
 
     /**
@@ -231,18 +505,40 @@ export class ParserImpl implements Parser {
         this.input = input;
         this.clearError();
         this.pattern_set_node_parse_stack.length = 0;
+        this.parse_single_node_stack.length = 0;
+        this.profiling = this.profileCreate();
+        this.parse_start_time_ms = Date.now();
+        this.debug_next_report_time_ms = this.parse_start_time_ms + this.debug_report_interval_ms;
+        this.debug_last_report_time_ms = this.parse_start_time_ms;
+        this.debug_last_report_enter_count = 0;
         this.parse_records = Array.from({ length: input.src.length + 1 }, () => []);
     }
 
     parse(input: ParserInput, root: ParserNode): ParseResult {
         this.initParse(input);
-        const parse_node_res = this.parseSingleNode(root);
+        let parse_node_res: ASTNode[] | ASTNode | null = null;
+        try {
+            parse_node_res = this.parseSingleNode(root);
+        } catch (err) {
+            this.profileRecordElapsed();
+            if (err instanceof ParseTimeoutError) {
+                return {
+                    kind: ParseResultKind.Failure,
+                    ast_nodes: [],
+                    end_pos: this.input.pos,
+                    error: this.getError() ?? err.message,
+                };
+            }
+            throw err;
+        }
+        this.profileRecordElapsed();
 
         if (!this.isSuccess()) {
             return {
                 kind: ParseResultKind.Failure,
                 ast_nodes: [],
                 end_pos: this.input.pos,
+                error: this.getError() ?? undefined,
             };
         }
 
@@ -345,6 +641,9 @@ export class ParserImpl implements Parser {
         }
 
         ret.ast_node_res = [] as ASTNode[];
+        if (quantifier === "+" && !this.isSuccess()) {
+            return ret;
+        }
         let push_node = (ast_node: ASTNode | null) => {
             if (ast_node !== null) {
                 (ret.ast_node_res as ASTNode[]).push(ast_node);
@@ -425,45 +724,77 @@ export class ParserImpl implements Parser {
      * 每次匹配失败时，尝试忽略一次 `ignored` 节点，直到匹配成功或即使忽略也不可能匹配成功
      */
     parseSingleNode(node: ParserNode, ignored: ParserNode | null = null): ASTNode | null {
-        if (ignored === null) {
-            return this.parseSingleNodeSimple(node);
-        }
         const start = this.input.pos;
-        for (; ;) {
-            const retry_pos = this.input.pos;
-            const ret = this.parseSingleNodeSimple(node);
-            if (this.isSuccess()) {
+        if (this.config.debug === true) {
+            this.parse_single_node_stack.push({ node, pos: start });
+            this.profileRecordParseSingleNodeEnter(node, start);
+        } else {
+            this.checkParseTimeout();
+        }
+        try {
+            const complete_return = (ret: ASTNode | null): ASTNode | null => {
+                if (this.isSuccess() && ret !== null) {
+                    this.assertConsumed(start, node);
+                }
+                this.profileRecordParseSingleNodeExit(node, start, ret);
                 return ret;
+            };
+            if (ignored === null) {
+                return complete_return(this.parseSingleNodeSimple(node));
             }
+            for (; ;) {
+                const retry_pos = this.input.pos;
+                const ret = this.parseSingleNodeSimple(node);
+                if (this.isSuccess()) {
+                    return complete_return(ret);
+                }
 
-            this.input.pos = retry_pos;
-            this.parseSingleNodeSimple(ignored);
-            if (!this.isSuccess()) {
-                this.input.pos = start;
-                return ret;
+                this.input.pos = retry_pos;
+                this.parseSingleNodeSimple(ignored);
+                if (!this.isSuccess()) {
+                    this.input.pos = start;
+                    return complete_return(ret);
+                }
+                if (this.input.pos === retry_pos) {
+                    this.setError(this.input.pos);
+                    this.input.pos = start;
+                    return complete_return(ret);
+                }
             }
-            if (this.input.pos === retry_pos) {
-                this.setError(this.input.pos);
-                this.input.pos = start;
-                return ret;
+        } finally {
+            if (this.config.debug === true) {
+                this.parse_single_node_stack.pop();
             }
         }
     }
 
     parseSingleNodeSimple(node: ParserNode): ASTNode | null {
+        const start = this.input.pos;
+        const cached = this.findParseRecord(start, node);
+        if (cached !== null) {
+            this.input.pos = cached.range[1];
+            this.setSuccess();
+            return cached;
+        }
+
+        let ret: ASTNode | null;
         if (node.kind === ParserNodeKind.CharSeq) {
-            return this.parseCharSeq(node as CharSeq);
+            ret = this.parseCharSeq(node as CharSeq);
+        } else if (node.kind === ParserNodeKind.PatternSeq) {
+            ret = this.parsePatternSeq(node as PatternSeq);
+        } else if (isGeneralCharMatchNode(node)) {
+            ret = this.parseCharMatchNode(node, " ");
+        } else if (node.kind === ParserNodeKind.PatternSet) {
+            ret = this.parsePatternSet(node as PatternSet);
+        } else {
+            assert.fail("unimplemented node kind");
         }
-        if (node.kind === ParserNodeKind.PatternSeq) {
-            return this.parsePatternSeq(node as PatternSeq);
+
+        if (this.isSuccess() && node.kind !== ParserNodeKind.PatternSet) {
+            assert.ok(ret !== null, "parseSingleNodeSimple succeeded with null ASTNode");
+            this.recordParse(start, ret);
         }
-        if (isGeneralCharMatchNode(node)) {
-            return this.parseCharMatchNode(node, " ");
-        }
-        if (node.kind === ParserNodeKind.PatternSet) {
-            return this.parsePatternSet(node as PatternSet);
-        }
-        assert.fail("unimplemented node kind");
+        return ret;
     }
 
     parsePatternSet(node: PatternSet): ASTNode | null {
@@ -477,22 +808,35 @@ export class ParserImpl implements Parser {
                 return null;
             }
 
-            const parse_alternative = (start:number): ASTNode | null => {
+            const parse_alternative = (start: number): ASTNode | null => {
                 for (let i = alt_idx; i < node.sub_nodes.length; i++) {
+                    this.profileRecordPatternSetAlternativeEnter(node, node_start, i);
                     const child = this.parseSingleNode(node.sub_nodes[i]);
                     if (!this.isSuccess()) {
                         this.input.pos = start;
+                        this.profileRecordPatternSetAlternativeExit(node, node_start, i, false);
                         continue;
                     }
                     if (node.neg_flags[i]) {
                         this.input.pos = start;
                         this.setError(this.input.pos, "negated alternative matched");
+                        this.profileRecordPatternSetAlternativeExit(node, node_start, i, false);
                         return null;
                     }
                     if (child === null) {
+                        this.profileRecordPatternSetAlternativeExit(node, node_start, i, false);
                         return null;
                     }
-                    child.parser_nodes.push(node);
+                    if (!child.parser_nodes.includes(node)) {
+                        child.parser_nodes.push(node);
+                    }
+                    if (alt_idx === 0) {
+                        // Only alt_idx=0 covers the full alternative list. Later alternatives
+                        // are left-recursion fallback results and must not populate the
+                        // ordinary (node, pos) success memo.
+                        this.recordParse(child.range[0], child);
+                    }
+                    this.profileRecordPatternSetAlternativeExit(node, node_start, i, true);
                     return child;
                 }
                 assert.ok(!this.isSuccess());
@@ -541,6 +885,7 @@ export class ParserImpl implements Parser {
                 inner.associate_enclosures[0].push(left);
                 inner.associate_enclosures[1].push(right);
             }
+            this.recordParse(inner.range[0], inner);
             this.setSuccess();
             return inner;
 
@@ -565,6 +910,7 @@ export class ParserImpl implements Parser {
             }
 
             for (let i = alt_idx; i < node.sub_nodes.length; i++) {
+                this.profileRecordPatternSetAlternativeEnter(node, start, i);
                 const sub_node = node.sub_nodes[i];
                 let matched_nodes: ParserNode[] = [];
                 if (node.neg_flags[i]) {
@@ -576,14 +922,17 @@ export class ParserImpl implements Parser {
 
                 if (!this.isSuccess()) {
                     this.input.pos = start;
+                    this.profileRecordPatternSetAlternativeExit(node, start, i, false);
                     continue;
                 }
                 if (node.neg_flags[i]) {
                     this.input.pos = start;
                     this.setError(start, "charset reject pattern matched");
+                    this.profileRecordPatternSetAlternativeExit(node, start, i, false);
                     return [];
                 }
                 matched_nodes.push(node);
+                this.profileRecordPatternSetAlternativeExit(node, start, i, true);
                 return matched_nodes;
             }
 

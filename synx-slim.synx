@@ -1,0 +1,89 @@
+Digit=0~9;
+Letter={a~z;A~Z;"_";OtherLanguageLetter};
+SymbolChar={Letter;Digit};
+SpaceChar= \oneof " \t\v\r\n";
+Delimiter=";";
+LineDelimiter={"\n";"\r\n"};
+CommentPrefix="\\\\";
+StringEscapePrefix="\\";
+
+Space=SpaceChar+;
+DigitLiteral=Digit+;
+Symbol=\raw (Letter,SymbolChar*);
+SymbolDotChain=(symbols:Symbol+ \sep ".")=>symbols;
+GeneralSymbol={Symbol;SymbolDotChain};
+
+Comment=(CommentPrefix,comment:AnyChar*,LineDelimiter?)=>comment;     \\ AnyChar with * or + always not greedy
+Ignorable={Space;Comment};
+
+EscapeChar=("\\", c:AnyChar)=>c;
+StringLiteral=(text:{EscapeChar; {-EscapeChar; -"\""; AnyChar}+}* \enclosedby "\"\"")=>text;
+GeneralChar={SymbolChar;StringLiteral;};
+CharRange=(first:GeneralChar, "~", last:GeneralChar)=>[.first=first, .last=last];
+
+FieldAssignment=(".", symbol:Symbol, "=", expr:Expr \ignore Ignorable)=>[.target=symbol, .source=expr];
+Struct=(field_assignments:FieldAssignment* \sep "," \ignore Ignorable \enclosedby "[]")=>field_assignments;
+
+CharSet = {
+    CharRange;
+    ("\\oneof", string:StringLiteral \sep Space)=>string;
+    GeneralSymbol;
+    \associateby "()";
+    \ignore Ignorable;
+};
+
+Option=(pattern:Pattern, "?")=>pattern;
+OneOrMany=(pattern:Pattern, "+")=>pattern;
+Many=(pattern:Pattern, "*")=>pattern;
+RawPattern=("\\raw", pattern:Pattern \ignore Ignorable)=>pattern;
+
+AssociateByPart=("\\associateby", pattern:Pattern \ignore Ignorable)=>pattern;
+NegPattern=("-", pattern:Pattern \ignore Ignorable)=>[.pattern=pattern]; \\ reject if match, only can be used in PatternSet
+NonGreedyPattern=(pattern:Pattern, "^")=>pattern;
+PatternSet=((patterns:Pattern* \sep ";" \ignore Ignorable), 
+    associateby_part:AssociateByPart?, 
+    ignore_part:IgnorePart? 
+    \ignore Ignorable \enclosedby "{}")=>[.patterns=patterns, .associateby=associateby_part, .ignore=ignore_part];
+
+sepPart=("\\sep", pattern:Pattern \ignore Ignorable)=>pattern;
+IgnorePart=("\\ignore", pattern:Pattern \ignore Ignorable)=>pattern;
+EnclosedbyPart=("\\enclosedby", pattern:Pattern \ignore Ignorable)=>pattern;        \\ valid pattern is StringLiteral of length 2 or PatternSeq of length 2
+PatternSeq=(
+    (patterns:Pattern+ \sep "," \ignore Ignorable), 
+    sep_part:sepPart?, ignore_part:IgnorePart?, enclosedby_part:EnclosedbyPart? 
+    \ignore Ignorable
+)=>[.patterns=patterns, .sep=sep_part, .ignore=ignore_part, .enclosedby=enclosedby_part];
+
+PatternBinding=(symbol:Symbol,":",pattern:Pattern)=>[.symbol=symbol, .pattern=pattern];
+Rule=(pattern:PatternSeq,"=>",returned:Expr)=>[.pattern=pattern, .returned=returned];
+
+Pattern={NegPattern;Option;OneOrMany;Many;RawPattern;Rule;PatternBinding;
+    PatternSeq;PatternSet;CharSet;StringLiteral \associateby "()" \ignore Ignorable};
+
+List=(exprs:Expr* \sep "," \ignore Ignorable \enclosedby "[]")=>exprs;
+
+Assignment = {
+    (symbol:Symbol, "=", expr:Expr \ignore Ignorable)=>[.target=symbol, .source=expr];
+};
+
+FuncCallArgsList=(args:Expr* \sep "," \ignore Ignorable \enclosedby "()")=>args;
+FuncCallExpr=(func:GeneralSymbol, args_list:FuncCallArgsList \ignore Ignorable)=>[.func=func, .args_list=args_list];
+
+Expr={
+    Assignment;
+    FuncCallExpr;
+    List;
+    Struct;
+    Pattern;
+    FuncCallArgsList;
+    GeneralSymbol;
+};
+
+Keyword={
+    "\\oneof"; 
+    "\\sep"; "\\ignore"; "\\enclosedby";
+    "\\associateby";
+    "\\raw";  \\ raw represents raw text within matched text
+};
+
+Synx=(expr:Expr* \sep ";" \ignore Ignorable);

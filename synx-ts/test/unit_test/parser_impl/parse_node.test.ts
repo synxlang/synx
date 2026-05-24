@@ -1,3 +1,4 @@
+import assert from 'assert';
 import { ParserImpl } from '../../../src/parser_impl';
 import { completeCharSeq, completeCharRange, completeCharSet, completePatternSeq } from '../../../src/parser_node';
 import type { CharMatchNode, ParserNode, Quantifier } from '../../../src/parser_node';
@@ -53,9 +54,30 @@ function test_parsePatternSeq_singleSlot_quantifiers(): void {
         }
     }
 }
+
+function test_parsePatternSeq_plus_non_char_node_first_match_failure(): void {
+    const parser = new ParserImpl({ parser_nodes: [] });
+    const item = completePatternSeq({
+        sub_nodes: [completeCharSeq({ literal: 'a' })],
+        sub_quantifiers: ' ',
+    });
+    const seq = completePatternSeq({
+        sub_nodes: [item],
+        sub_quantifiers: '+',
+    });
+
+    parser.initParse({ src: 'b', pos: 0 });
+    const top = parser.parsePatternSeq(seq);
+
+    assert.strictEqual(top, null);
+    assert.ok(!parser.isSuccess());
+    assert.strictEqual(parser.input.pos, 0);
+}
+
 function runAllTests(): void {
     console.log('Running parsePatternSeq single-slot tests...\n');
     test_parsePatternSeq_singleSlot_quantifiers();
+    test_parsePatternSeq_plus_non_char_node_first_match_failure();
     console.log('\nAll parsePatternSeq single-slot tests passed!');
 }
 if (require.main === module) {

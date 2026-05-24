@@ -1,18 +1,8 @@
 import { strict as assert } from 'assert';
 import { ParserImpl } from '../../../src/parser_impl';
-import { AnyChar, completeCharSeq, completeCharRange, completePatternSeq, completePatternSet, ParserNodeKind } from '../../../src/parser_node';
+import { AnyChar, completeCharSeq, completeCharRange, completePatternSeq, completePatternSet } from '../../../src/parser_node';
 import type { PatternSet, ParserNode } from '../../../src/parser_node';
 import type { ASTNode, ParserInput } from '../../../src/parser';
-function incompletePatternSet(): PatternSet {
-    return {
-        kind: ParserNodeKind.PatternSet,
-        sub_nodes: [],
-        neg_flags: [],
-        charset_flag: false,
-        associateby: null,
-        ignore: null,
-    };
-}
 function test_parsePatternSet_basic(): void {
     const set: PatternSet = completePatternSet({ sub_nodes: [completeCharSeq({ literal: 'ab' }), completeCharSeq({ literal: 'a' })] });
     const cases: Array<{
@@ -148,10 +138,11 @@ function test_parsePatternSet_associateby_ignore(): void {
     });
 }
 function test_parsePatternSet_infinite_recursion_self(): void {
-    const set: PatternSet = incompletePatternSet();
+    const set = { sub_nodes: [], neg_flags: [] } as unknown as PatternSet;
     // Self-recursive: attempting the only alternative re-enters the same (node,pos) on the call stack.
     set.sub_nodes.push(set as unknown as ParserNode);
     set.neg_flags.push(false);
+    completePatternSet(set);
     const parser = new ParserImpl({ parser_nodes: [] });
     parser.initParse({ src: 'x', pos: 0 });
     const result = parser.parseSingleNode(set);
@@ -159,12 +150,14 @@ function test_parsePatternSet_infinite_recursion_self(): void {
     assert.ok(!parser.isSuccess());
 }
 function test_parsePatternSet_infinite_recursion_cycle(): void {
-    const a: PatternSet = incompletePatternSet();
-    const b: PatternSet = incompletePatternSet();
+    const a = { sub_nodes: [], neg_flags: [] } as unknown as PatternSet;
+    const b = { sub_nodes: [], neg_flags: [] } as unknown as PatternSet;
     a.sub_nodes.push(b as unknown as ParserNode);
     b.sub_nodes.push(a as unknown as ParserNode);
     a.neg_flags.push(false);
     b.neg_flags.push(false);
+    completePatternSet(a);
+    completePatternSet(b);
     const parser = new ParserImpl({ parser_nodes: [] });
     parser.initParse({ src: 'x', pos: 0 });
     const result = parser.parseSingleNode(a);
@@ -237,9 +230,9 @@ function test_parsePatternSet_infinite_recursion_nested_cycle(): void {
     // Note: this would only be detected by node-only recursion checks.
     // Our implementation detects recursion by (node,pos), so we build the input such that the cycle
     // re-enters the same node at the same position (pos=0).
-    const a: PatternSet = incompletePatternSet();
-    const b: PatternSet = incompletePatternSet();
-    const c: PatternSet = incompletePatternSet();
+    const a = { sub_nodes: [], neg_flags: [] } as unknown as PatternSet;
+    const b = { sub_nodes: [], neg_flags: [] } as unknown as PatternSet;
+    const c = { sub_nodes: [], neg_flags: [] } as unknown as PatternSet;
     const q = completeCharSeq({ literal: 'q' });
     const r = completeCharSeq({ literal: 'r' });
     const s = completeCharSeq({ literal: 's' });
@@ -255,6 +248,9 @@ function test_parsePatternSet_infinite_recursion_nested_cycle(): void {
     a.neg_flags.push(false, false);
     b.neg_flags.push(false, false);
     c.neg_flags.push(false, false);
+    completePatternSet(a);
+    completePatternSet(b);
+    completePatternSet(c);
     const parser = new ParserImpl({ parser_nodes: [] });
     // Make the first literal fail at pos=0 so the cycle starts immediately at the same position.
     parser.initParse({ src: 'x', pos: 0 });
@@ -271,10 +267,11 @@ function test_parsePatternSet_infinite_recursion_nested_cycle(): void {
 function test_parsePatternSet_left_recursive_plus_chain(): void {
     const one = completeCharSeq({ literal: '1' });
     const plus = completeCharSeq({ literal: '+' });
-    const expr = incompletePatternSet();
+    const expr = { sub_nodes: [], neg_flags: [] } as unknown as PatternSet;
     const seq = completePatternSeq({ sub_nodes: [expr, plus, one], sub_quantifiers: '   ' });
     expr.sub_nodes.push(seq as unknown as ParserNode, one as unknown as ParserNode);
     expr.neg_flags.push(false, false);
+    completePatternSet(expr);
     const parser1 = new ParserImpl({ parser_nodes: [] });
     parser1.initParse({ src: '1', pos: 0 });
     const r1 = parser1.parseSingleNode(expr);
@@ -324,10 +321,11 @@ function test_parsePatternSet_left_recursive_plus_chain(): void {
 function test_parsePatternSet_left_recursive_expr_plus_expr(): void {
     const one = completeCharSeq({ literal: '1' });
     const plus = completeCharSeq({ literal: '+' });
-    const expr = incompletePatternSet();
+    const expr = { sub_nodes: [], neg_flags: [] } as unknown as PatternSet;
     const seq = completePatternSeq({ sub_nodes: [expr, plus, expr], sub_quantifiers: '   ' });
     expr.sub_nodes.push(seq as unknown as ParserNode, one as unknown as ParserNode);
     expr.neg_flags.push(false, false);
+    completePatternSet(expr);
     const leafAt = (lo: number, hi: number): ASTNode => ({
         parser_nodes: [one, expr],
         range: [lo, hi],
@@ -381,10 +379,11 @@ function test_parsePatternSet_left_recursive_expr_plus_expr(): void {
 function test_parsePatternSet_left_recursive_list_ab(): void {
     const a = completeCharSeq({ literal: 'a' });
     const b = completeCharSeq({ literal: 'b' });
-    const list = incompletePatternSet();
+    const list = { sub_nodes: [], neg_flags: [] } as unknown as PatternSet;
     const pair = completePatternSeq({ sub_nodes: [list, b], sub_quantifiers: '  ' });
     list.sub_nodes.push(pair as unknown as ParserNode, a as unknown as ParserNode);
     list.neg_flags.push(false, false);
+    completePatternSet(list);
     const pA = new ParserImpl({ parser_nodes: [] });
     pA.initParse({ src: 'a', pos: 0 });
     const ra = pA.parseSingleNode(list);
@@ -429,13 +428,15 @@ function test_parsePatternSet_synx_shape_ABC(): void {
     // - C is a PatternSet with alternatives: "12" | A
     // - B is a PatternSeq: "ab" , C
     // - A is a PatternSet with alternative: B
-    const A: PatternSet = incompletePatternSet();
+    const A = { sub_nodes: [], neg_flags: [] } as unknown as PatternSet;
     const C: PatternSet = completePatternSet({ sub_nodes: [completeCharSeq({ literal: '12' })] });
     const B = completePatternSeq({ sub_nodes: [completeCharSeq({ literal: 'ab' }), C], sub_quantifiers: '  ' });
     A.sub_nodes.push(B as unknown as ParserNode);
     C.sub_nodes.push(A as unknown as ParserNode);
     A.neg_flags.push(false);
     C.neg_flags.push(false);
+    completePatternSet(A);
+    completePatternSet(C);
     const parser = new ParserImpl({ parser_nodes: [] });
     parser.initParse({ src: 'ab12', pos: 0 });
     const result = parser.parseSingleNode(A);
