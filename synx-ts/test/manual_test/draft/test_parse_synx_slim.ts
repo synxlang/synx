@@ -38,7 +38,7 @@ const project_root = findProjectRoot(__dirname);
 const synx_slim_path = join(project_root, "synx-slim.synx");
 const src = readFileSync(synx_slim_path, "utf8");
 
-const parser = mkParser({ parser_nodes: [Synx], debug: true });
+const parser = mkParser({ parser_nodes: [Synx], debug: true, timeout_s: 300 });
 const result = parser.parse({ src, pos: 0 }, Synx);
 const success = result.kind === ParseResultKind.Success;
 

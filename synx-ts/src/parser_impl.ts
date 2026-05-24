@@ -140,7 +140,11 @@ export class ParserImpl implements Parser {
     private parse_records: ASTNode[][] = [];
     private parse_single_node_stack: Array<{ node: ParserNode; pos: number }> = [];
     private profiling: ParseProfiling = this.profileCreate();
-    private readonly parse_single_node_debug_step_limit: number = 100000;
+    private parse_start_time_ms: number = 0;
+    private debug_next_report_time_ms: number = 0;
+    private debug_last_report_time_ms: number = 0;
+    private debug_last_report_enter_count: number = 0;
+    private readonly debug_report_interval_ms: number = 5000;
 
     /**
      * ============================== EN ==============================
@@ -260,6 +264,7 @@ export class ParserImpl implements Parser {
 
     private profileRecordParseSingleNodeEnter(node: ParserNode, pos: number): void {
         if (this.config.debug !== true) {
+            this.checkParseTimeout();
             return;
         }
         this.profiling.parse_single_node_enter_count += 1;
@@ -268,12 +273,7 @@ export class ParserImpl implements Parser {
             this.parse_single_node_stack.length,
         );
         this.profileGetOrCreateParseSingleNode(node, pos).enter_count += 1;
-        assert.ok(
-            this.profiling.parse_single_node_enter_count <= this.parse_single_node_debug_step_limit,
-            `parseSingleNode debug step limit exceeded (${this.parse_single_node_debug_step_limit})`
-            + this.formatParseSingleNodeStack()
-            + this.profileFormatSummary(),
-        );
+        this.checkParseTimeoutAndMaybeReport();
     }
 
     private profileRecordParseSingleNodeExit(node: ParserNode, pos: number, ret: ASTNode | null): void {
@@ -357,6 +357,51 @@ export class ParserImpl implements Parser {
             + this.profileFormatTopPatternSetAlternative(20);
     }
 
+    private formatDebugProgress(now_ms: number): string {
+        const elapsed_ms = Math.max(1, now_ms - this.parse_start_time_ms);
+        const recent_elapsed_ms = Math.max(1, now_ms - this.debug_last_report_time_ms);
+        const elapsed_s = elapsed_ms / 1000;
+        const total_entries = this.profiling.parse_single_node_enter_count;
+        const recent_entries = total_entries - this.debug_last_report_enter_count;
+        const total_rate = total_entries * 1000 / elapsed_ms;
+        const recent_rate = recent_entries * 1000 / recent_elapsed_ms;
+        return "\nparse debug progress:"
+            + `\nelapsed_s: ${elapsed_s.toFixed(3)}`
+            + `\nparseSingleNode enter count: ${total_entries}`
+            + `\nparseSingleNode enter/s: ${total_rate.toFixed(2)}`
+            + `\nrecent enter/s: ${recent_rate.toFixed(2)}`
+            + this.formatParseSingleNodeStack()
+            + this.profileFormatSummary();
+    }
+
+    private checkParseTimeout(now_ms: number = Date.now()): void {
+        if (this.config.timeout_s === undefined) {
+            return;
+        }
+        const elapsed_ms = now_ms - this.parse_start_time_ms;
+        const timeout_ms = this.config.timeout_s * 1000;
+        assert.ok(
+            elapsed_ms <= timeout_ms,
+            `parse timeout exceeded (${this.config.timeout_s}s)`
+            + this.formatDebugProgress(now_ms),
+        );
+    }
+
+    private checkParseTimeoutAndMaybeReport(): void {
+        const now_ms = Date.now();
+        this.checkParseTimeout(now_ms);
+        if (this.config.debug !== true) {
+            return;
+        }
+        if (now_ms < this.debug_next_report_time_ms) {
+            return;
+        }
+        console.error(this.formatDebugProgress(now_ms));
+        this.debug_last_report_time_ms = now_ms;
+        this.debug_last_report_enter_count = this.profiling.parse_single_node_enter_count;
+        this.debug_next_report_time_ms = now_ms + this.debug_report_interval_ms;
+    }
+
     private assertConsumed(start: number, node: ParserNode): void {
         const near = this.input.src.slice(start, Math.min(this.input.src.length, start + 80));
         assert.ok(
@@ -422,6 +467,10 @@ export class ParserImpl implements Parser {
         this.pattern_set_node_parse_stack.length = 0;
         this.parse_single_node_stack.length = 0;
         this.profiling = this.profileCreate();
+        this.parse_start_time_ms = Date.now();
+        this.debug_next_report_time_ms = this.parse_start_time_ms + this.debug_report_interval_ms;
+        this.debug_last_report_time_ms = this.parse_start_time_ms;
+        this.debug_last_report_enter_count = 0;
         this.parse_records = Array.from({ length: input.src.length + 1 }, () => []);
     }
 
@@ -624,6 +673,7 @@ export class ParserImpl implements Parser {
             this.parse_single_node_stack.push({ node, pos: start });
             this.profileRecordParseSingleNodeEnter(node, start);
         }
+        this.checkParseTimeout();
         try {
             const complete_return = (ret: ASTNode | null): ASTNode | null => {
                 if (this.isSuccess() && ret !== null) {

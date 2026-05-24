@@ -80,4 +80,5 @@ export interface ParseProfiling {
 export interface ParserConfig {
     parser_nodes: ParserNode[];
     debug?: boolean;
+    timeout_s?: number;
 }
