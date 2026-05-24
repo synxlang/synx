@@ -271,8 +271,8 @@ export class ParserImpl implements Parser {
         assert.ok(
             this.profiling.parse_single_node_enter_count <= this.parse_single_node_debug_step_limit,
             `parseSingleNode debug step limit exceeded (${this.parse_single_node_debug_step_limit})`
-                + this.formatParseSingleNodeStack()
-                + this.profileFormatSummary(),
+            + this.formatParseSingleNodeStack()
+            + this.profileFormatSummary(),
         );
     }
 
@@ -391,7 +391,7 @@ export class ParserImpl implements Parser {
      * 按解析结果的匹配起始位置缓存解析结果，避免重复解析。
      */
     recordParse(pos: number, ast_node: ASTNode): void {
-        this.parse_records[pos]!.push(ast_node);
+        this.parse_records[pos].push(ast_node);
     }
 
     /**
@@ -662,19 +662,32 @@ export class ParserImpl implements Parser {
     }
 
     parseSingleNodeSimple(node: ParserNode): ASTNode | null {
+        const start = this.input.pos;
+        const cached = this.findParseRecord(start, node);
+        if (cached !== null) {
+            this.input.pos = cached.range[1];
+            this.setSuccess();
+            return cached;
+        }
+
+        let ret: ASTNode | null;
         if (node.kind === ParserNodeKind.CharSeq) {
-            return this.parseCharSeq(node as CharSeq);
+            ret = this.parseCharSeq(node as CharSeq);
+        } else if (node.kind === ParserNodeKind.PatternSeq) {
+            ret = this.parsePatternSeq(node as PatternSeq);
+        } else if (isGeneralCharMatchNode(node)) {
+            ret = this.parseCharMatchNode(node, " ");
+        } else if (node.kind === ParserNodeKind.PatternSet) {
+            ret = this.parsePatternSet(node as PatternSet);
+        } else {
+            assert.fail("unimplemented node kind");
         }
-        if (node.kind === ParserNodeKind.PatternSeq) {
-            return this.parsePatternSeq(node as PatternSeq);
+
+        if (this.isSuccess() && node.kind !== ParserNodeKind.PatternSet) {
+            assert.ok(ret !== null, "parseSingleNodeSimple succeeded with null ASTNode");
+            this.recordParse(start, ret);
         }
-        if (isGeneralCharMatchNode(node)) {
-            return this.parseCharMatchNode(node, " ");
-        }
-        if (node.kind === ParserNodeKind.PatternSet) {
-            return this.parsePatternSet(node as PatternSet);
-        }
-        assert.fail("unimplemented node kind");
+        return ret;
     }
 
     parsePatternSet(node: PatternSet): ASTNode | null {
@@ -707,7 +720,15 @@ export class ParserImpl implements Parser {
                         this.profileRecordPatternSetAlternativeExit(node, node_start, i, false);
                         return null;
                     }
-                    child.parser_nodes.push(node);
+                    if (!child.parser_nodes.includes(node)) {
+                        child.parser_nodes.push(node);
+                    }
+                    if (alt_idx === 0) {
+                        // Only alt_idx=0 covers the full alternative list. Later alternatives
+                        // are left-recursion fallback results and must not populate the
+                        // ordinary (node, pos) success memo.
+                        this.recordParse(child.range[0], child);
+                    }
                     this.profileRecordPatternSetAlternativeExit(node, node_start, i, true);
                     return child;
                 }
@@ -757,6 +778,7 @@ export class ParserImpl implements Parser {
                 inner.associate_enclosures[0].push(left);
                 inner.associate_enclosures[1].push(right);
             }
+            this.recordParse(inner.range[0], inner);
             this.setSuccess();
             return inner;
 
