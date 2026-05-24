@@ -42,6 +42,40 @@ const parser = mkParser({ parser_nodes: [Synx], debug: true });
 const result = parser.parse({ src, pos: 0 }, Synx);
 const success = result.kind === ParseResultKind.Success;
 
+function printProfiling(): void {
+  const profiling = parser.getParseProfiling();
+  console.log("\n=== profiling ===");
+  console.log(JSON.stringify({
+    parse_single_node_enter_count: profiling.parse_single_node_enter_count,
+    parse_single_node_max_depth: profiling.parse_single_node_max_depth,
+  }, null, 2));
+
+  const node_top = Array.from(profiling.parse_single_node_by_node_pos.entries())
+    .sort((a, b) => b[1].enter_count - a[1].enter_count)
+    .slice(0, 20)
+    .map(([key, record]) => ({
+      key,
+      enter: record.enter_count,
+      success: record.success_count,
+      success_null: record.success_null_count,
+      failure: record.failure_count,
+    }));
+  console.log("\n=== parseSingleNode top ===");
+  console.log(JSON.stringify(node_top, null, 2));
+
+  const alt_top = Array.from(profiling.pattern_set_alternative_by_node_pos_alt.entries())
+    .sort((a, b) => b[1].enter_count - a[1].enter_count)
+    .slice(0, 20)
+    .map(([key, record]) => ({
+      key,
+      enter: record.enter_count,
+      success: record.success_count,
+      failure: record.failure_count,
+    }));
+  console.log("\n=== PatternSet alternative top ===");
+  console.log(JSON.stringify(alt_top, null, 2));
+}
+
 console.log("=== parse synx-slim.synx ===");
 console.log(JSON.stringify({
   project_root,
@@ -58,3 +92,5 @@ if (result.ast_nodes.length > 0) {
   console.log("\n=== result ===");
   console.log(SynxFmt.stringify(result.ast_nodes.length === 1 ? result.ast_nodes[0] : result.ast_nodes));
 }
+
+printProfiling();
