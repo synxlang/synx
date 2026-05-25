@@ -38,13 +38,12 @@ const PARSE_STEP_EXIT_FAILURE = -2;
 interface ParseStep{
     parser_node: ParserNode;
     value_idx: number;              // 赋值的对应数组，-1为不赋值
-    consume_input?: boolean;         // 是否消耗本 step 匹配到的输入
+    consume_input: boolean;          // 是否消耗本 step 匹配到的输入
     empty_success_to_idx: number;    // 空成功后下一步索引，-1为成功退出，-2为失败退出
     success_to_idx: number;          // 成功后下一步索引，-1为成功退出，-2为失败退出
     fail_to_idx: number;             // 失败后下一步索引，-1为成功退出，-2为失败退出
-    // On failure, restore input.pos to the entry position of the referenced step before jumping.
-    // This is for local rollback across multiple already-successful steps, e.g. `sep` succeeds but the following item fails.
-    fail_restore_to_step_idx?: number;
+    // 失败后跳转前恢复到指定 step 最近一次进入前的状态；0 表示不做额外回滚
+    fail_restore_to_step_entry_idx: number;
 }
 
 interface ParseStepGraph{
@@ -57,6 +56,7 @@ interface ParsedStep{
     value: ASTNode | null;
     input_start: number;
     input_end: number;
+    parsed_steps_len_before: number;
 }
 
 interface ParseStepGraphResult{
