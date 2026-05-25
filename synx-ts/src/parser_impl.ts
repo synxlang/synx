@@ -727,11 +727,32 @@ export class ParserImpl implements Parser {
                 assert.ok(parsed !== undefined, "parseStepGraph: rollback exceeds parsed step stack");
                 if (parsed.value_idx >= 0) {
                     const values = result.values[parsed.value_idx];
-                    const popped = values.pop();
-                    assert.strictEqual(popped, parsed.value);
+                    if (this.isParsedCharRange(parsed.value) && parsed.value.range[0] < parsed.input_start) {
+                        assert.strictEqual(values[values.length - 1], parsed.value);
+                        parsed.value.range[1] = parsed.input_start;
+                    } else {
+                        const popped = values.pop();
+                        assert.strictEqual(popped, parsed.value);
+                    }
                 }
                 this.input.pos = parsed.input_start;
             }
+        };
+
+        const pushParsedValue = (value_idx: number, value: ParsedValue | null): ParsedValue | null => {
+            const values = result.values[value_idx];
+            const last = values[values.length - 1] ?? null;
+            if (
+                this.isParsedCharRange(value)
+                && this.isParsedCharRange(last)
+                && last.parser_node === value.parser_node
+                && last.range[1] === value.range[0]
+            ) {
+                last.range[1] = value.range[1];
+                return last;
+            }
+            values.push(value);
+            return value;
         };
 
         const exit = (idx: number): ParseStepGraphResult => {
@@ -754,13 +775,14 @@ export class ParserImpl implements Parser {
             if (this.isSuccess()) {
                 const input_end = this.input.pos;
                 action = value === null ? step.empty_success_action : step.non_empty_success_action;
+                let parsed_value = value;
                 if (step.value_idx >= 0) {
-                    result.values[step.value_idx].push(value);
+                    parsed_value = pushParsedValue(step.value_idx, value);
                 }
                 result.parsed_steps.push({
                     step_idx,
                     value_idx: step.value_idx,
-                    value,
+                    value: parsed_value,
                     input_start,
                     input_end,
                 });
