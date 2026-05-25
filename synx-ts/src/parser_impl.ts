@@ -48,8 +48,6 @@ function parseStepAction(
 interface ParseStepAction {
     next_step_idx: number;
     pop_value_cnt: number;
-    set_marker_idx: number;
-    pop_to_marker_idx: number;
 }
 
 interface ParseStep{
