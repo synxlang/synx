@@ -40,15 +40,6 @@ interface ParseStepAction {
     pop_value_cnt: number;
 }
 
-function completeParseStepAction(
-    partial: Partial<ParseStepAction> & { next_step_idx: number },
-): ParseStepAction {
-    return Object.assign(partial, {
-        next_step_idx: partial.next_step_idx,
-        pop_value_cnt: partial.pop_value_cnt ?? 0,
-    }) as ParseStepAction;
-}
-
 interface ParseStep {
     parser_node: ParserNode;
     value_idx: number;              // 赋值的对应数组，-1为不赋值
@@ -60,6 +51,7 @@ interface ParseStep {
 
 interface ParseStepGraph {
     steps: ParseStep[];
+    values_slot_cnt: number;
 }
 
 interface ParsedStep {
@@ -69,8 +61,14 @@ interface ParsedStep {
 
 interface ParseStepGraphResult {
     parsed_steps: ParsedStep[];
-    values: (ASTNode | null)[][];
-    exit_step_idx: number;
+    values: (ASTNode | number | null)[][];
+}
+
+function mkParseStepGraphResult(values_slot_cnt: number): ParseStepGraphResult {
+    return {
+        parsed_steps: [],
+        values: [][values_slot_cnt]
+    };
 }
 
 /**
@@ -130,6 +128,16 @@ interface ParseCharMatchNodeExResult {
     ast_node_res: ASTNode[] | ASTNode | null;
     end_idx: number;
 }
+
+function completeParseStepAction(
+    partial: Partial<ParseStepAction> & { next_step_idx: number },
+): ParseStepAction {
+    return Object.assign(partial, {
+        next_step_idx: partial.next_step_idx,
+        pop_value_cnt: partial.pop_value_cnt ?? 0,
+    }) as ParseStepAction;
+}
+
 
 /**
  * ============================== EN ==============================
@@ -613,6 +621,31 @@ export class ParserImpl implements Parser {
 
         this.setSuccess();
         return results;
+    }
+
+    parseStepGraph(graph: ParseStepGraph, ignored: ParserNode | null): ParseStepGraphResult {
+        let ret = mkParseStepGraphResult(graph.values_slot_cnt);
+        let parsed_steps = ret.parsed_steps;
+        let values = ret.values;
+        if (graph.steps.length === 0) {
+            return ret;
+        }
+        let step = graph.steps[0];
+        while (true) {
+            const parser_node = step.parser_node;
+            const step_start = this.input.pos;
+            if (isGeneralCharMatchNode(parser_node)) {
+                this.parseSingleCharMatchNode(parser_node, ignored);
+            } else {
+                let res = this.parseSingleNode(step.parser_node, ignored);
+                if (this.isSuccess()) {
+
+                } else {
+
+                }
+            }
+        }
+        return ret;
     }
 
     /**
@@ -1340,7 +1373,7 @@ export class ParserImpl implements Parser {
         }
     }
 
-    parseSingleCharMatchNode(node: GeneralCharMatchNode): ParserNode[] {
+    parseSingleCharMatchNode(node: GeneralCharMatchNode, ignored: ParserNode | null = null): ParserNode[] {
         if (node.kind === ParserNodeKind.CharMatchSet) {
             return this.parseCharMatchSet(node as CharMatchSet);
         }
@@ -1361,6 +1394,27 @@ export class ParserImpl implements Parser {
         }
     }
 
+    parseSingleCharMatchNodeWithIgnored(node: GeneralCharMatchNode, ignored: ParserNode | null = null): number {
+        const start = this.input.pos;
+        let success_start = start;
+        this.parseSingleCharMatchNode(node);
+        if (ignored === null) {
+            return start;
+        }
+        for (; ;) {
+            if (this.isSuccess()) {
+                return success_start;
+            }
+            this.parseSingleNode(ignored);
+            if (!this.isSuccess()) {
+                this.input.pos = start;
+                break;
+            }
+            success_start = this.input.pos;
+            this.parseSingleCharMatchNode(node);
+        }
+        return start;
+    }
 
     /**
      * Match a fixed `CharSeq.literal` once (`startsWith` at current byte offset in the binary-string model).
