@@ -70,16 +70,24 @@ interface ParseStepGraph {
 interface ParsedStep {
     step_idx: number;
     value_idx: number;
-    value: ASTNode | null;
+    value: ParsedValue | null;
     input_start: number;
     input_end: number;
 }
 
 interface ParseStepGraphResult {
     parsed_steps: ParsedStep[];
-    values: (ASTNode | null)[][];
+    values: (ParsedValue | null)[][];
     exit_step_idx: number;
 }
+
+interface ParsedCharRange {
+    kind: "char_range";
+    parser_node: GeneralCharMatchNode;
+    range: [number, number];
+}
+
+type ParsedValue = ASTNode | ParsedCharRange;
 
 enum ParseSeqState {
     LeftEnclosure = -1,
@@ -645,6 +653,61 @@ export class ParserImpl implements Parser {
         return results;
     }
 
+    private isParsedCharRange(value: ParsedValue | null): value is ParsedCharRange {
+        return value !== null
+            && typeof value === "object"
+            && "kind" in value
+            && value.kind === "char_range";
+    }
+
+    private makeCharRangeValue(node: GeneralCharMatchNode, start: number): ParsedCharRange {
+        return {
+            kind: "char_range",
+            parser_node: node,
+            range: [start, this.input.pos],
+        };
+    }
+
+    private parseStepValue(node: ParserNode, ignored: ParserNode | null): ParsedValue | null {
+        if (!isGeneralCharMatchNode(node)) {
+            return this.parseSingleNode(node, ignored);
+        }
+
+        const start = this.input.pos;
+        const parse_char_once = (): ParsedCharRange | null => {
+            const char_start = this.input.pos;
+            this.parseSingleCharMatchNode(node);
+            if (!this.isSuccess()) {
+                return null;
+            }
+            return this.makeCharRangeValue(node, char_start);
+        };
+
+        if (ignored === null) {
+            return parse_char_once();
+        }
+
+        for (; ;) {
+            const retry_pos = this.input.pos;
+            const ret = parse_char_once();
+            if (this.isSuccess()) {
+                return ret;
+            }
+
+            this.input.pos = retry_pos;
+            this.parseSingleNodeSimple(ignored);
+            if (!this.isSuccess()) {
+                this.input.pos = start;
+                return ret;
+            }
+            if (this.input.pos === retry_pos) {
+                this.setError(this.input.pos);
+                this.input.pos = start;
+                return ret;
+            }
+        }
+    }
+
     /**
      * Execute a small parse state graph.
      * Negative transitions are exits: -1 success, -2 failure.
@@ -686,7 +749,7 @@ export class ParserImpl implements Parser {
             assert.ok(step_idx < graph.steps.length, `parseStepGraph: invalid step index ${step_idx}`);
             const step = graph.steps[step_idx];
             const input_start = this.input.pos;
-            const value = this.parseSingleNode(step.parser_node, ignored);
+            const value = this.parseStepValue(step.parser_node, ignored);
             let action: ParseStepAction;
             if (this.isSuccess()) {
                 const input_end = this.input.pos;
@@ -976,16 +1039,22 @@ export class ParserImpl implements Parser {
             : -1;
     }
 
-    private getSingleGraphValue(result: ParseStepGraphResult, value_idx: number): ASTNode | null {
+    private getSingleParsedValue(result: ParseStepGraphResult, value_idx: number): ParsedValue | null {
         return result.values[value_idx]?.[0] ?? null;
     }
 
-    private makeMergedCharMatchASTNode(node: GeneralCharMatchNode, values: ASTNode[]): ASTNode | null {
-        if (values.length === 0) {
+    private parsedValueToASTNode(value: ParsedValue | null): ASTNode | null {
+        if (value === null) {
             return null;
         }
-        const start = values[0].range[0];
-        const end = values[values.length - 1].range[1];
+        if (!this.isParsedCharRange(value)) {
+            return value;
+        }
+        return this.makeCharRangeASTNode(value.parser_node, value.range);
+    }
+
+    private makeCharRangeASTNode(node: GeneralCharMatchNode, range: [number, number]): ASTNode {
+        const [start, end] = range;
         return {
             parser_nodes: [node],
             range: [start, end],
@@ -998,7 +1067,14 @@ export class ParserImpl implements Parser {
         };
     }
 
-    private makeMergedCharMatchASTNodes(node: GeneralCharMatchNode, values: ASTNode[]): ASTNode[] {
+    private makeMergedCharMatchASTNode(node: GeneralCharMatchNode, values: ParsedCharRange[]): ASTNode | null {
+        if (values.length === 0) {
+            return null;
+        }
+        return this.makeCharRangeASTNode(node, [values[0].range[0], values[values.length - 1].range[1]]);
+    }
+
+    private makeMergedCharMatchASTNodes(node: GeneralCharMatchNode, values: ParsedCharRange[]): ASTNode[] {
         const ret: ASTNode[] = [];
         let run_start = 0;
         for (let i = 1; i <= values.length; i++) {
@@ -1021,15 +1097,21 @@ export class ParserImpl implements Parser {
         result: ParseStepGraphResult,
     ): ASTNode[] | ASTNode | null {
         if (quantifier === " " || quantifier === "?") {
-            return this.getSingleGraphValue(result, PARSE_STEP_NODE_VALUE_IDX);
+            return this.parsedValueToASTNode(this.getSingleParsedValue(result, PARSE_STEP_NODE_VALUE_IDX));
         }
-        const values = (result.values[PARSE_STEP_NODE_VALUE_IDX] ?? []) as ASTNode[];
+        const values = result.values[PARSE_STEP_NODE_VALUE_IDX] ?? [];
         if (sep === null && isGeneralCharMatchNode(node)) {
+            const char_values = values.filter((value): value is ParsedCharRange => this.isParsedCharRange(value));
+            assert.strictEqual(char_values.length, values.length);
             return ignored === null
-                ? this.makeMergedCharMatchASTNode(node, values)
-                : this.makeMergedCharMatchASTNodes(node, values);
+                ? this.makeMergedCharMatchASTNode(node, char_values)
+                : this.makeMergedCharMatchASTNodes(node, char_values);
         }
-        return values;
+        return values.map((value) => {
+            const ast_node = this.parsedValueToASTNode(value);
+            assert.ok(ast_node !== null);
+            return ast_node;
+        });
     }
 
     /**
@@ -1079,10 +1161,12 @@ export class ParserImpl implements Parser {
         if (!this.isSuccess()) {
             return ret;
         }
-        ret.ast_node_res = quantifier === " " || quantifier === "?"
-            ? result.values[PARSE_STEP_NODE_VALUE_IDX]?.[0] ?? null
-            : (result.values[PARSE_STEP_NODE_VALUE_IDX] ?? []) as ASTNode[];
-        ret.seps = (result.values[PARSE_STEP_SEP_VALUE_IDX] ?? []) as ASTNode[];
+        ret.ast_node_res = this.makeParseNodeResultFromStepGraph(node, quantifier, ignored, sep, result);
+        ret.seps = (result.values[PARSE_STEP_SEP_VALUE_IDX] ?? []).map((value) => {
+            const ast_node = this.parsedValueToASTNode(value);
+            assert.ok(ast_node !== null);
+            return ast_node;
+        });
         return ret;
     }
 
@@ -1516,7 +1600,7 @@ export class ParserImpl implements Parser {
             }
 
             if (seq_step.state === ParseSeqState.LeftEnclosure) {
-                left_enclosure = this.getSingleGraphValue(result, PARSE_STEP_NODE_VALUE_IDX);
+                left_enclosure = this.parsedValueToASTNode(this.getSingleParsedValue(result, PARSE_STEP_NODE_VALUE_IDX));
                 assert.ok(left_enclosure !== null);
                 body_start = this.input.pos;
                 body_end = body_start;
@@ -1524,7 +1608,7 @@ export class ParserImpl implements Parser {
             }
 
             if (seq_step.state === ParseSeqState.RightEnclosure) {
-                right_enclosure = this.getSingleGraphValue(result, PARSE_STEP_NODE_VALUE_IDX);
+                right_enclosure = this.parsedValueToASTNode(this.getSingleParsedValue(result, PARSE_STEP_NODE_VALUE_IDX));
                 assert.ok(right_enclosure !== null);
                 continue;
             }
@@ -1539,7 +1623,11 @@ export class ParserImpl implements Parser {
                 result,
             );
             push_child(child);
-            seps.push(...((result.values[PARSE_STEP_SEP_VALUE_IDX] ?? []) as ASTNode[]));
+            seps.push(...(result.values[PARSE_STEP_SEP_VALUE_IDX] ?? []).map((value) => {
+                const ast_node = this.parsedValueToASTNode(value);
+                assert.ok(ast_node !== null);
+                return ast_node;
+            }));
 
             body_end = this.input.pos;
             const end_idx = this.getEndIdxFromParseStepGraphExit(seq_step.graph, result);
