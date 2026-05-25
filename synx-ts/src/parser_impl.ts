@@ -48,7 +48,8 @@ interface ParseStepGraph{
 interface ParseStepGraphResult{
     parsed_step_idxs: number[];
     // TODO: 根据SlotKind赋值
-    values:(ASTNode | null)[][]
+    values:(ASTNode | null)[][];
+    success: boolean;
 }
 
 /**
@@ -594,6 +595,52 @@ export class ParserImpl implements Parser {
     }
 
     /**
+     * Execute a small parse state graph as one transaction.
+     * On failure exit, the input position is restored to the graph start.
+     */
+    private parseStepGraph(graph: ParseStepGraph, ignored: ParserNode | null = null): ParseStepGraphResult {
+        const graph_start = this.input.pos;
+        const value_count = graph.steps.reduce((max_idx, step) => Math.max(max_idx, step.value_idx), -1) + 1;
+        const result: ParseStepGraphResult = {
+            parsed_step_idxs: [],
+            values: Array.from({ length: value_count }, () => []),
+            success: false,
+        };
+
+        let step_idx = 0;
+        while (step_idx >= 0) {
+            assert.ok(step_idx < graph.steps.length, `parseStepGraph: invalid step index ${step_idx}`);
+            const step = graph.steps[step_idx];
+            const value = this.parseSingleNode(step.parser_node, ignored);
+            if (this.isSuccess()) {
+                result.parsed_step_idxs.push(step_idx);
+                if (value === null) {
+                    step_idx = step.empty_success_to_idx;
+                } else {
+                    if (step.value_idx >= 0) {
+                        result.values[step.value_idx].push(value);
+                    }
+                    step_idx = step.success_to_idx;
+                }
+                if (step_idx === -1) {
+                    result.success = true;
+                    return result;
+                }
+                continue;
+            }
+
+            if (step.fail_to_idx === -1) {
+                this.input.pos = graph_start;
+                return result;
+            }
+            step_idx = step.fail_to_idx;
+        }
+
+        result.success = true;
+        return result;
+    }
+
+    /**
      * ============================== EN ==============================
      *
      * When `sep` is non-null, it is parsed only between successive matches of the same `node` while expanding `*` / `+` (the loop below).
@@ -634,6 +681,24 @@ export class ParserImpl implements Parser {
             seps: [],
             end_idx: -1,
         };
+        const node_graph: ParseStepGraph = {
+            steps: [{
+                parser_node: node,
+                value_idx: 0,
+                empty_success_to_idx: -1,
+                success_to_idx: -1,
+                fail_to_idx: -1,
+            }],
+        };
+        const sep_graph: ParseStepGraph | null = sep === null ? null : {
+            steps: [{
+                parser_node: sep,
+                value_idx: 0,
+                empty_success_to_idx: -1,
+                success_to_idx: -1,
+                fail_to_idx: -1,
+            }],
+        };
 
         let peek_ends = () => {
             let peek_res = this.peekEndNodes(ends, ignored);
@@ -647,8 +712,9 @@ export class ParserImpl implements Parser {
             }
         }
 
-        let first = this.parseSingleNode(node, ignored);
-        if (!this.isSuccess()) {
+        const first_res = this.parseStepGraph(node_graph, ignored);
+        let first = first_res.values[0]?.[0] ?? null;
+        if (!first_res.success) {
             if (quantifier === "?" || quantifier === "*") {
                 this.setSuccess();
             }
@@ -679,11 +745,12 @@ export class ParserImpl implements Parser {
             const sep_retry_pos = this.input.pos;
             let sep_node: ASTNode | null = null;
             if (sep !== null) {
-                sep_node = this.parseSingleNode(sep, ignored);
-                if (!this.isSuccess()) {
-                    this.input.pos = sep_retry_pos;
+                assert.ok(sep_graph !== null);
+                const sep_res = this.parseStepGraph(sep_graph, ignored);
+                if (!sep_res.success) {
                     break;
                 }
+                sep_node = sep_res.values[0]?.[0] ?? null;
             }
 
             if (peek_ends()) {
@@ -692,13 +759,14 @@ export class ParserImpl implements Parser {
                 }
                 break;
             }
-            let n = this.parseSingleNode(node, ignored);
-            if (!this.isSuccess()) {
+            const n_res = this.parseStepGraph(node_graph, ignored);
+            if (!n_res.success) {
                 if (sep !== null) {
                     this.input.pos = sep_retry_pos;
                 }
                 break;
             }
+            const n = n_res.values[0]?.[0] ?? null;
             push_sep_node(sep_node);
             push_node(n);
         }
