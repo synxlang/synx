@@ -78,6 +78,22 @@ interface ParseStepGraphResult {
     exit_step_idx: number;
 }
 
+enum ParseSeqState {
+    LeftEnclosure = -1,
+    TrailingSep = -2,
+    RightEnclosure = -3,
+}
+
+interface ParseSeqStep {
+    state: number|ParseSeqState; // state<0表示ParseSeqState，state>=0表示正在解析第state个sub_node
+    graph: ParseStepGraph;
+}
+
+interface ParseSeqStepGraph {
+    steps:ParseSeqStep[];
+}
+
+
 /**
  * ============================== EN ==============================
  *
