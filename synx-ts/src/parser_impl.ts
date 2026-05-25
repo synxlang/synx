@@ -799,10 +799,7 @@ export class ParserImpl implements Parser {
         };
 
         if (quantifier === " " || quantifier === "?") {
-            const post_sep_idx = post_sep_mode !== "none" ? addPostSepStep() : -1;
-            const non_empty_success_action = completeParseStepAction({
-                next_step_idx: post_sep_idx >= 0 ? post_sep_idx : PARSE_STEP_EXIT_SUCCESS,
-            });
+            const non_empty_success_action = completeParseStepAction({ next_step_idx: PARSE_STEP_EXIT_SUCCESS });
             const empty_success_action = completeParseStepAction({ next_step_idx: PARSE_STEP_EXIT_SUCCESS });
             const node_fail_action = completeParseStepAction({ next_step_idx: quantifier === "?" ? PARSE_STEP_EXIT_SUCCESS : PARSE_STEP_EXIT_FAILURE });
             if (quantifier === "?" && ends.length > 0) {
@@ -819,6 +816,10 @@ export class ParserImpl implements Parser {
             if (quantifier === "?" && ends.length > 0) {
                 const last_end_match_idx = node_idx - 1;
                 steps[last_end_match_idx].fail_action = completeParseStepAction({ next_step_idx: node_idx });
+            }
+            if (post_sep_mode !== "none") {
+                const post_sep_idx = addPostSepStep();
+                steps[node_idx].non_empty_success_action = completeParseStepAction({ next_step_idx: post_sep_idx });
             }
             return { graph: { steps } };
         }
@@ -973,6 +974,62 @@ export class ParserImpl implements Parser {
         return step.value_idx >= PARSE_STEP_END_VALUE_IDX_BASE
             ? step.value_idx - PARSE_STEP_END_VALUE_IDX_BASE
             : -1;
+    }
+
+    private getSingleGraphValue(result: ParseStepGraphResult, value_idx: number): ASTNode | null {
+        return result.values[value_idx]?.[0] ?? null;
+    }
+
+    private makeMergedCharMatchASTNode(node: GeneralCharMatchNode, values: ASTNode[]): ASTNode | null {
+        if (values.length === 0) {
+            return null;
+        }
+        const start = values[0].range[0];
+        const end = values[values.length - 1].range[1];
+        return {
+            parser_nodes: [node],
+            range: [start, end],
+            value: this.input.src.slice(start, end),
+            raw_value: this.input.src.slice(start, end),
+            seps: [],
+            enclosure: null,
+            associate_enclosures: null,
+            bindings: {},
+        };
+    }
+
+    private makeMergedCharMatchASTNodes(node: GeneralCharMatchNode, values: ASTNode[]): ASTNode[] {
+        const ret: ASTNode[] = [];
+        let run_start = 0;
+        for (let i = 1; i <= values.length; i++) {
+            if (i < values.length && values[i - 1].range[1] === values[i].range[0]) {
+                continue;
+            }
+            const merged = this.makeMergedCharMatchASTNode(node, values.slice(run_start, i));
+            assert.ok(merged !== null);
+            ret.push(merged);
+            run_start = i;
+        }
+        return ret;
+    }
+
+    private makeParseNodeResultFromStepGraph(
+        node: ParserNode,
+        quantifier: Quantifier,
+        ignored: ParserNode | null,
+        sep: ParserNode | null,
+        result: ParseStepGraphResult,
+    ): ASTNode[] | ASTNode | null {
+        if (quantifier === " " || quantifier === "?") {
+            return this.getSingleGraphValue(result, PARSE_STEP_NODE_VALUE_IDX);
+        }
+        const values = (result.values[PARSE_STEP_NODE_VALUE_IDX] ?? []) as ASTNode[];
+        if (sep === null && isGeneralCharMatchNode(node)) {
+            return ignored === null
+                ? this.makeMergedCharMatchASTNode(node, values)
+                : this.makeMergedCharMatchASTNodes(node, values);
+        }
+        return values;
     }
 
     /**
@@ -1286,6 +1343,10 @@ export class ParserImpl implements Parser {
     }
 
     parsePatternSeq(node: PatternSeq): ASTNode | null {
+        return this.newParsePatternSeq(node);
+    }
+
+    oldParsePatternSeq(node: PatternSeq): ASTNode | null {
         const start = this.input.pos;
         const children: (ASTNode[] | ASTNode | null)[] = [];
         const seps: ASTNode[] = [];
@@ -1372,6 +1433,134 @@ export class ParserImpl implements Parser {
                 return null;
             }
             right_enclosure = right;
+        }
+
+        if (node.sub_node_bindings !== null) {
+            for (let i = 0; i < node.sub_node_bindings.length; i++) {
+                const binding = node.sub_node_bindings[i];
+                const isolated = node.sub_node_isolated_scope_flags?.[i] ?? true;
+                if (!isolated) {
+                    const child = children[i];
+                    assert.ok(!Array.isArray(child), "non-isolated repeated PatternSeq binding scope is not implemented yet");
+                    if (child !== null) {
+                        Object.assign(bindings, child.bindings);
+                    }
+                }
+                if (binding === null) {
+                    continue;
+                }
+                assert.ok(!Object.prototype.hasOwnProperty.call(bindings, binding), `duplicate PatternSeq binding: ${binding}`);
+                bindings[binding] = children[i];
+            }
+        }
+
+        let value: any = node.raw
+            ? this.input.src.slice(body_start, body_end)
+            : children;
+        if (node.assignment_map !== null) {
+            if (typeof node.assignment_map === "string") {
+                if (Object.prototype.hasOwnProperty.call(bindings, node.assignment_map)) {
+                    value = bindings[node.assignment_map];
+                }
+            } else {
+                value = {};
+                for (const [target, source] of node.assignment_map) {
+                    if (Object.prototype.hasOwnProperty.call(bindings, source)) {
+                        value[target] = bindings[source];
+                    }
+                }
+            }
+        }
+
+        this.setSuccess();
+        return {
+            parser_nodes: [node],
+            range: [start, this.input.pos],
+            value,
+            raw_value: children,
+            seps,
+            enclosure: node.enclosure !== null
+                ? [left_enclosure!, right_enclosure!]
+                : null,
+            associate_enclosures: null,
+            bindings: bindings,
+        };
+    }
+
+    newParsePatternSeq(node: PatternSeq): ASTNode | null {
+        const start = this.input.pos;
+        const children: (ASTNode[] | ASTNode | null)[] = [];
+        const seps: ASTNode[] = [];
+        let left_enclosure: ASTNode | null = null;
+        let right_enclosure: ASTNode | null = null;
+        const bindings: Record<string, any> = {};
+        const seq_graph = this.buildPatternSeqStepGraph(node);
+
+        let body_start = start;
+        let body_end = start;
+
+        const push_child = (child: ASTNode[] | ASTNode | null): void => {
+            children.push(child);
+        };
+
+        for (let step_idx = 0; step_idx < seq_graph.steps.length; step_idx++) {
+            const seq_step = seq_graph.steps[step_idx];
+            if (seq_step.state === ParseSeqState.RightEnclosure) {
+                body_end = this.input.pos;
+            }
+
+            const result = this.parseStepGraph(seq_step.graph, node.ignore);
+            if (!this.isSuccess()) {
+                this.input.pos = start;
+                return null;
+            }
+
+            if (seq_step.state === ParseSeqState.LeftEnclosure) {
+                left_enclosure = this.getSingleGraphValue(result, PARSE_STEP_NODE_VALUE_IDX);
+                assert.ok(left_enclosure !== null);
+                body_start = this.input.pos;
+                body_end = body_start;
+                continue;
+            }
+
+            if (seq_step.state === ParseSeqState.RightEnclosure) {
+                right_enclosure = this.getSingleGraphValue(result, PARSE_STEP_NODE_VALUE_IDX);
+                assert.ok(right_enclosure !== null);
+                continue;
+            }
+
+            assert.ok(seq_step.state >= 0);
+            const sub_node_idx = seq_step.state;
+            const child = this.makeParseNodeResultFromStepGraph(
+                node.sub_nodes[sub_node_idx],
+                node.sub_quantifiers[sub_node_idx] as Quantifier,
+                node.ignore,
+                node.sep,
+                result,
+            );
+            push_child(child);
+            seps.push(...((result.values[PARSE_STEP_SEP_VALUE_IDX] ?? []) as ASTNode[]));
+
+            body_end = this.input.pos;
+            const end_idx = this.getEndIdxFromParseStepGraphExit(seq_step.graph, result);
+            if (end_idx >= 0) {
+                const end_node_idx = sub_node_idx + 1 + end_idx;
+                for (let j = sub_node_idx + 1; j < end_node_idx; j++) {
+                    const qj = node.sub_quantifiers[j] as Quantifier;
+                    push_child(qj === "*" ? [] : null);
+                }
+                while (step_idx + 1 < seq_graph.steps.length) {
+                    const next_state = seq_graph.steps[step_idx + 1].state;
+                    if (next_state < 0 || next_state >= end_node_idx) {
+                        break;
+                    }
+                    step_idx += 1;
+                }
+            }
+        }
+
+        if (node.enclosure !== null) {
+            assert.ok(left_enclosure !== null && right_enclosure !== null);
         }
 
         if (node.sub_node_bindings !== null) {
