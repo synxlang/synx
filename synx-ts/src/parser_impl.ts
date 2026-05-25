@@ -35,10 +35,22 @@ class ParseTimeoutError extends Error {
 const PARSE_STEP_EXIT_SUCCESS = -1;
 const PARSE_STEP_EXIT_FAILURE = -2;
 
+function parseStepAction(
+    next_step_idx: number,
+    rollback_step_count: number = 0,
+    consume_input: boolean = true,
+    set_marker_idx: number = 0,
+    rollback_to_marker_idx: number = 0,
+): ParseStepAction {
+    return { next_step_idx, rollback_step_count, consume_input, set_marker_idx, rollback_to_marker_idx };
+}
+
 interface ParseStepAction {
     next_step_idx: number;
     rollback_step_count: number;
     consume_input: boolean;
+    set_marker_idx: number;
+    rollback_to_marker_idx: number;
 }
 
 interface ParseStep{
@@ -67,6 +79,7 @@ interface ParseStepGraphResult{
     parsed_steps: ParsedStep[];
     values:(ASTNode | null)[][];
     success: boolean;
+    exit_step_idx: number;
 }
 
 /**
@@ -622,26 +635,35 @@ export class ParserImpl implements Parser {
             parsed_steps: [],
             values: Array.from({ length: value_count }, () => []),
             success: false,
+            exit_step_idx: -1,
         };
-        const step_entry_input_pos: number[] = [];
-        const step_entry_parsed_steps_len: number[] = [];
+        const marker_input_pos: number[] = [];
+        const marker_parsed_steps_len: number[] = [];
+        marker_input_pos[1] = graph_start;
+        marker_parsed_steps_len[1] = 0;
 
-        const restoreToStepEntry = (step_entry_idx: number): void => {
-            if (step_entry_idx === 0) {
-                return;
-            }
-            const target_step_idx = step_entry_idx - 1;
-            assert.ok(target_step_idx >= 0 && target_step_idx < graph.steps.length, `parseStepGraph: invalid restore step entry index ${step_entry_idx}`);
-            this.input.pos = step_entry_input_pos[target_step_idx];
-            const target_len = step_entry_parsed_steps_len[target_step_idx];
-            while (result.parsed_steps.length > target_len) {
+        const rollbackParsedSteps = (count: number): void => {
+            for (let i = 0; i < count; i++) {
                 const parsed = result.parsed_steps.pop();
-                assert.ok(parsed !== undefined);
-                if (parsed.value_idx >= 0 && parsed.value !== null) {
+                assert.ok(parsed !== undefined, "parseStepGraph: rollback exceeds parsed step stack");
+                if (parsed.value_idx >= 0) {
                     const values = result.values[parsed.value_idx];
                     const popped = values.pop();
                     assert.strictEqual(popped, parsed.value);
                 }
+                this.input.pos = parsed.input_start;
+            }
+        };
+
+        const rollbackToMarker = (marker_idx: number): void => {
+            if (marker_idx === 0) {
+                return;
+            }
+            assert.ok(marker_input_pos[marker_idx] !== undefined, `parseStepGraph: unset rollback marker ${marker_idx}`);
+            this.input.pos = marker_input_pos[marker_idx];
+            const parsed_steps_len = marker_parsed_steps_len[marker_idx];
+            while (result.parsed_steps.length > parsed_steps_len) {
+                rollbackParsedSteps(1);
             }
         };
 
@@ -662,13 +684,17 @@ export class ParserImpl implements Parser {
             const step = graph.steps[step_idx];
             const input_start = this.input.pos;
             const parsed_steps_len_before = result.parsed_steps.length;
-            step_entry_input_pos[step_idx] = input_start;
-            step_entry_parsed_steps_len[step_idx] = parsed_steps_len_before;
             const value = this.parseSingleNode(step.parser_node);
+            let action: ParseStepAction;
             if (this.isSuccess()) {
                 const input_end = this.input.pos;
-                if (step.consume_input === false) {
+                action = value === null ? step.empty_success_action : step.non_empty_success_action;
+                if (!action.consume_input) {
                     this.input.pos = input_start;
+                }
+                if (step.value_idx >= 0) {
+                    assert.ok(value !== null, "parseStepGraph: value_idx >= 0 requires a non-null value");
+                    result.values[step.value_idx].push(value);
                 }
                 result.parsed_steps.push({
                     step_idx,
@@ -678,25 +704,21 @@ export class ParserImpl implements Parser {
                     input_end,
                     parsed_steps_len_before,
                 });
-                if (value === null) {
-                    step_idx = step.empty_success_to_idx;
-                } else {
-                    if (step.value_idx >= 0) {
-                        result.values[step.value_idx].push(value);
-                    }
-                    step_idx = step.success_to_idx;
-                }
-                if (step_idx < 0) {
-                    return exit(step_idx);
-                }
-                continue;
+            } else {
+                action = step.fail_action;
             }
 
-            restoreToStepEntry(step.fail_restore_to_step_entry_idx);
-            if (step.fail_to_idx < 0) {
-                return exit(step.fail_to_idx);
+            rollbackToMarker(action.rollback_to_marker_idx);
+            rollbackParsedSteps(action.rollback_step_count);
+            if (action.set_marker_idx !== 0) {
+                marker_input_pos[action.set_marker_idx] = this.input.pos;
+                marker_parsed_steps_len[action.set_marker_idx] = result.parsed_steps.length;
             }
-            step_idx = step.fail_to_idx;
+            if (action.next_step_idx < 0) {
+                result.exit_step_idx = step_idx;
+                return exit(action.next_step_idx);
+            }
+            step_idx = action.next_step_idx;
         }
 
         return exit(PARSE_STEP_EXIT_SUCCESS);
@@ -706,23 +728,20 @@ export class ParserImpl implements Parser {
         steps: ParseStep[],
         parser_node: ParserNode,
         value_idx: number,
-        success_to_idx: number,
-        empty_success_to_idx: number,
-        fail_to_idx: number,
+        non_empty_success_action: ParseStepAction,
+        empty_success_action: ParseStepAction,
+        fail_action: ParseStepAction,
         ignored: ParserNode | null,
-        consume_input: boolean,
-        fail_restore_to_step_entry_idx: number,
+        marker_idx: number = 1,
     ): number {
         const match_idx = steps.length;
         if (ignored === null) {
             steps.push({
                 parser_node,
                 value_idx,
-                consume_input,
-                empty_success_to_idx,
-                success_to_idx,
-                fail_to_idx,
-                fail_restore_to_step_entry_idx,
+                empty_success_action,
+                non_empty_success_action,
+                fail_action,
             });
             return match_idx;
         }
@@ -731,20 +750,22 @@ export class ParserImpl implements Parser {
         steps.push({
             parser_node,
             value_idx,
-            consume_input,
-            empty_success_to_idx,
-            success_to_idx,
-            fail_to_idx: ignore_idx,
-            fail_restore_to_step_entry_idx: 0,
+            empty_success_action,
+            non_empty_success_action,
+            fail_action: parseStepAction(ignore_idx, 0, false),
         });
         steps.push({
             parser_node: ignored,
             value_idx: -1,
-            consume_input: true,
-            empty_success_to_idx: fail_to_idx,
-            success_to_idx: match_idx,
-            fail_to_idx,
-            fail_restore_to_step_entry_idx: match_idx + 1,
+            empty_success_action: fail_action,
+            non_empty_success_action: parseStepAction(match_idx),
+            fail_action: parseStepAction(
+                fail_action.next_step_idx,
+                fail_action.rollback_step_count,
+                fail_action.consume_input,
+                fail_action.set_marker_idx,
+                marker_idx,
+            ),
         });
         return match_idx;
     }
@@ -760,12 +781,10 @@ export class ParserImpl implements Parser {
             steps,
             parser_node,
             value_idx,
-            PARSE_STEP_EXIT_SUCCESS,
-            PARSE_STEP_EXIT_SUCCESS,
-            PARSE_STEP_EXIT_FAILURE,
+            parseStepAction(PARSE_STEP_EXIT_SUCCESS, 0, consume_input),
+            parseStepAction(PARSE_STEP_EXIT_SUCCESS, 0, consume_input),
+            parseStepAction(PARSE_STEP_EXIT_FAILURE, 0, false),
             ignored,
-            consume_input,
-            0,
         );
         return { steps };
     }
@@ -811,87 +830,181 @@ export class ParserImpl implements Parser {
             seps: [],
             end_idx: -1,
         };
-        const node_graph = this.makeParseStepMatchGraph(node, 0, ignored);
-        const sep_graph = sep === null ? null : this.makeParseStepMatchGraph(sep, 0, ignored);
-        const end_graphs = ends.map(end => this.makeParseStepMatchGraph(end, 0, ignored, false));
+        const NODE_VALUE_IDX = 0;
+        const SEP_VALUE_IDX = 1;
+        const MATCH_MARKER_IDX = 1;
+        const PLACEHOLDER_STEP_IDX = -999;
+        const steps: ParseStep[] = [];
+        const end_step_to_end_idx = new Map<number, number>();
 
-        let peek_ends = () => {
-            for (let i = end_graphs.length - 1; i >= 0; i--) {
-                const end_res = this.parseStepGraph(end_graphs[i]);
-                if (end_res.success) {
-                    ret.end_idx = i;
-                    return true;
+        const addEndProbeChain = (success_action: ParseStepAction, all_failed_action: ParseStepAction): number => {
+            assert.ok(ends.length > 0);
+            const first_idx = steps.length;
+            const end_match_idxs: number[] = [];
+            for (let i = ends.length - 1; i >= 0; i--) {
+                const match_idx = this.addParseStepMatch(
+                    steps,
+                    ends[i],
+                    -1,
+                    success_action,
+                    success_action,
+                    parseStepAction(PLACEHOLDER_STEP_IDX, 0, false),
+                    ignored,
+                    MATCH_MARKER_IDX,
+                );
+                end_match_idxs.push(match_idx);
+                end_step_to_end_idx.set(match_idx, i);
+            }
+            const setEndFailAction = (match_idx: number, action: ParseStepAction): void => {
+                if (ignored === null) {
+                    steps[match_idx].fail_action = action;
+                } else {
+                    steps[match_idx + 1].fail_action = action;
+                }
+            };
+            for (let i = 0; i < end_match_idxs.length - 1; i++) {
+                setEndFailAction(end_match_idxs[i], parseStepAction(end_match_idxs[i + 1], 0, false, MATCH_MARKER_IDX));
+            }
+            setEndFailAction(end_match_idxs[end_match_idxs.length - 1], all_failed_action);
+            return first_idx;
+        };
+
+        const runGraph = (): ParseStepGraphResult => {
+            const result = this.parseStepGraph({ steps });
+            ret.end_idx = result.exit_step_idx >= 0 ? end_step_to_end_idx.get(result.exit_step_idx) ?? -1 : -1;
+            return result;
+        };
+
+        if (quantifier === " " || quantifier === "?") {
+            let node_idx = -1;
+            let first_idx = -1;
+            if (quantifier === "?" && ends.length > 0) {
+                first_idx = addEndProbeChain(
+                    parseStepAction(PARSE_STEP_EXIT_SUCCESS, 0, false),
+                    parseStepAction(PLACEHOLDER_STEP_IDX, 0, false, MATCH_MARKER_IDX),
+                );
+            }
+            node_idx = this.addParseStepMatch(
+                steps,
+                node,
+                NODE_VALUE_IDX,
+                parseStepAction(PARSE_STEP_EXIT_SUCCESS),
+                parseStepAction(PARSE_STEP_EXIT_SUCCESS),
+                parseStepAction(quantifier === "?" ? PARSE_STEP_EXIT_SUCCESS : PARSE_STEP_EXIT_FAILURE, 0, false),
+                ignored,
+                MATCH_MARKER_IDX,
+            );
+            if (first_idx >= 0) {
+                const last_end_match_idx = first_idx + (ignored === null ? ends.length : ends.length * 2) - (ignored === null ? 1 : 2);
+                if (ignored === null) {
+                    steps[last_end_match_idx].fail_action = parseStepAction(node_idx, 0, false, MATCH_MARKER_IDX);
+                } else {
+                    steps[last_end_match_idx + 1].fail_action = parseStepAction(node_idx, 0, false, MATCH_MARKER_IDX);
                 }
             }
-            ret.end_idx = -1;
-            return false;
-        }
-
-        if (quantifier === "?" || quantifier === "*") {
-            if (peek_ends()) {
+            const result = runGraph();
+            if (!result.success) {
                 return ret;
             }
-        }
-
-        const first_res = this.parseStepGraph(node_graph);
-        let first = first_res.values[0]?.[0] ?? null;
-        if (!first_res.success) {
-            if (quantifier === "?" || quantifier === "*") {
-                this.setSuccess();
-            }
-            first = null;
-        }
-        if (quantifier === " " || quantifier === "?") {
-            ret.ast_node_res = first;
+            ret.ast_node_res = result.values[NODE_VALUE_IDX]?.[0] ?? null;
             return ret;
         }
 
-        ret.ast_node_res = [] as ASTNode[];
-        if (quantifier === "+" && !this.isSuccess()) {
+        let first_node_idx = -1;
+        let repeat_node_idx = -1;
+        let sep_idx = -1;
+        let initial_end_chain_first_idx = -1;
+        let initial_end_chain_last_match_idx = -1;
+
+        if (quantifier === "*" && ends.length > 0) {
+            initial_end_chain_first_idx = addEndProbeChain(
+                parseStepAction(PARSE_STEP_EXIT_SUCCESS, 0, true, 0, MATCH_MARKER_IDX),
+                parseStepAction(PLACEHOLDER_STEP_IDX, 0, false, MATCH_MARKER_IDX),
+            );
+            initial_end_chain_last_match_idx = initial_end_chain_first_idx + (ignored === null ? ends.length - 1 : (ends.length - 1) * 2);
+        }
+
+        const need_first_node = quantifier === "+" || sep !== null;
+        if (need_first_node) {
+            first_node_idx = this.addParseStepMatch(
+                steps,
+                node,
+                NODE_VALUE_IDX,
+                parseStepAction(PLACEHOLDER_STEP_IDX, 0, true, MATCH_MARKER_IDX),
+                parseStepAction(PLACEHOLDER_STEP_IDX, 0, true, MATCH_MARKER_IDX),
+                parseStepAction(quantifier === "+" ? PARSE_STEP_EXIT_FAILURE : PARSE_STEP_EXIT_SUCCESS, 0, false),
+                ignored,
+                MATCH_MARKER_IDX,
+            );
+        }
+
+        const repeatNodeFailAction = sep === null
+            ? parseStepAction(PARSE_STEP_EXIT_SUCCESS, 0, false)
+            : parseStepAction(PARSE_STEP_EXIT_SUCCESS, 1, false, 0, MATCH_MARKER_IDX);
+
+        repeat_node_idx = this.addParseStepMatch(
+            steps,
+            node,
+            NODE_VALUE_IDX,
+            parseStepAction(PLACEHOLDER_STEP_IDX, 0, true, MATCH_MARKER_IDX),
+            parseStepAction(PLACEHOLDER_STEP_IDX, 0, true, MATCH_MARKER_IDX),
+            repeatNodeFailAction,
+            ignored,
+            MATCH_MARKER_IDX,
+        );
+
+        if (initial_end_chain_first_idx >= 0) {
+            const action = parseStepAction(first_node_idx >= 0 ? first_node_idx : repeat_node_idx, 0, false, MATCH_MARKER_IDX);
+            if (ignored === null) {
+                steps[initial_end_chain_last_match_idx].fail_action = action;
+            } else {
+                steps[initial_end_chain_last_match_idx + 1].fail_action = action;
+            }
+        }
+
+        if (sep !== null) {
+            sep_idx = this.addParseStepMatch(
+                steps,
+                sep,
+                SEP_VALUE_IDX,
+                parseStepAction(PLACEHOLDER_STEP_IDX, 0, true, MATCH_MARKER_IDX),
+                parseStepAction(PLACEHOLDER_STEP_IDX, 0, true, MATCH_MARKER_IDX),
+                parseStepAction(PARSE_STEP_EXIT_SUCCESS, 0, false),
+                ignored,
+                MATCH_MARKER_IDX,
+            );
+        }
+
+        const makeRepeatStart = (after_sep: boolean): number => {
+            if (ends.length === 0) {
+                return repeat_node_idx;
+            }
+            return addEndProbeChain(
+                parseStepAction(PARSE_STEP_EXIT_SUCCESS, after_sep ? 1 : 0, true, 0, MATCH_MARKER_IDX),
+                parseStepAction(repeat_node_idx, 0, false, MATCH_MARKER_IDX),
+            );
+        };
+
+        const repeat_start_idx = makeRepeatStart(false);
+        const after_node_success_idx = sep_idx >= 0 ? sep_idx : repeat_start_idx;
+        steps[repeat_node_idx].non_empty_success_action = parseStepAction(after_node_success_idx, 0, true, MATCH_MARKER_IDX);
+        steps[repeat_node_idx].empty_success_action = steps[repeat_node_idx].non_empty_success_action;
+        if (first_node_idx >= 0) {
+            steps[first_node_idx].non_empty_success_action = parseStepAction(after_node_success_idx, 0, true, MATCH_MARKER_IDX);
+            steps[first_node_idx].empty_success_action = steps[first_node_idx].non_empty_success_action;
+        }
+        if (sep_idx >= 0) {
+            const after_sep_idx = makeRepeatStart(true);
+            steps[sep_idx].non_empty_success_action = parseStepAction(after_sep_idx, 0, true, MATCH_MARKER_IDX);
+            steps[sep_idx].empty_success_action = steps[sep_idx].non_empty_success_action;
+        }
+
+        const result = runGraph();
+        if (!result.success) {
             return ret;
         }
-        let push_node = (ast_node: ASTNode | null) => {
-            if (ast_node !== null) {
-                (ret.ast_node_res as ASTNode[]).push(ast_node);
-            }
-        };
-        let push_sep_node = (sep_node: ASTNode | null) => {
-            if (sep_node !== null) {
-                ret.seps.push(sep_node);
-            }
-        };
-        push_node(first);
-
-        for (; ;) {
-            const sep_retry_pos = this.input.pos;
-            let sep_node: ASTNode | null = null;
-            if (sep !== null) {
-                assert.ok(sep_graph !== null);
-                const sep_res = this.parseStepGraph(sep_graph);
-                if (!sep_res.success) {
-                    break;
-                }
-                sep_node = sep_res.values[0]?.[0] ?? null;
-            }
-
-            if (peek_ends()) {
-                if (sep !== null) {
-                    this.input.pos = sep_retry_pos;
-                }
-                break;
-            }
-            const n_res = this.parseStepGraph(node_graph);
-            if (!n_res.success) {
-                if (sep !== null) {
-                    this.input.pos = sep_retry_pos;
-                }
-                break;
-            }
-            const n = n_res.values[0]?.[0] ?? null;
-            push_sep_node(sep_node);
-            push_node(n);
-        }
-        this.setSuccess();
+        ret.ast_node_res = (result.values[NODE_VALUE_IDX] ?? []) as ASTNode[];
+        ret.seps = (result.values[SEP_VALUE_IDX] ?? []) as ASTNode[];
         return ret;
     }
 
