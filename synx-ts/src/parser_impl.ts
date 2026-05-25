@@ -85,13 +85,20 @@ enum ParseSeqState {
 }
 
 interface ParseSeqStep {
-    state: number|ParseSeqState; // state<0表示ParseSeqState，state>=0表示正在解析第state个sub_node
+    state: number | ParseSeqState; // state<0表示ParseSeqState，state>=0表示正在解析第state个sub_node
     graph: ParseStepGraph;
 }
 
 interface ParseSeqStepGraph {
-    steps:ParseSeqStep[];
+    steps: ParseSeqStep[];
 }
+
+interface ParseNodeStepGraph {
+    graph: ParseStepGraph;
+    end_step_to_end_idx: Map<number, number>;
+}
+
+type ParseStepGraphPostSepMode = "none" | "required" | "optional";
 
 
 /**
@@ -727,6 +734,236 @@ export class ParserImpl implements Parser {
             fail_action,
         });
         return match_idx;
+    }
+
+    private buildParseNodeStepGraph(
+        node: ParserNode,
+        quantifier: Quantifier,
+        sep: ParserNode | null,
+        ends: ParserNode[],
+        post_sep_mode: ParseStepGraphPostSepMode = "none",
+    ): ParseNodeStepGraph {
+        if (ends.length > 0) {
+            assert.ok(quantifier !== " ");
+        }
+        if (post_sep_mode !== "none") {
+            assert.ok(sep !== null, "buildParseNodeStepGraph: post sep requires sep");
+        }
+
+        const NODE_VALUE_IDX = 0;
+        const SEP_VALUE_IDX = 1;
+        const PLACEHOLDER_STEP_IDX = -999;
+        const steps: ParseStep[] = [];
+        const end_step_to_end_idx = new Map<number, number>();
+
+        const addEndProbeChain = (success_pop_value_cnt: number, all_failed_action: ParseStepAction): number => {
+            assert.ok(ends.length > 0);
+            const first_idx = steps.length;
+            const end_match_idxs: number[] = [];
+            for (let i = ends.length - 1; i >= 0; i--) {
+                const match_idx = this.addParseStepMatch(
+                    steps,
+                    ends[i],
+                    -1,
+                    completeParseStepAction({ next_step_idx: PARSE_STEP_EXIT_SUCCESS, pop_value_cnt: success_pop_value_cnt }),
+                    completeParseStepAction({ next_step_idx: PARSE_STEP_EXIT_SUCCESS, pop_value_cnt: success_pop_value_cnt }),
+                    completeParseStepAction({ next_step_idx: PLACEHOLDER_STEP_IDX }),
+                );
+                end_match_idxs.push(match_idx);
+                end_step_to_end_idx.set(match_idx, i);
+            }
+            for (let i = 0; i < end_match_idxs.length - 1; i++) {
+                steps[end_match_idxs[i]].fail_action = completeParseStepAction({ next_step_idx: end_match_idxs[i + 1] });
+            }
+            steps[end_match_idxs[end_match_idxs.length - 1]].fail_action = all_failed_action;
+            return first_idx;
+        };
+
+        const postSepFailAction = (): ParseStepAction => {
+            assert.ok(post_sep_mode !== "none");
+            return completeParseStepAction({
+                next_step_idx: post_sep_mode === "required"
+                    ? PARSE_STEP_EXIT_FAILURE
+                    : PARSE_STEP_EXIT_SUCCESS,
+            });
+        };
+
+        const addPostSepStep = (): number => {
+            assert.ok(sep !== null);
+            return this.addParseStepMatch(
+                steps,
+                sep,
+                SEP_VALUE_IDX,
+                completeParseStepAction({ next_step_idx: PARSE_STEP_EXIT_SUCCESS }),
+                completeParseStepAction({ next_step_idx: PARSE_STEP_EXIT_SUCCESS }),
+                postSepFailAction(),
+            );
+        };
+
+        if (quantifier === " " || quantifier === "?") {
+            const post_sep_idx = post_sep_mode !== "none" ? addPostSepStep() : -1;
+            const non_empty_success_action = completeParseStepAction({
+                next_step_idx: post_sep_idx >= 0 ? post_sep_idx : PARSE_STEP_EXIT_SUCCESS,
+            });
+            const empty_success_action = completeParseStepAction({ next_step_idx: PARSE_STEP_EXIT_SUCCESS });
+            const node_fail_action = completeParseStepAction({ next_step_idx: quantifier === "?" ? PARSE_STEP_EXIT_SUCCESS : PARSE_STEP_EXIT_FAILURE });
+            if (quantifier === "?" && ends.length > 0) {
+                addEndProbeChain(1, completeParseStepAction({ next_step_idx: PLACEHOLDER_STEP_IDX }));
+            }
+            const node_idx = this.addParseStepMatch(
+                steps,
+                node,
+                NODE_VALUE_IDX,
+                non_empty_success_action,
+                empty_success_action,
+                node_fail_action,
+            );
+            if (quantifier === "?" && ends.length > 0) {
+                const last_end_match_idx = node_idx - 1;
+                steps[last_end_match_idx].fail_action = completeParseStepAction({ next_step_idx: node_idx });
+            }
+            return { graph: { steps }, end_step_to_end_idx };
+        }
+
+        let first_node_idx = -1;
+        let repeat_node_idx = -1;
+        let sep_idx = -1;
+        let initial_end_chain_last_match_idx = -1;
+
+        if (quantifier === "*" && ends.length > 0) {
+            addEndProbeChain(1, completeParseStepAction({ next_step_idx: PLACEHOLDER_STEP_IDX }));
+            initial_end_chain_last_match_idx = steps.length - 1;
+        }
+
+        const need_first_node = quantifier === "+" || sep !== null || post_sep_mode !== "none";
+        if (need_first_node) {
+            first_node_idx = this.addParseStepMatch(
+                steps,
+                node,
+                NODE_VALUE_IDX,
+                completeParseStepAction({ next_step_idx: PLACEHOLDER_STEP_IDX }),
+                completeParseStepAction({ next_step_idx: PLACEHOLDER_STEP_IDX }),
+                completeParseStepAction({ next_step_idx: quantifier === "+" ? PARSE_STEP_EXIT_FAILURE : PARSE_STEP_EXIT_SUCCESS }),
+            );
+        }
+
+        const repeatNodeFailAction = sep === null
+            ? completeParseStepAction({ next_step_idx: post_sep_mode === "none" ? PARSE_STEP_EXIT_SUCCESS : PLACEHOLDER_STEP_IDX })
+            : completeParseStepAction({
+                next_step_idx: PARSE_STEP_EXIT_SUCCESS,
+                pop_value_cnt: post_sep_mode === "none" ? 1 : 0,
+            });
+
+        repeat_node_idx = this.addParseStepMatch(
+            steps,
+            node,
+            NODE_VALUE_IDX,
+            completeParseStepAction({ next_step_idx: PLACEHOLDER_STEP_IDX }),
+            completeParseStepAction({ next_step_idx: PLACEHOLDER_STEP_IDX }),
+            repeatNodeFailAction,
+        );
+
+        if (initial_end_chain_last_match_idx >= 0) {
+            steps[initial_end_chain_last_match_idx].fail_action = completeParseStepAction({ next_step_idx: first_node_idx >= 0 ? first_node_idx : repeat_node_idx });
+        }
+
+        if (sep !== null) {
+            sep_idx = this.addParseStepMatch(
+                steps,
+                sep,
+                SEP_VALUE_IDX,
+                completeParseStepAction({ next_step_idx: PLACEHOLDER_STEP_IDX }),
+                completeParseStepAction({ next_step_idx: PLACEHOLDER_STEP_IDX }),
+                post_sep_mode === "none"
+                    ? completeParseStepAction({ next_step_idx: PARSE_STEP_EXIT_SUCCESS })
+                    : postSepFailAction(),
+            );
+        }
+
+        const post_sep_idx = sep === null && post_sep_mode !== "none" ? addPostSepStep() : -1;
+        if (sep === null && post_sep_idx >= 0) {
+            steps[repeat_node_idx].fail_action = completeParseStepAction({ next_step_idx: post_sep_idx });
+        }
+
+        const makeRepeatStart = (after_sep: boolean): number => {
+            if (ends.length === 0) {
+                return repeat_node_idx;
+            }
+            return addEndProbeChain(
+                after_sep
+                    ? (post_sep_mode === "none" ? 2 : 1)
+                    : 1,
+                completeParseStepAction({ next_step_idx: repeat_node_idx }),
+            );
+        };
+
+        const repeat_start_idx = makeRepeatStart(false);
+        const after_node_success_idx = sep_idx >= 0 ? sep_idx : repeat_start_idx;
+        steps[repeat_node_idx].non_empty_success_action = completeParseStepAction({ next_step_idx: after_node_success_idx });
+        steps[repeat_node_idx].empty_success_action = steps[repeat_node_idx].non_empty_success_action;
+        if (first_node_idx >= 0) {
+            steps[first_node_idx].non_empty_success_action = completeParseStepAction({ next_step_idx: after_node_success_idx });
+            steps[first_node_idx].empty_success_action = steps[first_node_idx].non_empty_success_action;
+        }
+        if (sep_idx >= 0) {
+            const after_sep_idx = makeRepeatStart(true);
+            steps[sep_idx].non_empty_success_action = completeParseStepAction({ next_step_idx: after_sep_idx });
+            steps[sep_idx].empty_success_action = steps[sep_idx].non_empty_success_action;
+        }
+
+        return { graph: { steps }, end_step_to_end_idx };
+    }
+
+    private buildPatternSeqStepGraph(node: PatternSeq): ParseSeqStepGraph {
+        const steps: ParseSeqStep[] = [];
+        if (node.enclosure !== null) {
+            steps.push({
+                state: ParseSeqState.LeftEnclosure,
+                graph: this.buildParseNodeStepGraph(node.enclosure[0], " ", null, []).graph,
+            });
+        }
+
+        for (let i = 0; i < node.sub_nodes.length; i++) {
+            const ends: ParserNode[] = [];
+            if (node.greedy_flags[i] === false) {
+                for (let j = i + 1; j < node.sub_nodes.length; j++) {
+                    ends.push(node.sub_nodes[j]);
+                    const qj = node.sub_quantifiers[j] as Quantifier;
+                    if (node.greedy_flags[j] || qj === " " || qj === "+") {
+                        break;
+                    }
+                }
+                if (i === node.sub_nodes.length - 1 && node.enclosure !== null) {
+                    ends.push(node.enclosure[1]);
+                }
+            }
+
+            const post_sep_mode: ParseStepGraphPostSepMode = node.sep === null
+                ? "none"
+                : i < node.sub_nodes.length - 1
+                    ? "required"
+                    : node.accept_trailing_sep
+                        ? "optional"
+                        : "none";
+            steps.push({
+                state: i,
+                graph: this.buildParseNodeStepGraph(
+                    node.sub_nodes[i],
+                    node.sub_quantifiers[i] as Quantifier,
+                    node.sep,
+                    ends,
+                    post_sep_mode,
+                ).graph,
+            });
+        }
+
+        if (node.enclosure !== null) {
+            steps.push({
+                state: ParseSeqState.RightEnclosure,
+                graph: this.buildParseNodeStepGraph(node.enclosure[1], " ", null, []).graph,
+            });
+        }
+        return { steps };
     }
 
     /**
