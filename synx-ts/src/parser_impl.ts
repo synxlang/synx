@@ -981,10 +981,10 @@ export class ParserImpl implements Parser {
         let ret: ASTNode | null;
         if (node.kind === ParserNodeKind.CharSeq) {
             ret = this.parseCharSeq(node as CharSeq);
-        } else if (node.kind === ParserNodeKind.PatternSeq) {
-            ret = this.parsePatternSeq(node as PatternSeq);
         } else if (isGeneralCharMatchNode(node)) {
             ret = this.parseCharMatchNode(node, " ");
+        } else if (node.kind === ParserNodeKind.PatternSeq) {
+            ret = this.parsePatternSeq(node as PatternSeq);
         } else if (node.kind === ParserNodeKind.PatternSet) {
             ret = this.parsePatternSet(node as PatternSet);
         } else {
