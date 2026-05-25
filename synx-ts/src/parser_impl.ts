@@ -47,10 +47,9 @@ function parseStepAction(
 
 interface ParseStepAction {
     next_step_idx: number;
-    rollback_step_count: number;
-    consume_input: boolean;
+    pop_value_cnt: number;
     set_marker_idx: number;
-    rollback_to_marker_idx: number;
+    pop_to_marker_idx: number;
 }
 
 interface ParseStep{
