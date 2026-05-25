@@ -35,15 +35,19 @@ class ParseTimeoutError extends Error {
 const PARSE_STEP_EXIT_SUCCESS = -1;
 const PARSE_STEP_EXIT_FAILURE = -2;
 
+interface ParseStepAction {
+    next_step_idx: number;
+    rollback_step_count: number;
+    consume_input: boolean;
+}
+
 interface ParseStep{
     parser_node: ParserNode;
     value_idx: number;              // 赋值的对应数组，-1为不赋值
-    consume_input: boolean;          // 是否消耗本 step 匹配到的输入
-    empty_success_to_idx: number;    // 空成功后下一步索引，-1为成功退出，-2为失败退出
-    success_to_idx: number;          // 成功后下一步索引，-1为成功退出，-2为失败退出
-    fail_to_idx: number;             // 失败后下一步索引，-1为成功退出，-2为失败退出
-    // 失败后跳转前恢复到指定 step 最近一次进入前的状态；0 表示不做额外回滚
-    fail_restore_to_step_entry_idx: number;
+    
+    empty_success_action: ParseStepAction;
+    non_empty_success_action: ParseStepAction;
+    fail_action: ParseStepAction;
 }
 
 interface ParseStepGraph{
@@ -615,11 +619,31 @@ export class ParserImpl implements Parser {
         const graph_start = this.input.pos;
         const value_count = graph.steps.reduce((max_idx, step) => Math.max(max_idx, step.value_idx), -1) + 1;
         const result: ParseStepGraphResult = {
-            parsed_step_idxs: [],
+            parsed_steps: [],
             values: Array.from({ length: value_count }, () => []),
             success: false,
         };
-        const step_start_positions: number[] = [];
+        const step_entry_input_pos: number[] = [];
+        const step_entry_parsed_steps_len: number[] = [];
+
+        const restoreToStepEntry = (step_entry_idx: number): void => {
+            if (step_entry_idx === 0) {
+                return;
+            }
+            const target_step_idx = step_entry_idx - 1;
+            assert.ok(target_step_idx >= 0 && target_step_idx < graph.steps.length, `parseStepGraph: invalid restore step entry index ${step_entry_idx}`);
+            this.input.pos = step_entry_input_pos[target_step_idx];
+            const target_len = step_entry_parsed_steps_len[target_step_idx];
+            while (result.parsed_steps.length > target_len) {
+                const parsed = result.parsed_steps.pop();
+                assert.ok(parsed !== undefined);
+                if (parsed.value_idx >= 0 && parsed.value !== null) {
+                    const values = result.values[parsed.value_idx];
+                    const popped = values.pop();
+                    assert.strictEqual(popped, parsed.value);
+                }
+            }
+        };
 
         const exit = (idx: number): ParseStepGraphResult => {
             assert.ok(idx === PARSE_STEP_EXIT_SUCCESS || idx === PARSE_STEP_EXIT_FAILURE);
@@ -636,13 +660,24 @@ export class ParserImpl implements Parser {
         while (step_idx >= 0) {
             assert.ok(step_idx < graph.steps.length, `parseStepGraph: invalid step index ${step_idx}`);
             const step = graph.steps[step_idx];
-            step_start_positions[step_idx] = this.input.pos;
+            const input_start = this.input.pos;
+            const parsed_steps_len_before = result.parsed_steps.length;
+            step_entry_input_pos[step_idx] = input_start;
+            step_entry_parsed_steps_len[step_idx] = parsed_steps_len_before;
             const value = this.parseSingleNode(step.parser_node);
             if (this.isSuccess()) {
-                result.parsed_step_idxs.push(step_idx);
+                const input_end = this.input.pos;
                 if (step.consume_input === false) {
-                    this.input.pos = graph_start;
+                    this.input.pos = input_start;
                 }
+                result.parsed_steps.push({
+                    step_idx,
+                    value_idx: step.value_idx,
+                    value,
+                    input_start,
+                    input_end,
+                    parsed_steps_len_before,
+                });
                 if (value === null) {
                     step_idx = step.empty_success_to_idx;
                 } else {
@@ -657,9 +692,7 @@ export class ParserImpl implements Parser {
                 continue;
             }
 
-            if (step.fail_restore_to_step_idx !== undefined) {
-                this.input.pos = step_start_positions[step.fail_restore_to_step_idx];
-            }
+            restoreToStepEntry(step.fail_restore_to_step_entry_idx);
             if (step.fail_to_idx < 0) {
                 return exit(step.fail_to_idx);
             }
@@ -677,8 +710,8 @@ export class ParserImpl implements Parser {
         empty_success_to_idx: number,
         fail_to_idx: number,
         ignored: ParserNode | null,
-        consume_input: boolean = true,
-        fail_restore_to_step_idx: number | undefined = undefined,
+        consume_input: boolean,
+        fail_restore_to_step_entry_idx: number,
     ): number {
         const match_idx = steps.length;
         if (ignored === null) {
@@ -689,7 +722,7 @@ export class ParserImpl implements Parser {
                 empty_success_to_idx,
                 success_to_idx,
                 fail_to_idx,
-                fail_restore_to_step_idx,
+                fail_restore_to_step_entry_idx,
             });
             return match_idx;
         }
@@ -702,14 +735,16 @@ export class ParserImpl implements Parser {
             empty_success_to_idx,
             success_to_idx,
             fail_to_idx: ignore_idx,
+            fail_restore_to_step_entry_idx: 0,
         });
         steps.push({
             parser_node: ignored,
             value_idx: -1,
+            consume_input: true,
             empty_success_to_idx: fail_to_idx,
             success_to_idx: match_idx,
             fail_to_idx,
-            fail_restore_to_step_idx: match_idx,
+            fail_restore_to_step_entry_idx: match_idx + 1,
         });
         return match_idx;
     }
@@ -730,6 +765,7 @@ export class ParserImpl implements Parser {
             PARSE_STEP_EXIT_FAILURE,
             ignored,
             consume_input,
+            0,
         );
         return { steps };
     }
