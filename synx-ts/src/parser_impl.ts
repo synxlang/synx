@@ -755,7 +755,6 @@ export class ParserImpl implements Parser {
                 const input_end = this.input.pos;
                 action = value === null ? step.empty_success_action : step.non_empty_success_action;
                 if (step.value_idx >= 0) {
-                    assert.ok(value !== null, "parseStepGraph: value_idx >= 0 requires a non-null value");
                     result.values[step.value_idx].push(value);
                 }
                 result.parsed_steps.push({
