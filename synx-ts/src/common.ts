@@ -49,6 +49,7 @@ export interface ParseResult {
     kind: ParseResultKind;
     ast_nodes: ASTNode[];
     end_pos: number;    // not inclusive
+    profiling: ParseProfiling;
     error?: string;
 }
 

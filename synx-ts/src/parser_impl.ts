@@ -227,10 +227,6 @@ export class ParserImpl implements Parser {
         };
     }
 
-    getParseProfiling(): ParseProfiling {
-        return this.profiling;
-    }
-
     private profileGetNodeId(node: ParserNode): number {
         let id = this.profile_node_ids.get(node);
         if (id === undefined) {
@@ -526,6 +522,7 @@ export class ParserImpl implements Parser {
                     kind: ParseResultKind.Failure,
                     ast_nodes: [],
                     end_pos: this.input.pos,
+                    profiling: this.profiling,
                     error: this.getError() ?? err.message,
                 };
             }
@@ -538,6 +535,7 @@ export class ParserImpl implements Parser {
                 kind: ParseResultKind.Failure,
                 ast_nodes: [],
                 end_pos: this.input.pos,
+                profiling: this.profiling,
                 error: this.getError() ?? undefined,
             };
         }
@@ -552,6 +550,7 @@ export class ParserImpl implements Parser {
             kind: ParseResultKind.Success,
             ast_nodes,
             end_pos: this.input.pos,
+            profiling: this.profiling,
         };
     }
 
