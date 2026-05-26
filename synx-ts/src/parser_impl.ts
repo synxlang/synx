@@ -118,7 +118,7 @@ interface ParseCharMatchNodeExResult {
  *
  * 解析调用约定（针对parse开头的函数）：
  * - 索引：
- *   - 成功：返回前将解析索引移动到已匹配片段之后的下一未消费位置。
+ *   - 成功：返回前将解析索引移动到已匹配片段之后的下一未消耗位置。
  *   - 失败：要求还原索引到初始位置。
  *
  * - 错误处理与状态：
@@ -695,7 +695,7 @@ export class ParserImpl implements Parser {
      *
      * ============================== 中文 ==============================
      *
-     * 探测当前位置是否能匹配任一结束节点，但不消费输入。
+     * 探测当前位置是否能匹配任一结束节点，但不消耗输入。
      * `ends` 从右向左尝试，列表末尾节点优先级最高。
      * 此函数不会确保错误状态约定，应当通过返回值中的 `end_idx` 判定是否成功。
      */
@@ -902,7 +902,7 @@ export class ParserImpl implements Parser {
 
     /**
      * Match a `charset_flag` PatternSet as `GeneralCharSet`: rejecting branches are probes, normal branches consume one Char.
-     * 按 `GeneralCharSet` 匹配 `charset_flag` PatternSet：否定分支只探测拒绝，普通分支消费一个字符。
+     * 按 `GeneralCharSet` 匹配 `charset_flag` PatternSet：否定分支只探测拒绝，普通分支消耗一个字符。
      */
     parseCharMatchPatternSet(node: PatternSet): ParserNode[] {
         assert.ok(node.associateby === null);
@@ -1156,7 +1156,7 @@ export class ParserImpl implements Parser {
      *
      * 返回形状约定：
      * - ignored 为空时，量词为 `*` 或 `+` 的匹配返回合并后的单个 ASTNode。
-     * - 非贪婪 ends 让 `*` 量词在消费任何字符前停止时，返回 null。
+     * - 非贪婪 ends 让 `*` 量词在消耗任何字符前停止时，返回 null。
      * - ignored 非空时，量词为 `*` 或 `+` 的匹配返回 ASTNode[]，以保留被 ignored 文本分隔的多段结果；
      *   零段匹配表示为 []。
      */
