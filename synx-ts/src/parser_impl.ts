@@ -954,9 +954,10 @@ export class ParserImpl implements Parser {
         const push_child = (child: ASTNode[] | ASTNode | null): void => {
             children.push(child);
         };
+        const active_ignore = (): ParserNode | null => this.input.pos > start ? node.ignore : null;
 
         if (node.enclosure !== null) {
-            const left = this.parseSingleNode(node.enclosure[0], node.ignore);
+            const left = this.parseSingleNode(node.enclosure[0], active_ignore());
             if (!this.isSuccess() || left === null) {
                 this.input.pos = start;
                 return null;
@@ -982,7 +983,7 @@ export class ParserImpl implements Parser {
                     ends.push(node.enclosure[1]);
                 }
             }
-            const parse_res = this.parseNode(sub_node, q, node.ignore, node.sep, ends);
+            const parse_res = this.parseNode(sub_node, q, active_ignore(), node.sep, ends);
             const ast_res = parse_res.ast_node_res;
             if (!this.isSuccess()) {
                 this.input.pos = start;
@@ -1003,7 +1004,7 @@ export class ParserImpl implements Parser {
 
             if (node.sep !== null && this.input.pos > last_sep_end) {   // check last_sep_end for consecutive empty child nodes case
                 if (i < node.sub_nodes.length - 1) {
-                    const sep = this.parseSingleNode(node.sep, node.ignore);
+                    const sep = this.parseSingleNode(node.sep, active_ignore());
                     if (!this.isSuccess()) {
                         this.input.pos = start;
                         return null;
@@ -1012,7 +1013,7 @@ export class ParserImpl implements Parser {
                         seps.push(sep);
                     }
                 } else if (node.accept_trailing_sep) {
-                    const sep = this.parseSingleNode(node.sep, node.ignore);
+                    const sep = this.parseSingleNode(node.sep, active_ignore());
                     if (sep !== null) {
                         seps.push(sep);
                     }
@@ -1024,7 +1025,7 @@ export class ParserImpl implements Parser {
 
         const body_end = this.input.pos;
         if (node.enclosure !== null) {
-            const right = this.parseSingleNode(node.enclosure[1], node.ignore);
+            const right = this.parseSingleNode(node.enclosure[1], active_ignore());
             if (!this.isSuccess() || right === null) {
                 this.input.pos = start;
                 return null;

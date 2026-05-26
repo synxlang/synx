@@ -38,8 +38,14 @@ const project_root = findProjectRoot(__dirname);
 const synx_slim_path = join(project_root, "synx-slim.synx");
 const src = readFileSync(synx_slim_path, "utf8");
 
+function findFirstNonWhitespacePos(text: string): number {
+  const idx = text.search(/\S/);
+  return idx < 0 ? text.length : idx;
+}
+
+const start_pos = findFirstNonWhitespacePos(src);
 const parser = mkParser({ parser_nodes: [Synx], debug: true, timeout_s: 300 });
-const result = parser.parse({ src, pos: 0 }, Synx);
+const result = parser.parse({ src, pos: start_pos }, Synx);
 const success = result.kind === ParseResultKind.Success;
 
 function printProfiling(): void {
@@ -83,9 +89,11 @@ console.log(JSON.stringify({
   synx_slim_path,
   kind: ParseResultKind[result.kind],
   success,
+  start_pos,
   end_pos: result.end_pos,
   error: result.error,
   len: src.length,
+  skipped_leading: src.slice(0, start_pos),
   fully_consumed: success && result.end_pos === src.length,
   next: src.slice(result.end_pos, result.end_pos + 160),
 }, null, 2));

@@ -701,6 +701,13 @@ function test_parsePatternSeq(): void {
             expected_error: false,
         },
         {
+            id: 701,
+            seq: Seq_Digit_Letter_Mandatory_IgnoreSpace,
+            input: { src: ' 5a', pos: 0 },
+            expected: null,
+            expected_error: true,
+        },
+        {
             id: 73,
             seq: Seq_Digit_Letter_Mandatory_IgnoreSpace,
             input: { src: '5   a', pos: 0 },
@@ -971,8 +978,8 @@ function test_parsePatternSeq(): void {
             id: 109,
             seq: Seq_DigitOptionalOptionalLetter_Comma_IgnoreSpace,
             input: { src: '  a', pos: 0 },
-            expected: mkSeqAST(Seq_DigitOptionalOptionalLetter_Comma_IgnoreSpace, [0, 3], [null, null, { node: Letter, value: 'a', range: [2, 3] }], []),
-            expected_error: false,
+            expected: null,
+            expected_error: true,
         },
         {
             id: 110,
@@ -1023,7 +1030,7 @@ function test_parsePatternSeq(): void {
             id: 115,
             seq: Seq_DigitStarLetterStar_Comma_IgnoreSpace,
             input: { src: ' a', pos: 0 },
-            expected: mkSeqAST(Seq_DigitStarLetterStar_Comma_IgnoreSpace, [0, 2], [[], [{ node: Letter, value: 'a', range: [1, 2] }]], []),
+            expected: mkSeqAST(Seq_DigitStarLetterStar_Comma_IgnoreSpace, [0, 0], [[], []], []),
             expected_error: false,
         },
         {
@@ -1135,48 +1142,15 @@ function test_parsePatternSeq_enclosure(): void {
         bindings: {},
     });
 }
-function test_parsePatternSeq_enclosure_ignores_before_left(): void {
+function test_parsePatternSeq_enclosure_does_not_ignore_before_left(): void {
     const Quote = completeCharSeq({ literal: '"' });
     const Space = completeCharSeq({ literal: ' ' });
     const QuotedRaw = completePatternSeq({ sub_nodes: [AnyChar], sub_quantifiers: '*', raw: true, sep: null, accept_trailing_sep: false, ignore: Space, enclosure: [Quote, Quote] });
     const parser = new ParserImpl({ parser_nodes: [] });
     parser.initParse({ src: '  "abc"', pos: 0 });
     const result = parser.parsePatternSeq(QuotedRaw);
-    assert(parser.isSuccess());
-    assert.deepStrictEqual(result, {
-        parser_nodes: [QuotedRaw],
-        range: [0, 7],
-        value: 'abc',
-        raw_value: [[{
-                    parser_nodes: [AnyChar],
-                    range: [3, 6],
-                    value: 'abc',
-                    raw_value: 'abc',
-                    seps: [],
-                    enclosure: null, associate_enclosures: null, bindings: {},
-                }]],
-        seps: [],
-        enclosure: [
-            {
-                parser_nodes: [Quote],
-                range: [2, 3],
-                value: '"',
-                raw_value: '"',
-                seps: [],
-                enclosure: null, associate_enclosures: null, bindings: {},
-            },
-            {
-                parser_nodes: [Quote],
-                range: [6, 7],
-                value: '"',
-                raw_value: '"',
-                seps: [],
-                enclosure: null, associate_enclosures: null, bindings: {},
-            },
-        ],
-        associate_enclosures: null,
-        bindings: {},
-    });
+    assert(!parser.isSuccess());
+    assert.strictEqual(result, null);
 }
 function test_parsePatternSeq_enclosure_end_applies_to_last_nongreedy_child(): void {
     const Quote = completeCharSeq({ literal: '"' });
@@ -1310,7 +1284,7 @@ function runAllTests(): void {
     test_mkPatternSeq_validates_shape();
     test_parsePatternSeq();
     test_parsePatternSeq_enclosure();
-    test_parsePatternSeq_enclosure_ignores_before_left();
+    test_parsePatternSeq_enclosure_does_not_ignore_before_left();
     test_parsePatternSeq_enclosure_end_applies_to_last_nongreedy_child();
     test_parsePatternSeq_binding_assignment_isolated_scope();
     test_parsePatternSeq_binding_assignment_direct_value();
