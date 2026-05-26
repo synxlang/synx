@@ -29,7 +29,6 @@ const NonEscapeText: PatternSeq = completePatternSeq({ sub_nodes: [NonEscapeChar
  */
 const StringTextPiece = completePatternSet({ sub_nodes: [EscapeChar, NonEscapeText] });
 const StringLiteral: PatternSeq = completePatternSeq({ sub_nodes: [StringTextPiece], sub_quantifiers: "*", raw: false, sep: null, accept_trailing_sep: false, ignore: null, enclosure: [Quote, Quote], sub_node_bindings: ["text"], sub_node_isolated_scope_flags: [true], assignment_map: "text" });
-const MutiStringLiterals: PatternSeq = completePatternSeq({ sub_nodes: [StringLiteral], sub_quantifiers: "*", raw: false, sep: null, accept_trailing_sep: false, ignore: AnyChar });
 interface CaseDef {
     id: number;
     name: string;
@@ -99,16 +98,22 @@ function parseCaseRoot(src: string, root: PatternSeq): {
         result: parser.parsePatternSeq(root),
     };
 }
-function stringLiteralNodes(rootName: CaseDef["root"] | "StringLiteral", result: ASTNode): ASTNode[] {
+function parseAllCaseRoot(src: string, root: PatternSeq): {
+    parser: ParserImpl;
+    results: ASTNode[];
+} {
+    const parser = new ParserImpl({ parser_nodes: [] });
+    const results = parser.parseAll({ src, pos: 0 }, root);
+    return {
+        parser,
+        results,
+    };
+}
+function stringLiteralNodes(rootName: CaseDef["root"] | "StringLiteral", result: ASTNode | ASTNode[]): ASTNode[] {
     if (rootName !== "MutiStringLiterals") {
-        return [result];
+        return [result as ASTNode];
     }
-    const string_literals = result.raw_value[0] as ASTNode[] | ASTNode | null;
-    return Array.isArray(string_literals)
-        ? string_literals
-        : string_literals === null
-            ? []
-            : [string_literals];
+    return result as ASTNode[];
 }
 function simpleStringLiteralView(src: string, node: ASTNode): object {
     return {
@@ -118,8 +123,11 @@ function simpleStringLiteralView(src: string, node: ASTNode): object {
 }
 function runCase(c: CaseDef): void {
     const rootName = c.root ?? "StringLiteral";
-    const root = rootName === "MutiStringLiterals" ? MutiStringLiterals : StringLiteral;
-    const { parser, result } = parseCaseRoot(c.src, root);
+    const parsed = rootName === "MutiStringLiterals"
+        ? parseAllCaseRoot(c.src, StringLiteral)
+        : parseCaseRoot(c.src, StringLiteral);
+    const parser = parsed.parser;
+    const result = "result" in parsed ? parsed.result : null;
     console.log("\n" + "=".repeat(90));
     console.log(`#${c.id}: ${c.name}`);
     console.log(`root: ${rootName}`);
@@ -134,16 +142,14 @@ function runCase(c: CaseDef): void {
         consumed_range: [0, parser.input.pos],
         tail_range: [parser.input.pos, c.src.length],
         result_is_null: result === null,
+        result_count: "results" in parsed ? parsed.results.length : undefined,
     }));
     console.log("\n--- consumed raw text ---");
     console.log(c.src.slice(0, parser.input.pos));
     console.log("\n--- tail raw text ---");
     console.log(c.src.slice(parser.input.pos));
-    if (result === null) {
-        return;
-    }
     if (simple_print) {
-        const stringLiterals = stringLiteralNodes(rootName, result);
+        const stringLiterals = stringLiteralNodes(rootName, "results" in parsed ? parsed.results : result!);
         console.log("\n--- simple string literal slices ---");
         console.log(SynxFmt.stringify({
             string_literal_count: stringLiterals.length,
@@ -152,14 +158,17 @@ function runCase(c: CaseDef): void {
         return;
     }
     if (rootName === "MutiStringLiterals") {
-        const stringLiterals = stringLiteralNodes(rootName, result);
+        const stringLiterals = stringLiteralNodes(rootName, "results" in parsed ? parsed.results : []);
         console.log("\n--- MutiStringLiterals AST nodes ---");
         console.log(SynxFmt.stringify({
             string_literal_count: stringLiterals.length,
             string_literals: stringLiterals,
         }));
-        console.log("\n--- raw AST ---");
-        console.log(SynxFmt.stringify(result));
+        console.log("\n--- raw AST nodes ---");
+        console.log(SynxFmt.stringify(stringLiterals));
+        return;
+    }
+    if (result === null) {
         return;
     }
     console.log("\n--- StringLiteral AST ---");
@@ -235,7 +244,7 @@ line2" tail`,
 RuleB=("left", Symbol, "right");
 RuleC={ "a"; "b\"c"; "中文😀"; };
 tail = not_a_string;`,
-        note: "Scan a mixed grammar-like text and collect string literals from rules, sequences, and sets.",
+        note: "Use parseAll(StringLiteral) to scan a mixed grammar-like text and collect string literals from rules, sequences, and sets.",
     },
     {
         id: 12,

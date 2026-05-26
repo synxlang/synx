@@ -29,7 +29,6 @@ const LineDelimiter = completePatternSet({ sub_nodes: [CrLf, Lf] });
  * AnyChar 搭配 `*` 会被 `completePatternSeq` 规范为非贪婪。
  */
 const Comment: PatternSeq = completePatternSeq({ sub_nodes: [CommentPrefix, AnyChar, LineDelimiter], sub_quantifiers: " *?" });
-const MutiConmments: PatternSeq = completePatternSeq({ sub_nodes: [Comment], sub_quantifiers: "*", raw: false, sep: null, accept_trailing_sep: false, ignore: AnyChar }); // ignore Anychar
 interface CaseDef {
     id: number;
     name: string;
@@ -99,6 +98,17 @@ function parseCaseRoot(src: string, root: PatternSeq): {
         result: parser.parsePatternSeq(root),
     };
 }
+function parseAllCaseRoot(src: string, root: PatternSeq): {
+    parser: ParserImpl;
+    results: ASTNode[];
+} {
+    const parser = new ParserImpl({ parser_nodes: [] });
+    const results = parser.parseAll({ src, pos: 0 }, root);
+    return {
+        parser,
+        results,
+    };
+}
 function commentView(node: ASTNode): object {
     const slots = node.value as Array<ASTNode[] | ASTNode | null>;
     const [prefix, comment, lineDelimiter] = slots;
@@ -115,8 +125,11 @@ function commentView(node: ASTNode): object {
 }
 function runCase(c: CaseDef): void {
     const rootName = c.root ?? "Comment";
-    const root = rootName === "MutiConmments" ? MutiConmments : Comment;
-    const { parser, result } = parseCaseRoot(c.src, root);
+    const parsed = rootName === "MutiConmments"
+        ? parseAllCaseRoot(c.src, Comment)
+        : parseCaseRoot(c.src, Comment);
+    const parser = parsed.parser;
+    const result = "result" in parsed ? parsed.result : null;
     console.log("\n" + "=".repeat(90));
     console.log(`#${c.id}: ${c.name}`);
     console.log(`root: ${rootName}`);
@@ -132,26 +145,21 @@ function runCase(c: CaseDef): void {
         tail: c.src.slice(parser.input.pos),
         result_is_null: result === null,
     }));
-    if (result === null) {
-        return;
-    }
-    const slots = result.value as Array<ASTNode[] | ASTNode | null>;
     if (rootName === "MutiConmments") {
-        const commentsSlot = slots[0];
-        const comments = Array.isArray(commentsSlot)
-            ? commentsSlot
-            : commentsSlot === null
-                ? []
-                : [commentsSlot];
+        const comments = "results" in parsed ? parsed.results : [];
         console.log("\n--- MutiConmments semantic view ---");
         console.log(SynxFmt.stringify({
             comment_count: comments.length,
             comments: comments.map(commentView),
         }));
-        console.log("\n--- raw AST ---");
-        console.log(SynxFmt.stringify(result));
+        console.log("\n--- raw AST nodes ---");
+        console.log(SynxFmt.stringify(comments));
         return;
     }
+    if (result === null) {
+        return;
+    }
+    const slots = result.value as Array<ASTNode[] | ASTNode | null>;
     const [prefix, comment, lineDelimiter] = slots;
     console.log("\n--- Comment semantic view ---");
     console.log(SynxFmt.stringify({
@@ -238,14 +246,14 @@ const cases: CaseDef[] = [
             "\\\\ second comment with punctuation: []{}() => ; ,",
             "RuleC=\"literal\";",
         ].join("\n"),
-        note: "Use MutiConmments to scan a mixed grammar-like text and collect only comment lines.",
+        note: "Use parseAll(Comment) to scan a mixed grammar-like text and collect only comment lines.",
     },
     {
         id: 11,
         name: "MutiConmments handles LF, CRLF, empty comments, and EOF",
         root: "MutiConmments",
         src: "header\r\n\\\\ windows comment\r\nbody\n\\\\\nfooter\n\\\\ eof comment without newline",
-        note: "Observe mixed line delimiters, an empty comment line, ignored non-comment text, and a final EOF comment.",
+        note: "Observe mixed line delimiters, an empty comment line, skipped non-comment text, and a final EOF comment.",
     },
     {
         id: 12,
@@ -258,7 +266,7 @@ const cases: CaseDef[] = [
             "\\\\ paths C:\\\\tmp\\\\x and escaped-looking text \\\\n stay in one comment",
             "tail text",
         ].join("\n"),
-        note: "Stress a noisy mixed text: single slash is ignored, double slash starts comments, and unicode remains in the comment body.",
+        note: "Stress a noisy mixed text: single slash is skipped by parseAll, double slash starts comments, and unicode remains in the comment body.",
     },
 ];
 const TestCaseIds = [10, 11, 12];
