@@ -56,10 +56,11 @@ export interface CharSeq {
  * - Separator nodes appear in this sequence node's `seps` array; they do not appear in `value` or `raw_value`.
  *
  * `ignore` (when non-null): lowest priority. Ignore rules:
- * - Ignore is attempted only when a child match fails, or when the match succeeds but the quantified result is empty because of `?`, `*`, or `+`.
- * - Before the first sub-node;
- * - Between adjacent sub-nodes;
+ * - Ignore is active only after this PatternSeq has consumed input.
+ * - After that, ignore is attempted only when a child match fails, or when the match succeeds but the quantified result is empty because of `?`, `*`, or `+`.
+ * - It may apply between adjacent sub-nodes;
  * - Between two successive matches of a sub-node whose quantifier is `*` or `+` (i.e. the gap between repetitions of that child);
+ * - Around `sep` and the right enclosure boundary, once the sequence has already consumed input.
  * Text matched solely through `ignore` does not appear in this sequence node's `raw_value`.
  * When `raw` is true, `value` is the original matched source text for the sequence body; `raw_value` remains the structured child payload.
  * 
@@ -96,10 +97,11 @@ export interface CharSeq {
  * - sep 节点会出现在本序列节点的 `seps` 数组中，不会出现在 `value` 或 `raw_value` 中。
  *
  * `ignore`（非 null 时）：优先级最低，忽略规则如下：
- * - 只有当子节点匹配失败或者匹配成功但结果因量词（`?`、`*`、`+`）为空时，才会尝试忽略。
- * - 第一个子节点之前；
- * - 相邻子节点之间；
- * - 当某子节点量词为 `*` 或 `+` 时，该子节点连续两次匹配之间（即该子重复的间隔）;
+ * - 只有当前 PatternSeq 已经消耗过输入后，ignore 才会生效。
+ * - 生效后，只有当子节点匹配失败或者匹配成功但结果因量词（`?`、`*`、`+`）为空时，才会尝试忽略。
+ * - 它可以作用于相邻子节点之间；
+ * - 当某子节点量词为 `*` 或 `+` 时，该子节点连续两次匹配之间（即该子重复的间隔）；
+ * - 已经消耗过输入后，也可以作用于 `sep` 周围以及右 enclosure 边界之前。
  * 仅通过 `ignore` 匹配到的文本不会出现在本序列节点的 `raw_value` 中。
  * `raw` 为 true 时，`value` 是序列主体匹配到的原始源文本；`raw_value` 仍是结构化的子节点结果。
  *
@@ -170,8 +172,10 @@ export interface PatternSeq {
  * Only PatternSet nodes whose `charset_flag` is false may have `associateby`.
  *
  * `ignore` (when non-null, only valid when `associateby` is also non-null): lowest priority.
- * Only applies to the `associateby` delimiters — it is used when matching the left and right boundary
- * nodes of `associateby`, with the same semantics as `PatternSeq.ignore`.
+ * Only applies while handling `associateby` delimiters. It is inactive before the first left
+ * boundary is matched and consumed. After that first boundary, each failed attempt to match the
+ * body or another boundary may consume one `ignore` match before retrying; right boundaries also
+ * use this ignore rule.
  *
  * ============================== 中文 ==============================
  *
@@ -201,8 +205,9 @@ export interface PatternSeq {
  * 只有 `charset_flag` 为 false 的 PatternSet 可以拥有 `associateby`。
  *
  * `ignore`（非 null 时，仅在 `associateby` 也非 null 时有效）：优先级最低。
- * 仅对 `associateby` 的边界符生效——在匹配 `associateby` 的左右边界节点时使用，
- * 语义与 `PatternSeq.ignore` 相同。
+ * 仅在处理 `associateby` 边界符时生效。第一个左边界匹配并消耗输入之前，ignore 不生效。
+ * 第一个左边界成功后，每次尝试匹配 body 或其它边界失败时，可以消耗一次 `ignore` 再重试；
+ * 右边界匹配也使用这条 ignore 规则。
  */
 export interface PatternSet {
     kind: ParserNodeKind.PatternSet;

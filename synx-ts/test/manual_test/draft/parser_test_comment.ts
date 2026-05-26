@@ -184,7 +184,7 @@ const cases: CaseDef[] = [
         id: 1,
         name: "LF line comment stops before newline",
         src: "\\\\ simple comment\nnext = rule;",
-        note: "观察 AnyChar* 是否停在 LF 前，并由 LineDelimiter? 消费换行。",
+        note: "观察 AnyChar* 是否停在 LF 前，并由 LineDelimiter? 消耗换行。",
     },
     {
         id: 2,
@@ -196,7 +196,7 @@ const cases: CaseDef[] = [
         id: 3,
         name: "End of file comment without line delimiter",
         src: "\\\\ final comment at eof",
-        note: "观察 LineDelimiter? 为空时，Comment 是否仍然成功并消费到 EOF。",
+        note: "观察 LineDelimiter? 为空时，Comment 是否仍然成功并消耗到 EOF。",
     },
     {
         id: 4,
@@ -226,13 +226,13 @@ const cases: CaseDef[] = [
         id: 8,
         name: "Only one physical line is consumed",
         src: "\\\\ first line\n\\\\ second line\nthird",
-        note: "观察第一个 Comment 只消费第一行，第二行注释留在 tail 中等待外层循环处理。",
+        note: "观察第一个 Comment 只消耗第一行，第二行注释留在 tail 中等待外层循环处理。",
     },
     {
         id: 9,
         name: "Bare carriage return is not LineDelimiter",
         src: "\\\\ text before bare CR\rnext",
-        note: "根据 synx.synx，LineDelimiter 只有 LF 和 CRLF；这里应观察裸 CR 会被 AnyChar* 当作正文继续消费。",
+        note: "根据 synx.synx，LineDelimiter 只有 LF 和 CRLF；这里应观察裸 CR 会被 AnyChar* 当作正文继续消耗。",
     },
     {
         id: 10,

@@ -127,14 +127,34 @@ function test_parsePatternSet_associateby_ignore(): void {
         raw_value: value,
         seps: [], enclosure: null, associate_enclosures: null, bindings: {},
     });
-    const parser = new ParserImpl({ parser_nodes: [] });
-    parser.initParse({ src: ' (a )', pos: 0 });
-    const result = parser.parseSingleNode(set);
-    assert(parser.isSuccess());
-    assert.strictEqual(parser.input.pos, 5);
-    assert.deepStrictEqual(result, {
+    const parser1 = new ParserImpl({ parser_nodes: [] });
+    parser1.initParse({ src: ' (a )', pos: 0 });
+    assert.strictEqual(parser1.parseSingleNode(set), null);
+    assert(!parser1.isSuccess());
+    assert.strictEqual(parser1.input.pos, 0);
+
+    const parser2 = new ParserImpl({ parser_nodes: [] });
+    parser2.initParse({ src: '(a )', pos: 0 });
+    const result2 = parser2.parseSingleNode(set);
+    assert(parser2.isSuccess());
+    assert.strictEqual(parser2.input.pos, 4);
+    assert.deepStrictEqual(result2, {
         ...leaf([A, set, set], 0, 5, 'a'),
-        associate_enclosures: [[leaf([Left], 1, 2, '(')], [leaf([Right], 4, 5, ')')]],
+        range: [0, 4],
+        associate_enclosures: [[leaf([Left], 0, 1, '(')], [leaf([Right], 3, 4, ')')]],
+    });
+
+    const parser3 = new ParserImpl({ parser_nodes: [] });
+    parser3.initParse({ src: '((a ) )', pos: 0 });
+    const result3 = parser3.parseSingleNode(set);
+    assert(parser3.isSuccess());
+    assert.strictEqual(parser3.input.pos, 7);
+    assert.deepStrictEqual(result3, {
+        ...leaf([A, set, set, set], 0, 7, 'a'),
+        associate_enclosures: [
+            [leaf([Left], 1, 2, '('), leaf([Left], 0, 1, '(')],
+            [leaf([Right], 4, 5, ')'), leaf([Right], 6, 7, ')')],
+        ],
     });
 }
 function test_parsePatternSet_infinite_recursion_self(): void {

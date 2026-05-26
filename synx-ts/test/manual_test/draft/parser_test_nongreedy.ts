@@ -117,7 +117,7 @@ const cases: CaseDef[] = [
         name: "CharSeq *? + mandatory end",
         src: "aaabtail",
         seq: completePatternSeq({ sub_nodes: [A, B], sub_quantifiers: "* ", raw: false, sep: null, accept_trailing_sep: false, ignore: null, greedy_flags: [false, true] }),
-        note: "观察 A*? 如何在 B 前停下：slot0 应收连续 a，slot1 应收第一个 b，tail 不应被消费。",
+        note: "观察 A*? 如何在 B 前停下：slot0 应收连续 a，slot1 应收第一个 b，tail 不应被消耗。",
     },
     {
         name: "连续 ?? 可全部取 0，直接落到最终边界",
@@ -159,7 +159,7 @@ const cases: CaseDef[] = [
         name: "AnyChar * 强制非贪婪：不吞后续 !",
         src: "abc!tail",
         seq: completePatternSeq({ sub_nodes: [AnyChar, Bang], sub_quantifiers: "* " }),
-        note: "观察 AnyChar* 在 ! 前停止：slot0 应为 abc，slot1 为 !，tail 不被消费。",
+        note: "观察 AnyChar* 在 ! 前停止：slot0 应为 abc，slot1 为 !，tail 不被消耗。",
     },
     {
         name: "AnyChar + 强制非贪婪：至少一次后停在 end",

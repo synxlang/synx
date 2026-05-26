@@ -20,7 +20,7 @@ const EscapeChar: PatternSeq = completePatternSeq({ sub_nodes: [Backslash, AnyCh
 /**
  * {-EscapeChar; -"\""; AnyChar}
  * A `GeneralCharSet`-style PatternSet: reject escaped sequences and bare quotes, otherwise consume one Char.
- * `GeneralCharSet` 风格的 PatternSet：拒绝转义序列和裸引号，否则消费一个字符。
+ * `GeneralCharSet` 风格的 PatternSet：拒绝转义序列和裸引号，否则消耗一个字符。
  */
 const NonEscapeChar = completePatternSet({ sub_nodes: [EscapeChar, Quote, AnyChar], neg_flags: [true, true, false] });
 const NonEscapeText: PatternSeq = completePatternSeq({ sub_nodes: [NonEscapeChar], sub_quantifiers: "+" });

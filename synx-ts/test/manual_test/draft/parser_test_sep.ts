@@ -90,7 +90,7 @@ main();
  *
  * 2. `parseNode` 对 `+` 且 sep≠null 的循环逻辑（parser_impl.ts）是：
  *      已有首单元后，反复：parseSingleNode(sep) → parseSingleNode(node)。
- *    在匹配完第二个 `a` 之后，循环又多跑一轮：成功消费了 index=3 的逗号（记入 ret.seps），
+ *    在匹配完第二个 `a` 之后，循环又多跑一轮：成功消耗了 index=3 的逗号（记入 ret.seps），
  *    接着对 `5` 做 Letter，失败，此时仅 `break`，没有把 input.pos 恢复到吃逗号之前，也没有从 ret.seps 里弹出该逗号。
  *
  * 3. 因此 parseNode 返回时：input.pos=4（指向 `5`），ret.seps 长度为 2（两段逗号都算作「重复间隔」）。
@@ -101,7 +101,7 @@ main();
  *
  * 5. 与 case 92（仅 `a,a`）不冲突：没有后续 Digit，parseNode 多吞的「试探性」第三段 sep 不会暴露问题。
  *
- * 小结：失败根因是 `+`/sep 循环在「sep 成功、下一 node 失败」时缺少对 sep 消费与 ret.seps 的回滚，
+ * 小结：失败根因是 `+`/sep 循环在「sep 成功、下一 node 失败」时缺少对 sep 消耗与 ret.seps 的回滚，
  *       与 parsePatternSeq 外层「子节点之间的强制 sep」叠加后，case 93 必挂。
  * =============================================================================
  */

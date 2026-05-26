@@ -118,7 +118,7 @@ interface ParseCharMatchNodeExResult {
  *
  * 解析调用约定（针对parse开头的函数）：
  * - 索引：
- *   - 成功：返回前将解析索引移动到已匹配片段之后的下一未消费位置。
+ *   - 成功：返回前将解析索引移动到已匹配片段之后的下一未消耗位置。
  *   - 失败：要求还原索引到初始位置。
  *
  * - 错误处理与状态：
@@ -695,7 +695,7 @@ export class ParserImpl implements Parser {
      *
      * ============================== 中文 ==============================
      *
-     * 探测当前位置是否能匹配任一结束节点，但不消费输入。
+     * 探测当前位置是否能匹配任一结束节点，但不消耗输入。
      * `ends` 从右向左尝试，列表末尾节点优先级最高。
      * 此函数不会确保错误状态约定，应当通过返回值中的 `end_idx` 判定是否成功。
      */
@@ -799,8 +799,7 @@ export class ParserImpl implements Parser {
     parsePatternSet(node: PatternSet): ASTNode | null {
         const node_start = this.input.pos;
         let alt_idx = this.getPatternSetNextAltIdx(node, node_start);
-        this.pattern_set_node_parse_stack.push({ node, pos: node_start, alt_idx });
-
+        const pattern_set_node_parse_stack_start_length = this.pattern_set_node_parse_stack.length;
         try {
             if (alt_idx >= node.sub_nodes.length) {
                 this.setError(this.input.pos, "pattern set has no more alternatives");
@@ -822,10 +821,7 @@ export class ParserImpl implements Parser {
                         this.profileRecordPatternSetAlternativeExit(node, node_start, i, false);
                         return null;
                     }
-                    if (child === null) {
-                        this.profileRecordPatternSetAlternativeExit(node, node_start, i, false);
-                        return null;
-                    }
+                    assert.ok(child !==null);
                     if (!child.parser_nodes.includes(node)) {
                         child.parser_nodes.push(node);
                     }
@@ -843,61 +839,73 @@ export class ParserImpl implements Parser {
             };
 
             if (node.associateby === null || alt_idx !== 0) {
+                this.pattern_set_node_parse_stack.push({ node, pos: this.input.pos, alt_idx });
                 return parse_alternative(node_start);
             }
 
-            const direct = parse_alternative(node_start);
-            if (this.isSuccess()) {
-                return direct;
+            let body:ASTNode|null = null;
+            const lefts: ASTNode[] = [];
+            for(;;){
+                this.pattern_set_node_parse_stack.push({ node, pos: this.input.pos, alt_idx });
+                body = parse_alternative(this.input.pos);
+                if(this.isSuccess()){
+                    break;
+                }
+                let left = this.parseSingleNode(node.associateby[0]);
+                if(this.isSuccess()){
+                    assert.ok(left !== null);
+                    lefts.push(left);
+                    continue;
+                }
+                if(node.ignore === null || lefts.length === 0){
+                    this.input.pos = node_start;
+                    return null;
+                }
+                this.parseSingleNodeSimple(node.ignore);
+                if(!this.isSuccess()){
+                    this.input.pos = node_start;
+                    return null;
+                }
+            }
+            assert.ok(body!==null);
+
+            if (lefts.length === 0) {
+                return body;
             }
 
-            this.input.pos = node_start;
-            const left = this.parseSingleNode(node.associateby[0], node.ignore);
-            if (!this.isSuccess()) {
-                this.input.pos = node_start;
-                return null;
-            }
-            if (this.input.pos === node_start) {
-                this.setError(this.input.pos, "associateby left boundary matched empty");
-                this.input.pos = node_start;
-                return null;
+            for (let i = lefts.length - 1; i >= 0; i--) {
+                const right = this.parseSingleNode(node.associateby[1], node.ignore);
+                if (!this.isSuccess()) {
+                    this.input.pos = node_start;
+                    return null;
+                }
+                assert.ok(right !== null);
+
+                body.parser_nodes.push(node);
+                body.range = [node_start, this.input.pos];
+                if (body.associate_enclosures === null) {
+                    body.associate_enclosures = [[lefts[i]], [right]];
+                } else {
+                    body.associate_enclosures[0].push(lefts[i]);
+                    body.associate_enclosures[1].push(right);
+                }
             }
 
-            const inner = this.parseSingleNode(node);
-            if (!this.isSuccess()) {
-                this.input.pos = node_start;
-                return null;
-            }
-
-            const right = this.parseSingleNode(node.associateby[1], node.ignore);
-            if (!this.isSuccess()) {
-                this.input.pos = node_start;
-                return null;
-            }
-            assert.ok(left !== null && inner !== null && right !== null);
-
-            inner.parser_nodes.push(node);
-            inner.range = [node_start, this.input.pos];
-            if (inner.associate_enclosures === null) {
-                inner.associate_enclosures = [[left], [right]];
-            } else {
-                inner.associate_enclosures[0].push(left);
-                inner.associate_enclosures[1].push(right);
-            }
-            this.recordParse(inner.range[0], inner);
+            this.recordParse(body.range[0], body);
             this.setSuccess();
-            return inner;
+            return body;
 
         } finally {
-            this.pattern_set_node_parse_stack.pop();
+            this.pattern_set_node_parse_stack.length = pattern_set_node_parse_stack_start_length;
         }
     }
 
     /**
      * Match a `charset_flag` PatternSet as `GeneralCharSet`: rejecting branches are probes, normal branches consume one Char.
-     * 按 `GeneralCharSet` 匹配 `charset_flag` PatternSet：否定分支只探测拒绝，普通分支消费一个字符。
+     * 按 `GeneralCharSet` 匹配 `charset_flag` PatternSet：否定分支只探测拒绝，普通分支消耗一个字符。
      */
     parseCharMatchPatternSet(node: PatternSet): ParserNode[] {
+        assert.ok(node.associateby === null);
         const start = this.input.pos;
         let alt_idx = this.getPatternSetNextAltIdx(node, start);
         this.pattern_set_node_parse_stack.push({ node, pos: start, alt_idx });
@@ -1148,7 +1156,7 @@ export class ParserImpl implements Parser {
      *
      * 返回形状约定：
      * - ignored 为空时，量词为 `*` 或 `+` 的匹配返回合并后的单个 ASTNode。
-     * - 非贪婪 ends 让 `*` 量词在消费任何字符前停止时，返回 null。
+     * - 非贪婪 ends 让 `*` 量词在消耗任何字符前停止时，返回 null。
      * - ignored 非空时，量词为 `*` 或 `+` 的匹配返回 ASTNode[]，以保留被 ignored 文本分隔的多段结果；
      *   零段匹配表示为 []。
      */
