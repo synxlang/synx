@@ -90,6 +90,35 @@ interface ParseCharMatchNodeExResult {
     end_idx: number;
 }
 
+enum ParseActionKind{
+    IGNORE,
+    RECORD,     // 对于字符，相同ParserNode并且连续匹配总是合并到同一range
+    REJECT,
+}
+
+interface ParseAction{
+    kind:ParseActionKind;
+    next_rule:ParseRule|null;
+    rollback_here:boolean;      // 后续REJECT回滚到此规则开始解析前并ACCEPT
+}
+
+interface ParseRule{
+    node:ParserNode;
+    value_slot:number;           // 记录的values对应索引
+    not_null_success_action:ParseAction;
+    null_success_action:ParseAction;
+    fail_action:ParseAction;
+}
+
+// [number, number]用于记录连续子字符串
+type ParsedValueType = [number, number]|ASTNode|null;   
+
+
+interface ParseRuleResult{
+    values:ParsedValueType[][];
+}
+
+
 /**
  * ============================== EN ==============================
  *
@@ -1219,6 +1248,21 @@ export class ParserImpl implements Parser {
         this.setSuccess();
         return ret;
     }
+
+    parseRule(rule:ParseRule, value_slot_cnt:number):ParseRuleResult{
+
+    }
+
+    buildCharMatchNodeConsecutiveRule(
+        node: GeneralCharMatchNode,
+        ignored: ParserNode | null,
+        single: boolean,
+        ends: ParserNode[] = [],
+        first_peek_ends: boolean = true,
+    ): AtomRule{
+
+    }
+
 
     /**
      * ============================== EN ==============================
