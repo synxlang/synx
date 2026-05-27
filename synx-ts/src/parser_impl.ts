@@ -749,17 +749,12 @@ export class ParserImpl implements Parser {
                     return complete_return(ret);
                 }
 
-                this.input.pos = retry_pos;
                 this.parseSingleNodeSimple(ignored);
                 if (!this.isSuccess()) {
                     this.input.pos = start;
                     return complete_return(ret);
                 }
-                if (this.input.pos === retry_pos) {
-                    this.setError(this.input.pos);
-                    this.input.pos = start;
-                    return complete_return(ret);
-                }
+                assert.ok(this.input.pos > retry_pos);
             }
         } finally {
             if (this.config.debug === true) {
