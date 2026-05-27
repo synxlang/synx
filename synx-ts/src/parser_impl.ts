@@ -1276,7 +1276,6 @@ export class ParserImpl implements Parser {
                 return ret;
             }
 
-            this.input.pos = retry_pos;
             if (ignored === null) {
                 this.input.pos = start;
                 return ret;
@@ -1286,11 +1285,7 @@ export class ParserImpl implements Parser {
                 this.input.pos = start;
                 return ret;
             }
-            if (this.input.pos === retry_pos) {
-                this.setError(this.input.pos);
-                this.input.pos = start;
-                return ret;
-            }
+            assert.ok(this.input.pos > retry_pos);
         }
     }
 
