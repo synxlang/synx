@@ -1250,7 +1250,83 @@ export class ParserImpl implements Parser {
     }
 
     parseRule(rule: ParseRule, value_slot_cnt: number): ParseRuleResult {
+        const start = this.input.pos;
+        const values: ParsedValueType[][] = Array.from({ length: value_slot_cnt }, () => []);
+        let current_rule: ParseRule | null = rule;
+        let rollback_accept: { pos: number; value_lengths: number[] } | null = null;
 
+        const apply_rollback_accept = (): ParseRuleResult => {
+            assert.ok(rollback_accept !== null);
+            this.input.pos = rollback_accept.pos;
+            for (let i = 0; i < values.length; i++) {
+                values[i].length = rollback_accept.value_lengths[i]!;
+            }
+            this.setSuccess();
+            return { values };
+        };
+
+        const apply_reject = (pos: number): ParseRuleResult => {
+            if (rollback_accept !== null) {
+                return apply_rollback_accept();
+            }
+            this.input.pos = start;
+            this.setError(pos);
+            return { values };
+        };
+
+        while (current_rule !== null) {
+            const rule_start = this.input.pos;
+            let parsed_value: ParsedValueType = null;
+
+            if (isGeneralCharMatchNode(current_rule.node)) {
+                const char_start = this.input.pos;
+                this.parseSingleCharMatchNode(current_rule.node);
+                if (this.isSuccess()) {
+                    parsed_value = [char_start, this.input.pos];
+                }
+            } else {
+                parsed_value = this.parseSingleNodeSimple(current_rule.node);
+            }
+
+            const action: ParseAction = this.isSuccess()
+                ? parsed_value === null
+                    ? current_rule.null_success_action
+                    : current_rule.not_null_success_action
+                : current_rule.fail_action;
+
+            if (action.kind === ParseActionKind.REJECT) {
+                return apply_reject(rule_start);
+            }
+
+            if (action.kind === ParseActionKind.RECORD) {
+                assert.ok(
+                    current_rule.value_slot >= 0 && current_rule.value_slot < value_slot_cnt,
+                    `parseRule: value_slot ${current_rule.value_slot} out of range`,
+                );
+                values[current_rule.value_slot]!.push(parsed_value);
+            }
+
+            if (
+                action.next_rule !== null
+                && action.kind === ParseActionKind.IGNORE
+                && this.isSuccess()
+                && this.input.pos === rule_start
+            ) {
+                assert.fail("parseRule: ignored transition matched without consuming input");
+            }
+
+            if (action.rollback_here) {
+                rollback_accept = {
+                    pos: this.input.pos,
+                    value_lengths: values.map((slot) => slot.length),
+                };
+            }
+
+            current_rule = action.next_rule;
+        }
+
+        this.setSuccess();
+        return { values };
     }
 
     buildCharMatchNodeConsecutiveRule(
@@ -1260,7 +1336,66 @@ export class ParserImpl implements Parser {
         ends: ParserNode[] = [],
         first_peek_ends: boolean = true,
     ): ParseRule {
+        const reject: ParseAction = { kind: ParseActionKind.REJECT, next_rule: null, rollback_here: false };
+        const accept: ParseAction = { kind: ParseActionKind.IGNORE, next_rule: null, rollback_here: false };
+        const record_accept: ParseAction = { kind: ParseActionKind.RECORD, next_rule: null, rollback_here: false };
 
+        const build_end_probe_chain = (next_rule: ParseRule): ParseRule => {
+            let current_next = next_rule;
+            for (let i = 0; i < ends.length; i++) {
+                const end_node = ends[i]!;
+                current_next = {
+                    node: end_node,
+                    value_slot: i + 1,
+                    not_null_success_action: reject,
+                    null_success_action: reject,
+                    fail_action: { kind: ParseActionKind.IGNORE, next_rule: current_next, rollback_here: false },
+                };
+            }
+            return current_next;
+        };
+
+        const repeat_rule: ParseRule = {
+            node,
+            value_slot: 0,
+            not_null_success_action: { kind: ParseActionKind.RECORD, next_rule: null, rollback_here: false },
+            null_success_action: reject,
+            fail_action: reject,
+        };
+        repeat_rule.not_null_success_action.next_rule = repeat_rule;
+
+        const repeat_start = ends.length > 0
+            ? build_end_probe_chain(repeat_rule)
+            : repeat_rule;
+        repeat_rule.not_null_success_action.next_rule = repeat_start;
+
+        const first_match_success: ParseAction = single
+            ? record_accept
+            : { kind: ParseActionKind.RECORD, next_rule: repeat_start, rollback_here: true };
+
+        const first_rule: ParseRule = {
+            node,
+            value_slot: 0,
+            not_null_success_action: first_match_success,
+            null_success_action: reject,
+            fail_action: reject,
+        };
+
+        if (ignored !== null) {
+            const retry_rule: ParseRule = {
+                node: ignored,
+                value_slot: 0,
+                not_null_success_action: { kind: ParseActionKind.IGNORE, next_rule: first_rule, rollback_here: false },
+                null_success_action: reject,
+                fail_action: reject,
+            };
+            first_rule.fail_action = { kind: ParseActionKind.IGNORE, next_rule: retry_rule, rollback_here: false };
+        }
+
+        if (first_peek_ends && ends.length > 0) {
+            return build_end_probe_chain(first_rule);
+        }
+        return first_rule;
     }
 
 
