@@ -1078,10 +1078,345 @@ export class ParserImpl implements Parser {
     }
 
     newParsePatternSeq(node: PatternSeq): ASTNode | null{
-        return this.parsePatternSeq(node);
+        const start = this.input.pos;
+        const child_slot_start = 0;
+        const sep_slot = node.sub_nodes.length;
+        const left_enclosure_slot = sep_slot + 1;
+        const right_enclosure_slot = sep_slot + 2;
+        const bindings: Record<string, any> = {};
+
+        const action = (
+            kind: ParseActionKind,
+            next_rule: ParseRule | null,
+            rollback_here: boolean = false,
+            rollback_next_rule: ParseRule | null = null,
+        ): ParseAction => {
+            return { kind, next_rule, rollback_here, rollback_next_rule };
+        };
+
+        const make_rule = (parser_node: ParserNode, value_slot: number): ParseRule => {
+            const reject = action(ParseActionKind.REJECT, null);
+            return {
+                node: parser_node,
+                value_slot,
+                not_null_success_action: reject,
+                null_success_action: reject,
+                fail_action: reject,
+            };
+        };
+
+        const is_range_value = (value: ParsedValueType): value is [number, number] => {
+            return Array.isArray(value);
+        };
+
+        const make_ast_value = (parser_node: ParserNode, value: ParsedValueType): ASTNode | null => {
+            if (value === null) {
+                return null;
+            }
+            if (!is_range_value(value)) {
+                return value;
+            }
+            return {
+                parser_nodes: [parser_node],
+                range: [value[0], value[1]],
+                value: this.input.src.slice(value[0], value[1]),
+                raw_value: this.input.src.slice(value[0], value[1]),
+                seps: [],
+                enclosure: null,
+                associate_enclosures: null,
+                bindings: {},
+            };
+        };
+
+        const state_entries: (ParseRule | null | undefined)[] = Array.from({ length: node.sub_nodes.length + 1 }, () => undefined);
+        const state_ignore_entries: (ParseRule | null | undefined)[] = Array.from({ length: node.sub_nodes.length + 1 }, () => undefined);
+
+        const get_state = (idx: number): ParseRule | null => {
+            if (state_entries[idx] !== undefined) {
+                return state_entries[idx]!;
+            }
+            const ignore_rule = node.ignore !== null
+                ? make_rule(node.ignore, -1)
+                : null;
+            state_ignore_entries[idx] = ignore_rule;
+            state_entries[idx] = build_suffix_with_fail(idx, ignore_rule);
+            if (ignore_rule !== null) {
+                ignore_rule.not_null_success_action = action(ParseActionKind.IGNORE, state_entries[idx]!);
+                ignore_rule.null_success_action = action(ParseActionKind.IGNORE, state_entries[idx]!);
+                ignore_rule.fail_action = action(ParseActionKind.REJECT, null);
+            }
+            return state_entries[idx]!;
+        };
+
+        const build_sep_to = (
+            idx: number,
+            next_rule: ParseRule | null,
+            fail_action: ParseAction,
+            optional: boolean,
+        ): ParseRule | null => {
+            if (node.sep === null) {
+                return next_rule;
+            }
+            if (idx < node.sub_nodes.length - 1 || node.accept_trailing_sep) {
+                const sep_rule = make_rule(node.sep, sep_slot);
+                sep_rule.not_null_success_action = action(ParseActionKind.RECORD, next_rule);
+                sep_rule.null_success_action = action(ParseActionKind.RECORD, next_rule);
+                sep_rule.fail_action = optional
+                    ? action(ParseActionKind.IGNORE, next_rule)
+                    : fail_action;
+                return sep_rule;
+            }
+            return next_rule;
+        };
+
+        const build_item_rule = (
+            idx: number,
+            success_next: ParseRule | null,
+            fail_action: ParseAction,
+            rollback_next_rule: ParseRule | null = null,
+        ): ParseRule => {
+            const item_rule = make_rule(node.sub_nodes[idx]!, child_slot_start + idx);
+            item_rule.not_null_success_action = action(
+                ParseActionKind.RECORD,
+                success_next,
+                rollback_next_rule !== null,
+                rollback_next_rule,
+            );
+            item_rule.null_success_action = action(
+                ParseActionKind.RECORD,
+                success_next,
+                rollback_next_rule !== null,
+                rollback_next_rule,
+            );
+            item_rule.fail_action = fail_action;
+            return item_rule;
+        };
+
+        function build_suffix_with_fail(idx: number, fail_next: ParseRule | null): ParseRule | null {
+            if (idx >= node.sub_nodes.length) {
+                if (node.enclosure === null) {
+                    return null;
+                }
+                const right_rule = make_rule(node.enclosure[1], right_enclosure_slot);
+                right_rule.not_null_success_action = action(ParseActionKind.RECORD, null);
+                right_rule.null_success_action = action(ParseActionKind.RECORD, null);
+                right_rule.fail_action = fail_next !== null
+                    ? action(ParseActionKind.IGNORE, fail_next)
+                    : action(ParseActionKind.REJECT, null);
+                return right_rule;
+            }
+
+            const fail_action = fail_next !== null
+                ? action(ParseActionKind.IGNORE, fail_next)
+                : action(ParseActionKind.REJECT, null);
+            const q = node.sub_quantifiers[idx] as Quantifier;
+            const greedy = node.greedy_flags[idx]!;
+            const normal_next = get_state(idx + 1);
+            const clone_next = build_suffix_with_fail(idx + 1, fail_next);
+            const exit_after_match = build_sep_to(idx, normal_next, fail_action, false);
+            const exit_without_match = clone_next;
+
+            if (q === " ") {
+                const after_match = build_sep_to(idx, normal_next, fail_action, false);
+                return build_item_rule(idx, after_match, fail_action);
+            }
+
+            if (q === "?") {
+                if (greedy) {
+                    return build_item_rule(idx, exit_after_match, action(ParseActionKind.IGNORE, exit_without_match));
+                }
+                if (exit_without_match === null) {
+                    return build_item_rule(idx, exit_after_match, fail_action);
+                }
+                let item_rule: ParseRule;
+                const exit_entry = exit_without_match;
+                const item_entry = (): ParseRule => item_rule;
+                const retry_rule = node.ignore !== null
+                    ? make_rule(node.ignore, -1)
+                    : null;
+                item_rule = build_item_rule(idx, exit_after_match, fail_action);
+                if (retry_rule !== null) {
+                    retry_rule.not_null_success_action = action(ParseActionKind.IGNORE, exit_entry);
+                    retry_rule.null_success_action = action(ParseActionKind.IGNORE, exit_entry);
+                    retry_rule.fail_action = action(ParseActionKind.REJECT, null);
+                    item_rule.fail_action = action(ParseActionKind.IGNORE, retry_rule);
+                }
+                const last_fail = action(ParseActionKind.IGNORE, item_entry());
+                exit_entry.fail_action = last_fail;
+                return exit_entry;
+            }
+
+            const item_rule = build_item_rule(idx, null, fail_action, exit_after_match);
+            const repeat_next = build_sep_to(idx, item_rule, fail_action, true);
+            item_rule.not_null_success_action.next_rule = repeat_next;
+            item_rule.null_success_action.next_rule = repeat_next;
+            if (repeat_next !== null && repeat_next !== item_rule && node.sep !== null) {
+                repeat_next.not_null_success_action.next_rule = item_rule;
+                repeat_next.null_success_action.next_rule = item_rule;
+            }
+
+            if (q === "+") {
+                if (greedy) {
+                    return item_rule;
+                }
+                const first_rule = build_item_rule(idx, null, fail_action, exit_after_match);
+                const after_first = build_sep_to(idx, item_rule, fail_action, true);
+                first_rule.not_null_success_action.next_rule = after_first;
+                first_rule.null_success_action.next_rule = after_first;
+                if (after_first !== null && after_first !== first_rule && node.sep !== null) {
+                    after_first.not_null_success_action.next_rule = item_rule;
+                    after_first.null_success_action.next_rule = item_rule;
+                }
+                return first_rule;
+            }
+
+            assert.ok(q === "*");
+            if (greedy) {
+                item_rule.fail_action = action(ParseActionKind.IGNORE, exit_without_match);
+                return item_rule;
+            }
+            if (exit_without_match === null) {
+                return item_rule;
+            }
+            const probe_entry = exit_without_match;
+            item_rule.fail_action = fail_action;
+            item_rule.not_null_success_action.next_rule = probe_entry;
+            item_rule.not_null_success_action.rollback_here = false;
+            item_rule.not_null_success_action.rollback_next_rule = null;
+            item_rule.null_success_action.next_rule = probe_entry;
+            item_rule.null_success_action.rollback_here = false;
+            item_rule.null_success_action.rollback_next_rule = null;
+            probe_entry.fail_action = action(ParseActionKind.IGNORE, item_rule);
+            return probe_entry;
+        }
+
+        const body_start_rule = get_state(0);
+        let first_rule = body_start_rule;
+        if (node.enclosure !== null) {
+            const left_rule = make_rule(node.enclosure[0], left_enclosure_slot);
+            left_rule.not_null_success_action = action(ParseActionKind.RECORD, body_start_rule);
+            left_rule.null_success_action = action(ParseActionKind.RECORD, body_start_rule);
+            left_rule.fail_action = action(ParseActionKind.REJECT, null);
+            first_rule = left_rule;
+        }
+
+        if (first_rule === null) {
+            this.setSuccess();
+            return {
+                parser_nodes: [node],
+                range: [start, start],
+                value: [],
+                raw_value: [],
+                seps: [],
+                enclosure: null,
+                associate_enclosures: null,
+                bindings,
+            };
+        }
+
+        const body_start = node.enclosure !== null ? -1 : start;
+        const parse_res = this.parseRule(first_rule);
+        if (!this.isSuccess()) {
+            this.input.pos = start;
+            return null;
+        }
+
+        const slot_values: ParsedValueType[][] = Array.from(
+            { length: right_enclosure_slot + 1 },
+            () => [],
+        );
+        for (const element of parse_res.parsed_elements) {
+            if (element.slot >= 0) {
+                slot_values[element.slot]!.push(element.value);
+            }
+        }
+
+        const children: (ASTNode[] | ASTNode | null)[] = [];
+        for (let i = 0; i < node.sub_nodes.length; i++) {
+            const values = slot_values[child_slot_start + i]!;
+            const q = node.sub_quantifiers[i] as Quantifier;
+            const child_node = node.sub_nodes[i]!;
+            if (q === " " || q === "?") {
+                assert.ok(values.length <= 1);
+                children.push(values.length === 0 ? null : make_ast_value(child_node, values[0]!)!);
+                continue;
+            }
+            if (isGeneralCharMatchNode(child_node) && node.sep === null && node.ignore === null) {
+                assert.ok(values.length <= 1);
+                children.push(values.length === 0 ? null : make_ast_value(child_node, values[0]!)!);
+                continue;
+            }
+            children.push(values.map((value) => make_ast_value(child_node, value)!));
+        }
+
+        const seps = slot_values[sep_slot]!.map((value) => make_ast_value(node.sep!, value)!);
+        const left_enclosure = slot_values[left_enclosure_slot]!.length > 0
+            ? make_ast_value(node.enclosure![0], slot_values[left_enclosure_slot]![0]!)!
+            : null;
+        const right_enclosure = slot_values[right_enclosure_slot]!.length > 0
+            ? make_ast_value(node.enclosure![1], slot_values[right_enclosure_slot]![0]!)!
+            : null;
+        const body_start_pos = node.enclosure !== null && left_enclosure !== null
+            ? left_enclosure.range[1]
+            : body_start;
+        const body_end = node.enclosure !== null && right_enclosure !== null
+            ? right_enclosure.range[0]
+            : this.input.pos;
+
+        if (node.sub_node_bindings !== null) {
+            for (let i = 0; i < node.sub_node_bindings.length; i++) {
+                const binding = node.sub_node_bindings[i];
+                const isolated = node.sub_node_isolated_scope_flags?.[i] ?? true;
+                if (!isolated) {
+                    const child = children[i];
+                    assert.ok(!Array.isArray(child), "non-isolated repeated PatternSeq binding scope is not implemented yet");
+                    if (child !== null) {
+                        Object.assign(bindings, child.bindings);
+                    }
+                }
+                if (binding === null) {
+                    continue;
+                }
+                assert.ok(!Object.prototype.hasOwnProperty.call(bindings, binding), `duplicate PatternSeq binding: ${binding}`);
+                bindings[binding] = children[i];
+            }
+        }
+
+        let value: any = node.raw
+            ? this.input.src.slice(body_start_pos, body_end)
+            : children;
+        if (node.assignment_map !== null) {
+            if (typeof node.assignment_map === "string") {
+                if (Object.prototype.hasOwnProperty.call(bindings, node.assignment_map)) {
+                    value = bindings[node.assignment_map];
+                }
+            } else {
+                value = {};
+                for (const [target, source] of node.assignment_map) {
+                    if (Object.prototype.hasOwnProperty.call(bindings, source)) {
+                        value[target] = bindings[source];
+                    }
+                }
+            }
+        }
+
+        this.setSuccess();
+        return {
+            parser_nodes: [node],
+            range: [start, this.input.pos],
+            value,
+            raw_value: children,
+            seps,
+            enclosure: node.enclosure !== null
+                ? [left_enclosure!, right_enclosure!]
+                : null,
+            associate_enclosures: null,
+            bindings,
+        };
     }
 
     parsePatternSeq(node: PatternSeq): ASTNode | null {
+        return this.newParsePatternSeq(node);
         const start = this.input.pos;
         const children: (ASTNode[] | ASTNode | null)[] = [];
         const seps: ASTNode[] = [];
