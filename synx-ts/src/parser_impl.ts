@@ -124,6 +124,14 @@ interface ParseRuleResult {
     parsed_elements: ParsedElement[];
 }
 
+interface PatternSeqRule {
+    first_rule: ParseRule | null;
+    child_slot_start: number;
+    sep_slot: number;
+    left_enclosure_slot: number;
+    right_enclosure_slot: number;
+}
+
 
 /**
  * ============================== EN ==============================
@@ -190,6 +198,7 @@ export class ParserImpl implements Parser {
     private readonly debug_check_interval: number = 1024;
     private profile_node_ids = new WeakMap<ParserNode, number>();
     private profile_next_node_id: number = 1;
+    private pattern_seq_rule_cache = new WeakMap<PatternSeq, PatternSeqRule>();
 
     /**
      * ============================== EN ==============================
@@ -1077,13 +1086,11 @@ export class ParserImpl implements Parser {
         }
     }
 
-    newParsePatternSeq(node: PatternSeq): ASTNode | null{
-        const start = this.input.pos;
+    buildPatternSeqRule(node: PatternSeq): PatternSeqRule {
         const child_slot_start = 0;
         const sep_slot = node.sub_nodes.length;
         const left_enclosure_slot = sep_slot + 1;
         const right_enclosure_slot = sep_slot + 2;
-        const bindings: Record<string, any> = {};
 
         const action = (
             kind: ParseActionKind,
@@ -1102,29 +1109,6 @@ export class ParserImpl implements Parser {
                 not_null_success_action: reject,
                 null_success_action: reject,
                 fail_action: reject,
-            };
-        };
-
-        const is_range_value = (value: ParsedValueType): value is [number, number] => {
-            return Array.isArray(value);
-        };
-
-        const make_ast_value = (parser_node: ParserNode, value: ParsedValueType): ASTNode | null => {
-            if (value === null) {
-                return null;
-            }
-            if (!is_range_value(value)) {
-                return value;
-            }
-            return {
-                parser_nodes: [parser_node],
-                range: [value[0], value[1]],
-                value: this.input.src.slice(value[0], value[1]),
-                raw_value: this.input.src.slice(value[0], value[1]),
-                seps: [],
-                enclosure: null,
-                associate_enclosures: null,
-                bindings: {},
             };
         };
 
@@ -1334,6 +1318,54 @@ export class ParserImpl implements Parser {
             }
             first_rule = left_rule;
         }
+
+        return {
+            first_rule,
+            child_slot_start,
+            sep_slot,
+            left_enclosure_slot,
+            right_enclosure_slot,
+        };
+    }
+
+    newParsePatternSeq(node: PatternSeq): ASTNode | null{
+        const start = this.input.pos;
+        const bindings: Record<string, any> = {};
+        let pattern_seq_rule = this.pattern_seq_rule_cache.get(node);
+        if (pattern_seq_rule === undefined) {
+            pattern_seq_rule = this.buildPatternSeqRule(node);
+            this.pattern_seq_rule_cache.set(node, pattern_seq_rule);
+        }
+        const {
+            first_rule,
+            child_slot_start,
+            sep_slot,
+            left_enclosure_slot,
+            right_enclosure_slot,
+        } = pattern_seq_rule;
+
+        const is_range_value = (value: ParsedValueType): value is [number, number] => {
+            return Array.isArray(value);
+        };
+
+        const make_ast_value = (parser_node: ParserNode, value: ParsedValueType): ASTNode | null => {
+            if (value === null) {
+                return null;
+            }
+            if (!is_range_value(value)) {
+                return value;
+            }
+            return {
+                parser_nodes: [parser_node],
+                range: [value[0], value[1]],
+                value: this.input.src.slice(value[0], value[1]),
+                raw_value: this.input.src.slice(value[0], value[1]),
+                seps: [],
+                enclosure: null,
+                associate_enclosures: null,
+                bindings: {},
+            };
+        };
 
         if (first_rule === null) {
             this.setSuccess();
