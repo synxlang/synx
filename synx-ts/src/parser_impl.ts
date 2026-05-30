@@ -98,8 +98,8 @@ enum ParseActionKind {
 
 interface ParseAction {
     kind: ParseActionKind;
-    next_rule: ParseRule | null;
-    rollback_here: boolean;      // 后续REJECT回滚到next_rule开始解析前并ACCEPT
+    next_rule: ParseRule | null; // kind为REJECT时必须为null
+    rollback_here: boolean;      // 后续REJECT的回滚点，回滚到next_rule开始解析前，如果没有回滚点，则REJECT直接失败
 }
 
 interface ParseRule {
@@ -113,9 +113,14 @@ interface ParseRule {
 // [number, number]用于记录连续子字符串
 type ParsedValueType = [number, number] | ASTNode | null;
 
+interface ParsedElement {
+    slot: number;
+    value: ParsedValueType;
+}
+
 
 interface ParseRuleResult {
-    values: ParsedValueType[][];
+    parsed_elements: ParsedElement[];
 }
 
 
@@ -715,6 +720,91 @@ export class ParserImpl implements Parser {
         this.setSuccess();
         return ret;
     }
+    
+    parseRule(rule: ParseRule): ParseRuleResult {
+        const start = this.input.pos;
+        const parsed_elements: ParsedElement[] = [];
+        let last_value_node: ParserNode | null = null;
+        let current_rule: ParseRule | null = rule;
+        let rollback_record: {
+            pos: number;
+            parsed_elements_length: number;
+        } | null = null;
+
+        const is_range_value = (value: ParsedValueType): value is [number, number] => {
+            return Array.isArray(value);
+        };
+
+        while (current_rule !== null) {
+            const rule_start = this.input.pos;
+            let parsed_value: ParsedValueType = null;
+
+            if (isGeneralCharMatchNode(current_rule.node)) {
+                const char_start = this.input.pos;
+                this.parseSingleCharMatchNode(current_rule.node);
+                if (this.isSuccess()) {
+                    assert.ok(this.input.pos > char_start);
+                    parsed_value = [char_start, this.input.pos];
+                }
+            } else {
+                parsed_value = this.parseSingleNodeSimple(current_rule.node);
+            }
+
+            const action: ParseAction = this.isSuccess()
+                ? parsed_value === null
+                    ? current_rule.null_success_action
+                    : current_rule.not_null_success_action
+                : current_rule.fail_action;
+
+            if (action.kind === ParseActionKind.RECORD) {
+                assert.ok(this.isSuccess(), "use IGNORE instead of RECORD when fail.");
+                const last_element = parsed_elements[parsed_elements.length - 1];
+                let merged = false;
+                if (
+                    isGeneralCharMatchNode(current_rule.node)
+                    && last_value_node === current_rule.node
+                    && last_element !== undefined
+                    && last_element.slot === current_rule.value_slot
+                ) {
+                    assert.ok(is_range_value(last_element.value) && is_range_value(parsed_value));
+                    if (last_element.value[1] === parsed_value[0]) {
+                        last_element.value[1] = parsed_value[1];
+                        merged = true;
+                    }
+                }
+                if (!merged) {
+                    parsed_elements.push({ slot: current_rule.value_slot, value: parsed_value });
+                }
+                last_value_node = current_rule.node;
+            } else if (action.kind == ParseActionKind.IGNORE) {
+                if (this.input.pos > rule_start) {
+                    last_value_node = null;
+                }
+            } else if (action.kind === ParseActionKind.REJECT) {
+                if (rollback_record !== null) {
+                    this.input.pos = rollback_record.pos;
+                    parsed_elements.length = rollback_record.parsed_elements_length;
+                    this.setSuccess();
+                    return { parsed_elements };
+                }
+                this.input.pos = start;
+                this.setError(rule_start);
+                return { parsed_elements };
+            }
+
+            if (action.rollback_here) {
+                rollback_record = {
+                    pos: this.input.pos,
+                    parsed_elements_length: parsed_elements.length,
+                };
+            }
+
+            current_rule = action.next_rule;
+        }
+
+        this.setSuccess();
+        return { parsed_elements };
+    }
 
     /**
      * ============================== EN ==============================
@@ -1248,156 +1338,6 @@ export class ParserImpl implements Parser {
         this.setSuccess();
         return ret;
     }
-
-    parseRule(rule: ParseRule, value_slot_cnt: number): ParseRuleResult {
-        const start = this.input.pos;
-        const values: ParsedValueType[][] = Array.from({ length: value_slot_cnt }, () => []);
-        let current_rule: ParseRule | null = rule;
-        let rollback_accept: { pos: number; value_lengths: number[] } | null = null;
-
-        const apply_rollback_accept = (): ParseRuleResult => {
-            assert.ok(rollback_accept !== null);
-            this.input.pos = rollback_accept.pos;
-            for (let i = 0; i < values.length; i++) {
-                values[i].length = rollback_accept.value_lengths[i]!;
-            }
-            this.setSuccess();
-            return { values };
-        };
-
-        const apply_reject = (pos: number): ParseRuleResult => {
-            if (rollback_accept !== null) {
-                return apply_rollback_accept();
-            }
-            this.input.pos = start;
-            this.setError(pos);
-            return { values };
-        };
-
-        while (current_rule !== null) {
-            const rule_start = this.input.pos;
-            let parsed_value: ParsedValueType = null;
-
-            if (isGeneralCharMatchNode(current_rule.node)) {
-                const char_start = this.input.pos;
-                this.parseSingleCharMatchNode(current_rule.node);
-                if (this.isSuccess()) {
-                    parsed_value = [char_start, this.input.pos];
-                }
-            } else {
-                parsed_value = this.parseSingleNodeSimple(current_rule.node);
-            }
-
-            const action: ParseAction = this.isSuccess()
-                ? parsed_value === null
-                    ? current_rule.null_success_action
-                    : current_rule.not_null_success_action
-                : current_rule.fail_action;
-
-            if (action.kind === ParseActionKind.REJECT) {
-                return apply_reject(rule_start);
-            }
-
-            if (action.kind === ParseActionKind.RECORD) {
-                assert.ok(
-                    current_rule.value_slot >= 0 && current_rule.value_slot < value_slot_cnt,
-                    `parseRule: value_slot ${current_rule.value_slot} out of range`,
-                );
-                values[current_rule.value_slot]!.push(parsed_value);
-            }
-
-            if (
-                action.next_rule !== null
-                && action.kind === ParseActionKind.IGNORE
-                && this.isSuccess()
-                && this.input.pos === rule_start
-            ) {
-                assert.fail("parseRule: ignored transition matched without consuming input");
-            }
-
-            if (action.rollback_here) {
-                rollback_accept = {
-                    pos: this.input.pos,
-                    value_lengths: values.map((slot) => slot.length),
-                };
-            }
-
-            current_rule = action.next_rule;
-        }
-
-        this.setSuccess();
-        return { values };
-    }
-
-    buildCharMatchNodeConsecutiveRule(
-        node: GeneralCharMatchNode,
-        ignored: ParserNode | null,
-        single: boolean,
-        ends: ParserNode[] = [],
-        first_peek_ends: boolean = true,
-    ): ParseRule {
-        const reject: ParseAction = { kind: ParseActionKind.REJECT, next_rule: null, rollback_here: false };
-        const accept: ParseAction = { kind: ParseActionKind.IGNORE, next_rule: null, rollback_here: false };
-        const record_accept: ParseAction = { kind: ParseActionKind.RECORD, next_rule: null, rollback_here: false };
-
-        const build_end_probe_chain = (next_rule: ParseRule): ParseRule => {
-            let current_next = next_rule;
-            for (let i = 0; i < ends.length; i++) {
-                const end_node = ends[i]!;
-                current_next = {
-                    node: end_node,
-                    value_slot: i + 1,
-                    not_null_success_action: reject,
-                    null_success_action: reject,
-                    fail_action: { kind: ParseActionKind.IGNORE, next_rule: current_next, rollback_here: false },
-                };
-            }
-            return current_next;
-        };
-
-        const repeat_rule: ParseRule = {
-            node,
-            value_slot: 0,
-            not_null_success_action: { kind: ParseActionKind.RECORD, next_rule: null, rollback_here: false },
-            null_success_action: reject,
-            fail_action: reject,
-        };
-        repeat_rule.not_null_success_action.next_rule = repeat_rule;
-
-        const repeat_start = ends.length > 0
-            ? build_end_probe_chain(repeat_rule)
-            : repeat_rule;
-        repeat_rule.not_null_success_action.next_rule = repeat_start;
-
-        const first_match_success: ParseAction = single
-            ? record_accept
-            : { kind: ParseActionKind.RECORD, next_rule: repeat_start, rollback_here: true };
-
-        const first_rule: ParseRule = {
-            node,
-            value_slot: 0,
-            not_null_success_action: first_match_success,
-            null_success_action: reject,
-            fail_action: reject,
-        };
-
-        if (ignored !== null) {
-            const retry_rule: ParseRule = {
-                node: ignored,
-                value_slot: 0,
-                not_null_success_action: { kind: ParseActionKind.IGNORE, next_rule: first_rule, rollback_here: false },
-                null_success_action: reject,
-                fail_action: reject,
-            };
-            first_rule.fail_action = { kind: ParseActionKind.IGNORE, next_rule: retry_rule, rollback_here: false };
-        }
-
-        if (first_peek_ends && ends.length > 0) {
-            return build_end_probe_chain(first_rule);
-        }
-        return first_rule;
-    }
-
 
     /**
      * ============================== EN ==============================
