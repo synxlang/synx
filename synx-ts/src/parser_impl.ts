@@ -100,7 +100,7 @@ interface ParseAction {
     kind: ParseActionKind;
     next_rule: ParseRule | null; // kind为REJECT时必须为null
     rollback_here: boolean;      // 后续REJECT的回滚点，回滚到next_rule开始解析前，如果没有回滚点，则REJECT直接失败
-    rollback_next_rule: ParseRule | null; // rollback_here为true时才有效，如果非null，消费回滚点并执行rollback_next_rule
+    rollback_next_rule: ParseRule | null; // rollback_here为true时才有效，如果非null，清空回滚点并执行rollback_next_rule
 }
 
 interface ParseRule {
@@ -727,13 +727,14 @@ export class ParserImpl implements Parser {
         const parsed_elements: ParsedElement[] = [];
         let last_value_node: ParserNode | null = null;
         let current_rule: ParseRule | null = rule;
-        let rollback_record: {
+        type RollbackRecord = {
             pos: number;
             parsed_elements_length: number;
             last_value_node: ParserNode | null;
             next_rule: ParseRule | null;
             last_range_element_right_bound: number | null;
-        }[] = [];
+        };
+        let rollback_record: RollbackRecord | null = null;
 
         const is_range_value = (value: ParsedValueType): value is [number, number] => {
             return Array.isArray(value);
@@ -785,8 +786,9 @@ export class ParserImpl implements Parser {
                     last_value_node = null;
                 }
             } else if (action.kind === ParseActionKind.REJECT) {
-                const rollback = rollback_record.pop();
-                if (rollback !== undefined) {
+                if (rollback_record !== null) {
+                    const rollback: RollbackRecord = rollback_record;
+                    rollback_record = null;
                     this.input.pos = rollback.pos;
                     parsed_elements.length = rollback.parsed_elements_length;
                     if (rollback.last_range_element_right_bound !== null) {
@@ -806,7 +808,7 @@ export class ParserImpl implements Parser {
 
             if (action.rollback_here) {
                 const last_element = parsed_elements[parsed_elements.length - 1];
-                rollback_record.push({
+                rollback_record = {
                     pos: this.input.pos,
                     parsed_elements_length: parsed_elements.length,
                     last_value_node,
@@ -814,7 +816,7 @@ export class ParserImpl implements Parser {
                     last_range_element_right_bound: last_element !== undefined && is_range_value(last_element.value)
                         ? last_element.value[1]
                         : null,
-                });
+                };
             }
 
             current_rule = action.next_rule;
@@ -1076,7 +1078,7 @@ export class ParserImpl implements Parser {
     }
 
     newParsePatternSeq(node: PatternSeq): ASTNode | null{
-        // TODO
+        return this.parsePatternSeq(node);
     }
 
     parsePatternSeq(node: PatternSeq): ASTNode | null {
