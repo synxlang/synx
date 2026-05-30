@@ -1153,17 +1153,34 @@ export class ParserImpl implements Parser {
             next_rule: ParseRule | null,
             fail_action: ParseAction,
             optional: boolean,
+            force: boolean = false,
         ): ParseRule | null => {
             if (node.sep === null) {
                 return next_rule;
             }
-            if (idx < node.sub_nodes.length - 1 || node.accept_trailing_sep) {
+            if (force || idx < node.sub_nodes.length - 1 || node.accept_trailing_sep) {
                 const sep_rule = make_rule(node.sep, sep_slot);
                 sep_rule.not_null_success_action = action(ParseActionKind.RECORD, next_rule);
                 sep_rule.null_success_action = action(ParseActionKind.RECORD, next_rule);
-                sep_rule.fail_action = optional
-                    ? action(ParseActionKind.IGNORE, next_rule)
-                    : fail_action;
+                if (optional || (!force && idx >= node.sub_nodes.length - 1)) {
+                    if (node.ignore !== null) {
+                        const retry_ignore_rule = make_rule(node.ignore, -1);
+                        retry_ignore_rule.not_null_success_action = action(ParseActionKind.IGNORE, sep_rule);
+                        retry_ignore_rule.null_success_action = action(ParseActionKind.IGNORE, sep_rule);
+                        retry_ignore_rule.fail_action = action(ParseActionKind.IGNORE, next_rule);
+                        sep_rule.fail_action = action(ParseActionKind.IGNORE, retry_ignore_rule);
+                    } else {
+                        sep_rule.fail_action = action(ParseActionKind.IGNORE, next_rule);
+                    }
+                } else if (node.ignore !== null) {
+                    const retry_ignore_rule = make_rule(node.ignore, -1);
+                    retry_ignore_rule.not_null_success_action = action(ParseActionKind.IGNORE, sep_rule);
+                    retry_ignore_rule.null_success_action = action(ParseActionKind.IGNORE, sep_rule);
+                    retry_ignore_rule.fail_action = fail_action;
+                    sep_rule.fail_action = action(ParseActionKind.IGNORE, retry_ignore_rule);
+                } else {
+                    sep_rule.fail_action = fail_action;
+                }
                 return sep_rule;
             }
             return next_rule;
@@ -1173,19 +1190,20 @@ export class ParserImpl implements Parser {
             idx: number,
             success_next: ParseRule | null,
             fail_action: ParseAction,
+            rollback_here: boolean = false,
             rollback_next_rule: ParseRule | null = null,
         ): ParseRule => {
             const item_rule = make_rule(node.sub_nodes[idx]!, child_slot_start + idx);
             item_rule.not_null_success_action = action(
                 ParseActionKind.RECORD,
                 success_next,
-                rollback_next_rule !== null,
+                rollback_here,
                 rollback_next_rule,
             );
             item_rule.null_success_action = action(
                 ParseActionKind.RECORD,
                 success_next,
-                rollback_next_rule !== null,
+                rollback_here,
                 rollback_next_rule,
             );
             item_rule.fail_action = fail_action;
@@ -1246,8 +1264,8 @@ export class ParserImpl implements Parser {
                 return exit_entry;
             }
 
-            const item_rule = build_item_rule(idx, null, fail_action, exit_after_match);
-            const repeat_next = build_sep_to(idx, item_rule, fail_action, true);
+            const item_rule = build_item_rule(idx, null, fail_action, true, exit_after_match);
+            const repeat_next = build_sep_to(idx, item_rule, fail_action, false, true);
             item_rule.not_null_success_action.next_rule = repeat_next;
             item_rule.null_success_action.next_rule = repeat_next;
             if (repeat_next !== null && repeat_next !== item_rule && node.sep !== null) {
@@ -1259,20 +1277,29 @@ export class ParserImpl implements Parser {
                 if (greedy) {
                     return item_rule;
                 }
-                const first_rule = build_item_rule(idx, null, fail_action, exit_after_match);
-                const after_first = build_sep_to(idx, item_rule, fail_action, true);
-                first_rule.not_null_success_action.next_rule = after_first;
-                first_rule.null_success_action.next_rule = after_first;
-                if (after_first !== null && after_first !== first_rule && node.sep !== null) {
-                    after_first.not_null_success_action.next_rule = item_rule;
-                    after_first.null_success_action.next_rule = item_rule;
-                }
+                const probe_after_match = exit_after_match;
+                item_rule.not_null_success_action.next_rule = probe_after_match;
+                item_rule.not_null_success_action.rollback_here = true;
+                item_rule.not_null_success_action.rollback_next_rule = repeat_next;
+                item_rule.null_success_action.next_rule = probe_after_match;
+                item_rule.null_success_action.rollback_here = true;
+                item_rule.null_success_action.rollback_next_rule = repeat_next;
+
+                const first_rule = build_item_rule(idx, probe_after_match, fail_action, true, repeat_next);
                 return first_rule;
             }
 
             assert.ok(q === "*");
             if (greedy) {
-                item_rule.fail_action = action(ParseActionKind.IGNORE, exit_without_match);
+                if (node.ignore !== null) {
+                    const retry_ignore_rule = make_rule(node.ignore, -1);
+                    retry_ignore_rule.not_null_success_action = action(ParseActionKind.IGNORE, item_rule);
+                    retry_ignore_rule.null_success_action = action(ParseActionKind.IGNORE, item_rule);
+                    retry_ignore_rule.fail_action = action(ParseActionKind.IGNORE, exit_without_match);
+                    item_rule.fail_action = action(ParseActionKind.IGNORE, retry_ignore_rule);
+                } else {
+                    item_rule.fail_action = action(ParseActionKind.IGNORE, exit_without_match);
+                }
                 return item_rule;
             }
             if (exit_without_match === null) {
@@ -1280,12 +1307,12 @@ export class ParserImpl implements Parser {
             }
             const probe_entry = exit_without_match;
             item_rule.fail_action = fail_action;
-            item_rule.not_null_success_action.next_rule = probe_entry;
-            item_rule.not_null_success_action.rollback_here = false;
-            item_rule.not_null_success_action.rollback_next_rule = null;
-            item_rule.null_success_action.next_rule = probe_entry;
-            item_rule.null_success_action.rollback_here = false;
-            item_rule.null_success_action.rollback_next_rule = null;
+            item_rule.not_null_success_action.next_rule = exit_after_match;
+            item_rule.not_null_success_action.rollback_here = true;
+            item_rule.not_null_success_action.rollback_next_rule = repeat_next;
+            item_rule.null_success_action.next_rule = exit_after_match;
+            item_rule.null_success_action.rollback_here = true;
+            item_rule.null_success_action.rollback_next_rule = repeat_next;
             probe_entry.fail_action = action(ParseActionKind.IGNORE, item_rule);
             return probe_entry;
         }
@@ -1296,7 +1323,15 @@ export class ParserImpl implements Parser {
             const left_rule = make_rule(node.enclosure[0], left_enclosure_slot);
             left_rule.not_null_success_action = action(ParseActionKind.RECORD, body_start_rule);
             left_rule.null_success_action = action(ParseActionKind.RECORD, body_start_rule);
-            left_rule.fail_action = action(ParseActionKind.REJECT, null);
+            if (node.ignore !== null) {
+                const retry_ignore_rule = make_rule(node.ignore, -1);
+                retry_ignore_rule.not_null_success_action = action(ParseActionKind.IGNORE, left_rule);
+                retry_ignore_rule.null_success_action = action(ParseActionKind.IGNORE, left_rule);
+                retry_ignore_rule.fail_action = action(ParseActionKind.REJECT, null);
+                left_rule.fail_action = action(ParseActionKind.IGNORE, retry_ignore_rule);
+            } else {
+                left_rule.fail_action = action(ParseActionKind.REJECT, null);
+            }
             first_rule = left_rule;
         }
 
@@ -1330,6 +1365,16 @@ export class ParserImpl implements Parser {
                 slot_values[element.slot]!.push(element.value);
             }
         }
+        const final_pos = parse_res.parsed_elements.reduce((pos, element) => {
+            if (is_range_value(element.value)) {
+                return Math.max(pos, element.value[1]);
+            }
+            if (element.value !== null) {
+                return Math.max(pos, element.value.range[1]);
+            }
+            return pos;
+        }, start);
+        this.input.pos = final_pos;
 
         const children: (ASTNode[] | ASTNode | null)[] = [];
         for (let i = 0; i < node.sub_nodes.length; i++) {
@@ -1417,6 +1462,9 @@ export class ParserImpl implements Parser {
 
     parsePatternSeq(node: PatternSeq): ASTNode | null {
         return this.newParsePatternSeq(node);
+    }
+    
+    oldParsePatternSeq(node: PatternSeq): ASTNode | null {
         const start = this.input.pos;
         const children: (ASTNode[] | ASTNode | null)[] = [];
         const seps: ASTNode[] = [];
