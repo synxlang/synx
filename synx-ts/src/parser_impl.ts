@@ -128,10 +128,12 @@ interface PatternSeqRule {
     first_rule: ParseRule;
 }
 
-const PATTERN_SEQ_SEP_SLOT = 0;
-const PATTERN_SEQ_LEFT_ENCLOSURE_SLOT = 1;
-const PATTERN_SEQ_RIGHT_ENCLOSURE_SLOT = 2;
-const PATTERN_SEQ_CHILD_SLOT_START = 3;
+enum SeqVauleSlot {
+    SEP = 0,
+    LEFT_ENCLOSURE = 1,
+    RIGHT_ENCLOSURE = 2,
+    SUB_NODE_START = 3,
+}
 
 
 /**
@@ -1139,7 +1141,7 @@ export class ParserImpl implements Parser {
                 return next_rule;
             }
             if (force || idx < node.sub_nodes.length - 1 || node.accept_trailing_sep) {
-                const sep_rule = make_rule(node.sep, PATTERN_SEQ_SEP_SLOT);
+                const sep_rule = make_rule(node.sep, SeqVauleSlot.SEP);
                 sep_rule.not_null_success_action = action(ParseActionKind.RECORD, next_rule);
                 sep_rule.null_success_action = action(ParseActionKind.RECORD, next_rule);
                 if (optional || (!force && idx >= node.sub_nodes.length - 1)) {
@@ -1173,7 +1175,7 @@ export class ParserImpl implements Parser {
             rollback_here: boolean = false,
             rollback_next_rule: ParseRule | null = null,
         ): ParseRule => {
-            const item_rule = make_rule(node.sub_nodes[idx]!, PATTERN_SEQ_CHILD_SLOT_START + idx);
+            const item_rule = make_rule(node.sub_nodes[idx]!, SeqVauleSlot.SUB_NODE_START + idx);
             item_rule.not_null_success_action = action(
                 ParseActionKind.RECORD,
                 success_next,
@@ -1195,7 +1197,7 @@ export class ParserImpl implements Parser {
                 if (node.enclosure === null) {
                     return null;
                 }
-                const right_rule = make_rule(node.enclosure[1], PATTERN_SEQ_RIGHT_ENCLOSURE_SLOT);
+                const right_rule = make_rule(node.enclosure[1], SeqVauleSlot.RIGHT_ENCLOSURE);
                 right_rule.not_null_success_action = action(ParseActionKind.RECORD, null);
                 right_rule.null_success_action = action(ParseActionKind.RECORD, null);
                 right_rule.fail_action = fail_next !== null
@@ -1301,7 +1303,7 @@ export class ParserImpl implements Parser {
         assert.ok(body_start_rule !== null);
         let first_rule = body_start_rule;
         if (node.enclosure !== null) {
-            const left_rule = make_rule(node.enclosure[0], PATTERN_SEQ_LEFT_ENCLOSURE_SLOT);
+            const left_rule = make_rule(node.enclosure[0], SeqVauleSlot.LEFT_ENCLOSURE);
             left_rule.not_null_success_action = action(ParseActionKind.RECORD, body_start_rule);
             left_rule.null_success_action = action(ParseActionKind.RECORD, body_start_rule);
             if (node.ignore !== null) {
@@ -1362,7 +1364,7 @@ export class ParserImpl implements Parser {
         }
 
         const slot_values: ParsedValueType[][] = Array.from(
-            { length: PATTERN_SEQ_CHILD_SLOT_START + node.sub_nodes.length },
+            { length: SeqVauleSlot.SUB_NODE_START + node.sub_nodes.length },
             () => [],
         );
         for (const element of parse_res.parsed_elements) {
@@ -1383,7 +1385,7 @@ export class ParserImpl implements Parser {
 
         const children: (ASTNode[] | ASTNode | null)[] = [];
         for (let i = 0; i < node.sub_nodes.length; i++) {
-            const values = slot_values[PATTERN_SEQ_CHILD_SLOT_START + i]!;
+            const values = slot_values[SeqVauleSlot.SUB_NODE_START + i]!;
             const q = node.sub_quantifiers[i] as Quantifier;
             const child_node = node.sub_nodes[i]!;
             if (q === " " || q === "?") {
@@ -1399,12 +1401,12 @@ export class ParserImpl implements Parser {
             children.push(values.map((value) => make_ast_value(child_node, value)!));
         }
 
-        const seps = slot_values[PATTERN_SEQ_SEP_SLOT]!.map((value) => make_ast_value(node.sep!, value)!);
-        const left_enclosure = slot_values[PATTERN_SEQ_LEFT_ENCLOSURE_SLOT]!.length > 0
-            ? make_ast_value(node.enclosure![0], slot_values[PATTERN_SEQ_LEFT_ENCLOSURE_SLOT]![0]!)!
+        const seps = slot_values[SeqVauleSlot.SEP]!.map((value) => make_ast_value(node.sep!, value)!);
+        const left_enclosure = slot_values[SeqVauleSlot.LEFT_ENCLOSURE]!.length > 0
+            ? make_ast_value(node.enclosure![0], slot_values[SeqVauleSlot.LEFT_ENCLOSURE]![0]!)!
             : null;
-        const right_enclosure = slot_values[PATTERN_SEQ_RIGHT_ENCLOSURE_SLOT]!.length > 0
-            ? make_ast_value(node.enclosure![1], slot_values[PATTERN_SEQ_RIGHT_ENCLOSURE_SLOT]![0]!)!
+        const right_enclosure = slot_values[SeqVauleSlot.RIGHT_ENCLOSURE]!.length > 0
+            ? make_ast_value(node.enclosure![1], slot_values[SeqVauleSlot.RIGHT_ENCLOSURE]![0]!)!
             : null;
         const body_start_pos = node.enclosure !== null && left_enclosure !== null
             ? left_enclosure.range[1]
