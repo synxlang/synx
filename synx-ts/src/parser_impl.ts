@@ -125,7 +125,7 @@ interface ParseRuleResult {
 }
 
 interface PatternSeqRule {
-    first_rule: ParseRule | null;
+    first_rule: ParseRule;
     child_slot_start: number;
     sep_slot: number;
     left_enclosure_slot: number;
@@ -1302,6 +1302,7 @@ export class ParserImpl implements Parser {
         }
 
         const body_start_rule = get_state(0);
+        assert.ok(body_start_rule !== null);
         let first_rule = body_start_rule;
         if (node.enclosure !== null) {
             const left_rule = make_rule(node.enclosure[0], left_enclosure_slot);
@@ -1366,20 +1367,6 @@ export class ParserImpl implements Parser {
                 bindings: {},
             };
         };
-
-        if (first_rule === null) {
-            this.setSuccess();
-            return {
-                parser_nodes: [node],
-                range: [start, start],
-                value: [],
-                raw_value: [],
-                seps: [],
-                enclosure: null,
-                associate_enclosures: null,
-                bindings,
-            };
-        }
 
         const body_start = node.enclosure !== null ? -1 : start;
         const parse_res = this.parseRule(first_rule);
