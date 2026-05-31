@@ -101,6 +101,7 @@ interface ParseAction {
     next_rule: ParseRule | null; // kind为REJECT时必须为null
     rollback_here: boolean;      // 后续REJECT的回滚点，回滚到next_rule开始解析前，如果没有回滚点，则REJECT直接失败
     rollback_next_rule: ParseRule | null; // rollback_here为true时才有效，如果非null，清空回滚点并执行rollback_next_rule
+    ignore_start: boolean;        // 用于连带忽略，后续如果触发ignore，则回滚parsed_elements到该rule解析前，但不回滚输入
 }
 
 interface ParseRule {
@@ -147,6 +148,9 @@ function completeParseAction(action: Partial<ParseAction>): ParseAction {
     }
     if (action.rollback_next_rule === undefined) {
         action.rollback_next_rule = null;
+    }
+    if (action.ignore_start === undefined){
+        action.ignore_start = true;
     }
     return action as ParseAction;
 }
