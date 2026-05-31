@@ -1122,7 +1122,7 @@ export class ParserImpl implements Parser {
     }
 
     buildPatternSeqRule(node: PatternSeq): PatternSeqRule {
-        const mk_ignore_rule = (rule: ParseRule): ParseRule | null => {
+        const mk_ignore_rule = (rule: ParseRule, fail_rule: ParseRule | null = null): ParseRule | null => {
             let ret = null;
             if (node.ignore !== null) {
                 ret = completeParseRule({
@@ -1131,8 +1131,14 @@ export class ParserImpl implements Parser {
                 });
                 ret.not_null_success_action = completeParseAction({
                     kind: ParseActionKind.IGNORE,
-                    next_rule: rule
+                    next_rule: rule,
                 });
+                if (fail_rule !== null) {
+                    ret.fail_action = completeParseAction({
+                        kind: ParseActionKind.IGNORE,
+                        next_rule: fail_rule,
+                    });
+                }
             }
             return ret;
         }
@@ -1170,12 +1176,21 @@ export class ParserImpl implements Parser {
             sub_node_rules.push(sub_node_rule);
         }
 
-        for (let i = 0; i < node.sub_nodes.length; i++) {
-            const sub_node = node.sub_nodes[i];
-            let sub_node_rule = sub_node_rules[i];
-            let sep_rule = null;
-            let next_sub_node_rule = sub_node_rules[i + 1];
-            let fail_try_chain: ParseRule[] = [sub_node_rule];
+        const complete_sub_node_rule = (sub_node_rule: ParseRule, q: Quantifier, i: number): ParseRule => {
+            let next_sub_node_rule = null;
+            let fail_chain: ParseRule[] = [sub_node_rule];
+
+            if (q === "+") {
+                next_sub_node_rule = complete_sub_node_rule({ ...sub_node_rule }, "*", i);
+            } else if (q === "*") {
+                next_sub_node_rule = sub_node_rule;
+            } else {
+                if (i + 1 < sub_node_rules.length) {
+                    next_sub_node_rule = sub_node_rules[i + 1];
+                } else if (right_enclosure_rule !== null) {
+                    next_sub_node_rule = right_enclosure_rule;
+                }
+            }
 
             if (node.sep === null) {
                 sub_node_rule.null_success_action = sub_node_rule.not_null_success_action = completeParseAction({
@@ -1184,34 +1199,64 @@ export class ParserImpl implements Parser {
                 });
 
                 for (let j = i; j < node.sub_nodes.length; j++) {
-                    const q = node.sub_quantifiers[j];
-                    if ("?*".includes(q)) {
+                    const loc_q = j === i ? q = q : node.sub_quantifiers[j];
+                    if ("?*".includes(loc_q)) {
                         if (j + 1 < node.sub_nodes.length) {
-                            fail_try_chain.push(sub_node_rules[j + 1]);
+                            fail_chain.push(sub_node_rules[j + 1]);
                         } else if (right_enclosure_rule !== null) {
-                            fail_try_chain.push(right_enclosure_rule);
+                            fail_chain.push(right_enclosure_rule);
                         }
                     } else {
                         break;
                     }
                 }
             } else {
-                sep_rule = completeParseRule({
+                let sep_rule = completeParseRule({
                     node: node.sep,
                     value_slot: SeqVauleSlot.SEP,
                 });
 
                 sep_rule.not_null_success_action = completeParseAction({
                     kind: ParseActionKind.RECORD,
-                    next_rule: next_sub_node_rule
+                    next_rule: next_sub_node_rule,
                 });
-                set_fail_ignore_action(sep_rule);
+
+                if ("?*".includes(q)) {
+                    fail_chain.push(sep_rule);
+                } else {
+                    set_fail_ignore_action(sep_rule);
+                }
 
                 sub_node_rule.null_success_action = sub_node_rule.not_null_success_action = completeParseAction({
                     kind: ParseActionKind.RECORD,
-                    next_rule: sep_rule
+                    next_rule: sep_rule,
+                    rollback_here: true,
+                    rollback_next_rule: right_enclosure_rule
                 });
             }
+
+            if (node.ignore !== null) {
+                let ignore_rule = mk_ignore_rule(fail_chain[0], next_sub_node_rule);
+                assert.ok(ignore_rule !== null);
+                fail_chain.push(ignore_rule);
+            }
+
+            for (let j = 0; j < fail_chain.length; j++) {
+                let n = fail_chain[j];
+                if (j + 1 < fail_chain.length) {
+                    // n.fail_action = completeParseAction({
+                    //     kind: ParseActionKind.RECORD,
+                    //     next_rule: 
+                    // })
+                }
+
+            }
+
+            return sub_node_rule;
+        };
+
+        for (let i = 0; i < node.sub_nodes.length; i++) {
+            complete_sub_node_rule(sub_node_rules[i], node.sub_quantifiers[i] as Quantifier, i);
         }
     }
 
