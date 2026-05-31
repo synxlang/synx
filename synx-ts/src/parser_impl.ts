@@ -101,7 +101,7 @@ interface ParseAction {
     next_rule: ParseRule | null; // kind为REJECT时必须为null
     rollback_here: boolean;      // 后续REJECT的回滚点，回滚到next_rule开始解析前，如果没有回滚点，则REJECT直接失败
     rollback_next_rule: ParseRule | null; // rollback_here为true时才有效，如果非null，清空回滚点并执行rollback_next_rule
-    ignore_start: boolean;        // 用于连带忽略，后续如果触发ignore，则回滚parsed_elements到该rule解析前，但不回滚输入，当前只支持null回滚
+    ignore_together: boolean;        // 用于连带忽略，后续如果触发ignore则忽略连续的ignore_together，则回滚parsed_elements到该rule解析前，但不回滚输入，当前只支持null回滚
 }
 
 interface ParseRule {
@@ -149,8 +149,8 @@ function completeParseAction(action: Partial<ParseAction>): ParseAction {
     if (action.rollback_next_rule === undefined) {
         action.rollback_next_rule = null;
     }
-    if (action.ignore_start === undefined) {
-        action.ignore_start = true;
+    if (action.ignore_together === undefined) {
+        action.ignore_together = false;
     }
     return action as ParseAction;
 }
@@ -774,6 +774,7 @@ export class ParserImpl implements Parser {
         const parsed_elements: ParsedElement[] = [];
         let last_value_node: ParserNode | null = null;
         let current_rule: ParseRule | null = rule;
+        let ignore_start_parsed_elements_length = 0;
         type RollbackRecord = {
             pos: number;
             parsed_elements_length: number;
@@ -783,7 +784,6 @@ export class ParserImpl implements Parser {
             ignore_start_parsed_elements_length: number;
         };
         let rollback_record: RollbackRecord | null = null;
-        let ignore_start_parsed_elements_length = 0;
 
         const is_range_value = (value: ParsedValueType): value is [number, number] => {
             return Array.isArray(value);
@@ -811,7 +811,7 @@ export class ParserImpl implements Parser {
                 : current_rule.fail_action;
             assert.ok(action !== null);
 
-            if (action.ignore_start) {
+            if (!action.ignore_together) {
                 ignore_start_parsed_elements_length = parsed_elements.length;
             }
 
@@ -1183,11 +1183,14 @@ export class ParserImpl implements Parser {
             sub_node_rules.push(sub_node_rule);
         }
 
-        for (let i = 0; i < node.sub_nodes.length; i++) {
-            let sub_node_rule = sub_node_rules[i];
+        const complete_sub_node_rule = (sub_node_rule: ParseRule, q: Quantifier, i: number): ParseRule => {
             let sep_rule = null;
             let next_sub_node_rule = sub_node_rules[i + 1];
-            let fail_try_chain: ParseRule[] = [sub_node_rule];
+            let fail_chain: ParseRule[] = [sub_node_rule];
+
+            if (q === "+") {
+                next_sub_node_rule = complete_sub_node_rule({ ...sub_node_rule }, "*", i);
+            }
 
             if (node.sep === null) {
                 sub_node_rule.null_success_action = sub_node_rule.not_null_success_action = completeParseAction({
@@ -1196,12 +1199,12 @@ export class ParserImpl implements Parser {
                 });
 
                 for (let j = i; j < node.sub_nodes.length; j++) {
-                    const q = node.sub_quantifiers[j];
-                    if ("?*".includes(q)) {
+                    const loc_q = j === i ? q = q : node.sub_quantifiers[j];
+                    if ("?*".includes(loc_q)) {
                         if (j + 1 < node.sub_nodes.length) {
-                            fail_try_chain.push(sub_node_rules[j + 1]);
+                            fail_chain.push(sub_node_rules[j + 1]);
                         } else if (right_enclosure_rule !== null) {
-                            fail_try_chain.push(right_enclosure_rule);
+                            fail_chain.push(right_enclosure_rule);
                         }
                     } else {
                         break;
@@ -1218,10 +1221,9 @@ export class ParserImpl implements Parser {
                     next_rule: next_sub_node_rule
                 });
 
-                const q = node.sub_quantifiers[i];
-                if("?*".includes(q)){
-                    fail_try_chain.push(sep_rule);
-                }else{
+                if ("?*".includes(q)) {
+                    fail_chain.push(sep_rule);
+                } else {
                     set_fail_ignore_action(sep_rule);
                 }
 
@@ -1230,6 +1232,14 @@ export class ParserImpl implements Parser {
                     next_rule: sep_rule
                 });
             }
+
+            return sub_node_rule;
+        };
+
+        for (let i = 0; i < node.sub_nodes.length; i++) {
+            const q = node.sub_quantifiers[i];
+            let sub_node_rule = sub_node_rules[i];
+
         }
     }
 
