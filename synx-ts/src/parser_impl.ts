@@ -145,7 +145,7 @@ function completeParseAction(action: Partial<ParseAction>): ParseAction {
     if (action.rollback_here === undefined) {
         action.rollback_here = false;
     }
-    if (action.rollback_next_rule = undefined) {
+    if (action.rollback_next_rule === undefined) {
         action.rollback_next_rule = null;
     }
     return action as ParseAction;
@@ -1122,6 +1122,30 @@ export class ParserImpl implements Parser {
     }
 
     buildPatternSeqRule(node: PatternSeq): PatternSeqRule {
+        const mk_ignore_rule = (rule: ParseRule): ParseRule | null => {
+            let ret = null;
+            if (node.ignore !== null) {
+                ret = completeParseRule({
+                    node: node.ignore,
+                    value_slot: SeqVauleSlot.IGNORE,
+                });
+                ret.not_null_success_action = completeParseAction({
+                    kind: ParseActionKind.IGNORE,
+                    next_rule: rule
+                });
+            }
+            return ret;
+        }
+
+        const set_fail_ignore_action = (rule: ParseRule) => {
+            if (node.ignore !== null) {
+                rule.fail_action = completeParseAction({
+                    kind: ParseActionKind.IGNORE,
+                    next_rule: mk_ignore_rule(rule)
+                });
+            }
+        }
+
         let left_enclosure_rule = null;
         let right_enclosure_rule = null;
         let sub_node_rules: ParseRule[] = [];
@@ -1147,42 +1171,46 @@ export class ParserImpl implements Parser {
         }
 
         for (let i = 0; i < node.sub_nodes.length; i++) {
+            const sub_node = node.sub_nodes[i];
             let sub_node_rule = sub_node_rules[i];
-            const q = node.sub_quantifiers[i];
-            if (q === " ") {
-                let next_rule = sub_node_rules[i + 1];
-                let rollback_here = false;
-                if (node.sep !== null) {
-                    let sep_rule = completeParseRule({
-                        node: node.sep,
-                        value_slot: SeqVauleSlot.SEP,
-                    });
-                    sep_rule.not_null_success_action = completeParseAction({
-                        kind: ParseActionKind.RECORD,
-                        next_rule: next_rule
-                    });
-                    next_rule = sep_rule;
-                    rollback_here = true;
-                };
-                sub_node_rule.not_null_success_action = sub_node_rule.null_success_action = completeParseAction({
+            let sep_rule = null;
+            let next_sub_node_rule = sub_node_rules[i + 1];
+            let fail_try_chain: ParseRule[] = [sub_node_rule];
+
+            if (node.sep === null) {
+                sub_node_rule.null_success_action = sub_node_rule.not_null_success_action = completeParseAction({
                     kind: ParseActionKind.RECORD,
-                    next_rule: next_rule,
-                    rollback_here: rollback_here,
+                    next_rule: next_sub_node_rule
                 });
-                if (node.ignore !== null) {
-                    let ignore_rule = completeParseRule({
-                        node: node.ignore,
-                        value_slot: SeqVauleSlot.IGNORE,
-                        not_null_success_action: completeParseAction({
-                            kind: ParseActionKind.IGNORE,
-                            next_rule: sub_node_rule,
-                        })
-                    });
-                    sub_node_rule.fail_action = completeParseAction({
-                        kind: ParseActionKind.IGNORE,
-                        next_rule: ignore_rule
-                    });
+
+                for (let j = i; j < node.sub_nodes.length; j++) {
+                    const q = node.sub_quantifiers[j];
+                    if ("?*".includes(q)) {
+                        if (j + 1 < node.sub_nodes.length) {
+                            fail_try_chain.push(sub_node_rules[j + 1]);
+                        } else if (right_enclosure_rule !== null) {
+                            fail_try_chain.push(right_enclosure_rule);
+                        }
+                    } else {
+                        break;
+                    }
                 }
+            } else {
+                sep_rule = completeParseRule({
+                    node: node.sep,
+                    value_slot: SeqVauleSlot.SEP,
+                });
+
+                sep_rule.not_null_success_action = completeParseAction({
+                    kind: ParseActionKind.RECORD,
+                    next_rule: next_sub_node_rule
+                });
+                set_fail_ignore_action(sep_rule);
+
+                sub_node_rule.null_success_action = sub_node_rule.not_null_success_action = completeParseAction({
+                    kind: ParseActionKind.RECORD,
+                    next_rule: sep_rule
+                });
             }
         }
     }
