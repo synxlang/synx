@@ -1184,7 +1184,6 @@ export class ParserImpl implements Parser {
         }
 
         for (let i = 0; i < node.sub_nodes.length; i++) {
-            const sub_node = node.sub_nodes[i];
             let sub_node_rule = sub_node_rules[i];
             let sep_rule = null;
             let next_sub_node_rule = sub_node_rules[i + 1];
@@ -1218,7 +1217,13 @@ export class ParserImpl implements Parser {
                     kind: ParseActionKind.RECORD,
                     next_rule: next_sub_node_rule
                 });
-                set_fail_ignore_action(sep_rule);
+
+                const q = node.sub_quantifiers[i];
+                if("?*".includes(q)){
+                    fail_try_chain.push(sep_rule);
+                }else{
+                    set_fail_ignore_action(sep_rule);
+                }
 
                 sub_node_rule.null_success_action = sub_node_rule.not_null_success_action = completeParseAction({
                     kind: ParseActionKind.RECORD,
