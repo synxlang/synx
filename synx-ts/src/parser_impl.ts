@@ -106,9 +106,9 @@ interface ParseAction {
 interface ParseRule {
     node: ParserNode;
     value_slot: number;           // 记录的values对应索引
-    not_null_success_action: ParseAction;
-    null_success_action: ParseAction;
-    fail_action: ParseAction;
+    not_null_success_action: ParseAction | null; // null 表示不可能的路径，会直接报错
+    null_success_action: ParseAction | null; // null 表示不可能的路径，会直接报错
+    fail_action: ParseAction | null; // null 表示不可能的路径，会直接报错
 }
 
 // [number, number]用于记录连续子字符串
@@ -129,10 +129,41 @@ interface PatternSeqRule {
 }
 
 enum SeqVauleSlot {
-    SEP = 0,
-    LEFT_ENCLOSURE = 1,
-    RIGHT_ENCLOSURE = 2,
-    SUB_NODE_START = 3,
+    IGNORE,
+    SEP,
+    LEFT_ENCLOSURE,
+    RIGHT_ENCLOSURE,
+    SUB_NODE_START,
+}
+
+
+function completeParseAction(action: Partial<ParseAction>): ParseAction {
+    assert.ok(action.kind !== undefined);
+    if (action.next_rule === undefined) {
+        action.next_rule = null;
+    }
+    if (action.rollback_here === undefined) {
+        action.rollback_here = false;
+    }
+    if (action.rollback_next_rule = undefined) {
+        action.rollback_next_rule = null;
+    }
+    return action as ParseAction;
+}
+
+function completeParseRule(rule: Partial<ParseRule>): ParseRule {
+    assert.ok(rule.node !== undefined);
+    assert.ok(rule.value_slot !== undefined);
+    if (rule.not_null_success_action === undefined) {
+        rule.not_null_success_action = null;
+    }
+    if (rule.null_success_action === undefined) {
+        rule.null_success_action = null;
+    }
+    if (rule.fail_action === undefined) {
+        rule.fail_action = completeParseAction({ kind: ParseActionKind.REJECT });
+    }
+    return rule as ParseRule;
 }
 
 
@@ -733,7 +764,7 @@ export class ParserImpl implements Parser {
         this.setSuccess();
         return ret;
     }
-    
+
     parseRule(rule: ParseRule): ParseRuleResult {
         const start = this.input.pos;
         const parsed_elements: ParsedElement[] = [];
@@ -767,11 +798,12 @@ export class ParserImpl implements Parser {
                 parsed_value = this.parseSingleNodeSimple(current_rule.node);
             }
 
-            const action: ParseAction = this.isSuccess()
+            const action: ParseAction | null = this.isSuccess()
                 ? parsed_value === null
                     ? current_rule.null_success_action
                     : current_rule.not_null_success_action
                 : current_rule.fail_action;
+            assert.ok(action !== null);
 
             if (action.kind === ParseActionKind.RECORD) {
                 assert.ok(this.isSuccess(), "use IGNORE instead of RECORD when fail.");
@@ -1090,240 +1122,72 @@ export class ParserImpl implements Parser {
     }
 
     buildPatternSeqRule(node: PatternSeq): PatternSeqRule {
-        const action = (
-            kind: ParseActionKind,
-            next_rule: ParseRule | null,
-            rollback_here: boolean = false,
-            rollback_next_rule: ParseRule | null = null,
-        ): ParseAction => {
-            return { kind, next_rule, rollback_here, rollback_next_rule };
-        };
+        let left_enclosure_rule = null;
+        let right_enclosure_rule = null;
+        let sub_node_rules: ParseRule[] = [];
 
-        const make_rule = (parser_node: ParserNode, value_slot: number): ParseRule => {
-            const reject = action(ParseActionKind.REJECT, null);
-            return {
-                node: parser_node,
-                value_slot,
-                not_null_success_action: reject,
-                null_success_action: reject,
-                fail_action: reject,
-            };
-        };
-
-        const state_entries: (ParseRule | null | undefined)[] = Array.from({ length: node.sub_nodes.length + 1 }, () => undefined);
-        const state_ignore_entries: (ParseRule | null | undefined)[] = Array.from({ length: node.sub_nodes.length + 1 }, () => undefined);
-
-        const get_state = (idx: number): ParseRule | null => {
-            if (state_entries[idx] !== undefined) {
-                return state_entries[idx]!;
-            }
-            const ignore_rule = node.ignore !== null
-                ? make_rule(node.ignore, -1)
-                : null;
-            state_ignore_entries[idx] = ignore_rule;
-            state_entries[idx] = build_suffix_with_fail(idx, ignore_rule);
-            if (ignore_rule !== null) {
-                ignore_rule.not_null_success_action = action(ParseActionKind.IGNORE, state_entries[idx]!);
-                ignore_rule.null_success_action = action(ParseActionKind.IGNORE, state_entries[idx]!);
-                ignore_rule.fail_action = action(ParseActionKind.REJECT, null);
-            }
-            return state_entries[idx]!;
-        };
-
-        const build_sep_to = (
-            idx: number,
-            next_rule: ParseRule | null,
-            fail_action: ParseAction,
-            optional: boolean,
-            force: boolean = false,
-        ): ParseRule | null => {
-            if (node.sep === null) {
-                return next_rule;
-            }
-            if (force || idx < node.sub_nodes.length - 1 || node.accept_trailing_sep) {
-                const sep_rule = make_rule(node.sep, SeqVauleSlot.SEP);
-                sep_rule.not_null_success_action = action(ParseActionKind.RECORD, next_rule);
-                sep_rule.null_success_action = action(ParseActionKind.RECORD, next_rule);
-                if (optional || (!force && idx >= node.sub_nodes.length - 1)) {
-                    if (node.ignore !== null) {
-                        const retry_ignore_rule = make_rule(node.ignore, -1);
-                        retry_ignore_rule.not_null_success_action = action(ParseActionKind.IGNORE, sep_rule);
-                        retry_ignore_rule.null_success_action = action(ParseActionKind.IGNORE, sep_rule);
-                        retry_ignore_rule.fail_action = action(ParseActionKind.IGNORE, next_rule);
-                        sep_rule.fail_action = action(ParseActionKind.IGNORE, retry_ignore_rule);
-                    } else {
-                        sep_rule.fail_action = action(ParseActionKind.IGNORE, next_rule);
-                    }
-                } else if (node.ignore !== null) {
-                    const retry_ignore_rule = make_rule(node.ignore, -1);
-                    retry_ignore_rule.not_null_success_action = action(ParseActionKind.IGNORE, sep_rule);
-                    retry_ignore_rule.null_success_action = action(ParseActionKind.IGNORE, sep_rule);
-                    retry_ignore_rule.fail_action = fail_action;
-                    sep_rule.fail_action = action(ParseActionKind.IGNORE, retry_ignore_rule);
-                } else {
-                    sep_rule.fail_action = fail_action;
-                }
-                return sep_rule;
-            }
-            return next_rule;
-        };
-
-        const build_item_rule = (
-            idx: number,
-            success_next: ParseRule | null,
-            fail_action: ParseAction,
-            rollback_here: boolean = false,
-            rollback_next_rule: ParseRule | null = null,
-        ): ParseRule => {
-            const item_rule = make_rule(node.sub_nodes[idx]!, SeqVauleSlot.SUB_NODE_START + idx);
-            item_rule.not_null_success_action = action(
-                ParseActionKind.RECORD,
-                success_next,
-                rollback_here,
-                rollback_next_rule,
-            );
-            item_rule.null_success_action = action(
-                ParseActionKind.RECORD,
-                success_next,
-                rollback_here,
-                rollback_next_rule,
-            );
-            item_rule.fail_action = fail_action;
-            return item_rule;
-        };
-
-        function build_suffix_with_fail(idx: number, fail_next: ParseRule | null): ParseRule | null {
-            if (idx >= node.sub_nodes.length) {
-                if (node.enclosure === null) {
-                    return null;
-                }
-                const right_rule = make_rule(node.enclosure[1], SeqVauleSlot.RIGHT_ENCLOSURE);
-                right_rule.not_null_success_action = action(ParseActionKind.RECORD, null);
-                right_rule.null_success_action = action(ParseActionKind.RECORD, null);
-                right_rule.fail_action = fail_next !== null
-                    ? action(ParseActionKind.IGNORE, fail_next)
-                    : action(ParseActionKind.REJECT, null);
-                return right_rule;
-            }
-
-            const fail_action = fail_next !== null
-                ? action(ParseActionKind.IGNORE, fail_next)
-                : action(ParseActionKind.REJECT, null);
-            const q = node.sub_quantifiers[idx] as Quantifier;
-            const greedy = node.greedy_flags[idx]!;
-            const normal_next = get_state(idx + 1);
-            const clone_next = build_suffix_with_fail(idx + 1, fail_next);
-            const exit_after_match = build_sep_to(idx, normal_next, fail_action, false);
-            const exit_without_match = clone_next;
-
-            if (q === " ") {
-                const after_match = build_sep_to(idx, normal_next, fail_action, false);
-                return build_item_rule(idx, after_match, fail_action);
-            }
-
-            if (q === "?") {
-                if (greedy) {
-                    return build_item_rule(idx, exit_after_match, action(ParseActionKind.IGNORE, exit_without_match));
-                }
-                if (exit_without_match === null) {
-                    return build_item_rule(idx, exit_after_match, fail_action);
-                }
-                let item_rule: ParseRule;
-                const exit_entry = exit_without_match;
-                const item_entry = (): ParseRule => item_rule;
-                const retry_rule = node.ignore !== null
-                    ? make_rule(node.ignore, -1)
-                    : null;
-                item_rule = build_item_rule(idx, exit_after_match, fail_action);
-                if (retry_rule !== null) {
-                    retry_rule.not_null_success_action = action(ParseActionKind.IGNORE, exit_entry);
-                    retry_rule.null_success_action = action(ParseActionKind.IGNORE, exit_entry);
-                    retry_rule.fail_action = action(ParseActionKind.REJECT, null);
-                    item_rule.fail_action = action(ParseActionKind.IGNORE, retry_rule);
-                }
-                const last_fail = action(ParseActionKind.IGNORE, item_entry());
-                exit_entry.fail_action = last_fail;
-                return exit_entry;
-            }
-
-            const item_rule = build_item_rule(idx, null, fail_action, true, exit_after_match);
-            const repeat_next = build_sep_to(idx, item_rule, fail_action, false, true);
-            item_rule.not_null_success_action.next_rule = repeat_next;
-            item_rule.null_success_action.next_rule = repeat_next;
-            if (repeat_next !== null && repeat_next !== item_rule && node.sep !== null) {
-                repeat_next.not_null_success_action.next_rule = item_rule;
-                repeat_next.null_success_action.next_rule = item_rule;
-            }
-
-            if (q === "+") {
-                if (greedy) {
-                    return item_rule;
-                }
-                const probe_after_match = exit_after_match;
-                item_rule.not_null_success_action.next_rule = probe_after_match;
-                item_rule.not_null_success_action.rollback_here = true;
-                item_rule.not_null_success_action.rollback_next_rule = repeat_next;
-                item_rule.null_success_action.next_rule = probe_after_match;
-                item_rule.null_success_action.rollback_here = true;
-                item_rule.null_success_action.rollback_next_rule = repeat_next;
-
-                const first_rule = build_item_rule(idx, probe_after_match, fail_action, true, repeat_next);
-                return first_rule;
-            }
-
-            assert.ok(q === "*");
-            if (greedy) {
-                if (node.ignore !== null) {
-                    const retry_ignore_rule = make_rule(node.ignore, -1);
-                    retry_ignore_rule.not_null_success_action = action(ParseActionKind.IGNORE, item_rule);
-                    retry_ignore_rule.null_success_action = action(ParseActionKind.IGNORE, item_rule);
-                    retry_ignore_rule.fail_action = action(ParseActionKind.IGNORE, exit_without_match);
-                    item_rule.fail_action = action(ParseActionKind.IGNORE, retry_ignore_rule);
-                } else {
-                    item_rule.fail_action = action(ParseActionKind.IGNORE, exit_without_match);
-                }
-                return item_rule;
-            }
-            if (exit_without_match === null) {
-                return item_rule;
-            }
-            const probe_entry = exit_without_match;
-            item_rule.fail_action = fail_action;
-            item_rule.not_null_success_action.next_rule = exit_after_match;
-            item_rule.not_null_success_action.rollback_here = true;
-            item_rule.not_null_success_action.rollback_next_rule = repeat_next;
-            item_rule.null_success_action.next_rule = exit_after_match;
-            item_rule.null_success_action.rollback_here = true;
-            item_rule.null_success_action.rollback_next_rule = repeat_next;
-            probe_entry.fail_action = action(ParseActionKind.IGNORE, item_rule);
-            return probe_entry;
-        }
-
-        const body_start_rule = get_state(0);
-        assert.ok(body_start_rule !== null);
-        let first_rule = body_start_rule;
         if (node.enclosure !== null) {
-            const left_rule = make_rule(node.enclosure[0], SeqVauleSlot.LEFT_ENCLOSURE);
-            left_rule.not_null_success_action = action(ParseActionKind.RECORD, body_start_rule);
-            left_rule.null_success_action = action(ParseActionKind.RECORD, body_start_rule);
-            if (node.ignore !== null) {
-                const retry_ignore_rule = make_rule(node.ignore, -1);
-                retry_ignore_rule.not_null_success_action = action(ParseActionKind.IGNORE, left_rule);
-                retry_ignore_rule.null_success_action = action(ParseActionKind.IGNORE, left_rule);
-                retry_ignore_rule.fail_action = action(ParseActionKind.REJECT, null);
-                left_rule.fail_action = action(ParseActionKind.IGNORE, retry_ignore_rule);
-            } else {
-                left_rule.fail_action = action(ParseActionKind.REJECT, null);
-            }
-            first_rule = left_rule;
+            left_enclosure_rule = completeParseRule({
+                node: node.enclosure[0],
+                value_slot: SeqVauleSlot.LEFT_ENCLOSURE,
+            });
+            right_enclosure_rule = completeParseRule({
+                node: node.enclosure[1],
+                value_slot: SeqVauleSlot.RIGHT_ENCLOSURE,
+            });
         }
 
-        return {
-            first_rule,
-        };
+        for (let i = 0; i < node.sub_nodes.length; i++) {
+            let sub_node = node.sub_nodes[i];
+            let sub_node_rule = completeParseRule({
+                node: sub_node,
+                value_slot: SeqVauleSlot.SUB_NODE_START + i,
+            });
+            sub_node_rules.push(sub_node_rule);
+        }
+
+        for (let i = 0; i < node.sub_nodes.length; i++) {
+            let sub_node_rule = sub_node_rules[i];
+            const q = node.sub_quantifiers[i];
+            if (q === " ") {
+                let next_rule = sub_node_rules[i + 1];
+                let rollback_here = false;
+                if (node.sep !== null) {
+                    let sep_rule = completeParseRule({
+                        node: node.sep,
+                        value_slot: SeqVauleSlot.SEP,
+                    });
+                    sep_rule.not_null_success_action = completeParseAction({
+                        kind: ParseActionKind.RECORD,
+                        next_rule: next_rule
+                    });
+                    next_rule = sep_rule;
+                    rollback_here = true;
+                };
+                sub_node_rule.not_null_success_action = sub_node_rule.null_success_action = completeParseAction({
+                    kind: ParseActionKind.RECORD,
+                    next_rule: next_rule,
+                    rollback_here: rollback_here,
+                });
+                if (node.ignore !== null) {
+                    let ignore_rule = completeParseRule({
+                        node: node.ignore,
+                        value_slot: SeqVauleSlot.IGNORE,
+                        not_null_success_action: completeParseAction({
+                            kind: ParseActionKind.IGNORE,
+                            next_rule: sub_node_rule,
+                        })
+                    });
+                    sub_node_rule.fail_action = completeParseAction({
+                        kind: ParseActionKind.IGNORE,
+                        next_rule: ignore_rule
+                    });
+                }
+            }
+        }
     }
 
-    newParsePatternSeq(node: PatternSeq): ASTNode | null{
+    newParsePatternSeq(node: PatternSeq): ASTNode | null {
         const start = this.input.pos;
         const bindings: Record<string, any> = {};
         let pattern_seq_rule = this.pattern_seq_rule_cache.get(node);
@@ -1470,7 +1334,7 @@ export class ParserImpl implements Parser {
     parsePatternSeq(node: PatternSeq): ASTNode | null {
         return this.newParsePatternSeq(node);
     }
-    
+
     oldParsePatternSeq(node: PatternSeq): ASTNode | null {
         const start = this.input.pos;
         const children: (ASTNode[] | ASTNode | null)[] = [];
