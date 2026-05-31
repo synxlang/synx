@@ -101,7 +101,7 @@ interface ParseAction {
     next_rule: ParseRule | null; // kind为REJECT时必须为null
     rollback_here: boolean;      // 后续REJECT的回滚点，回滚到next_rule开始解析前，如果没有回滚点，则REJECT直接失败
     rollback_next_rule: ParseRule | null; // rollback_here为true时才有效，如果非null，清空回滚点并执行rollback_next_rule
-    ignore_together: boolean;        // 用于连带忽略，后续如果触发ignore则忽略连续的ignore_together，则回滚parsed_elements到该rule解析前，但不回滚输入，当前只支持null回滚
+    ignore_together: boolean;        // 用于连带忽略，后续如果触发ignore则忽略连续的ignore_together，则回滚parsed_elements到该rule解析前，但不回滚输入，当前不支持字符节点回滚
 }
 
 interface ParseRule {
@@ -811,30 +811,29 @@ export class ParserImpl implements Parser {
                 : current_rule.fail_action;
             assert.ok(action !== null);
 
-            if (!action.ignore_together) {
-                ignore_start_parsed_elements_length = parsed_elements.length;
-            }
-
             if (action.kind === ParseActionKind.RECORD) {
-                assert.ok(this.isSuccess(), "use IGNORE instead of RECORD when fail.");
-                const last_element = parsed_elements[parsed_elements.length - 1];
-                let merged = false;
-                if (
-                    isGeneralCharMatchNode(current_rule.node)
-                    && last_value_node === current_rule.node
-                    && last_element !== undefined
-                    && last_element.slot === current_rule.value_slot
-                ) {
-                    assert.ok(is_range_value(last_element.value) && is_range_value(parsed_value));
-                    if (last_element.value[1] === parsed_value[0]) {
-                        last_element.value[1] = parsed_value[1];
-                        merged = true;
+                if (this.isSuccess()) {
+                    const last_element = parsed_elements[parsed_elements.length - 1];
+                    let merged = false;
+                    if (
+                        isGeneralCharMatchNode(current_rule.node)
+                        && last_value_node === current_rule.node
+                        && last_element !== undefined
+                        && last_element.slot === current_rule.value_slot
+                    ) {
+                        assert.ok(is_range_value(last_element.value) && is_range_value(parsed_value));
+                        if (last_element.value[1] === parsed_value[0]) {
+                            last_element.value[1] = parsed_value[1];
+                            merged = true;
+                        }
                     }
+                    if (!merged) {
+                        parsed_elements.push({ slot: current_rule.value_slot, value: parsed_value });
+                    }
+                    last_value_node = current_rule.node;
+                } else {
+                    parsed_elements.push({ slot: current_rule.value_slot, value: null });
                 }
-                if (!merged) {
-                    parsed_elements.push({ slot: current_rule.value_slot, value: parsed_value });
-                }
-                last_value_node = current_rule.node;
             } else if (action.kind == ParseActionKind.IGNORE) {
                 if (this.input.pos > rule_start) {
                     last_value_node = null;
@@ -860,6 +859,10 @@ export class ParserImpl implements Parser {
                 this.input.pos = start;
                 this.setError(rule_start);
                 return { parsed_elements };
+            }
+
+            if (!action.ignore_together) {
+                ignore_start_parsed_elements_length = parsed_elements.length;
             }
 
             if (action.rollback_here) {
@@ -1135,7 +1138,7 @@ export class ParserImpl implements Parser {
     }
 
     buildPatternSeqRule(node: PatternSeq): PatternSeqRule {
-        const mk_ignore_rule = (rule: ParseRule): ParseRule | null => {
+        const mk_ignore_rule = (rule: ParseRule, fail_rule: ParseRule | null = null): ParseRule | null => {
             let ret = null;
             if (node.ignore !== null) {
                 ret = completeParseRule({
@@ -1144,8 +1147,14 @@ export class ParserImpl implements Parser {
                 });
                 ret.not_null_success_action = completeParseAction({
                     kind: ParseActionKind.IGNORE,
-                    next_rule: rule
+                    next_rule: rule,
                 });
+                if (fail_rule !== null) {
+                    ret.fail_action = completeParseAction({
+                        kind: ParseActionKind.IGNORE,
+                        next_rule: fail_rule,
+                    });
+                }
             }
             return ret;
         }
@@ -1184,12 +1193,19 @@ export class ParserImpl implements Parser {
         }
 
         const complete_sub_node_rule = (sub_node_rule: ParseRule, q: Quantifier, i: number): ParseRule => {
-            let sep_rule = null;
-            let next_sub_node_rule = sub_node_rules[i + 1];
+            let next_sub_node_rule = null;
             let fail_chain: ParseRule[] = [sub_node_rule];
 
             if (q === "+") {
                 next_sub_node_rule = complete_sub_node_rule({ ...sub_node_rule }, "*", i);
+            } else if (q === "*") {
+                next_sub_node_rule = sub_node_rule;
+            } else {
+                if (i + 1 < sub_node_rules.length) {
+                    next_sub_node_rule = sub_node_rules[i + 1];
+                } else if (right_enclosure_rule !== null) {
+                    next_sub_node_rule = right_enclosure_rule;
+                }
             }
 
             if (node.sep === null) {
@@ -1211,14 +1227,14 @@ export class ParserImpl implements Parser {
                     }
                 }
             } else {
-                sep_rule = completeParseRule({
+                let sep_rule = completeParseRule({
                     node: node.sep,
                     value_slot: SeqVauleSlot.SEP,
                 });
 
                 sep_rule.not_null_success_action = completeParseAction({
                     kind: ParseActionKind.RECORD,
-                    next_rule: next_sub_node_rule
+                    next_rule: next_sub_node_rule,
                 });
 
                 if ("?*".includes(q)) {
@@ -1229,17 +1245,34 @@ export class ParserImpl implements Parser {
 
                 sub_node_rule.null_success_action = sub_node_rule.not_null_success_action = completeParseAction({
                     kind: ParseActionKind.RECORD,
-                    next_rule: sep_rule
+                    next_rule: sep_rule,
+                    rollback_here: true,
+                    rollback_next_rule: right_enclosure_rule
                 });
+            }
+
+            if (node.ignore !== null) {
+                let ignore_rule = mk_ignore_rule(fail_chain[0], next_sub_node_rule);
+                assert.ok(ignore_rule !== null);
+                fail_chain.push(ignore_rule);
+            }
+
+            for (let j = 0; j < fail_chain.length; j++) {
+                let n = fail_chain[j];
+                if (j + 1 < fail_chain.length) {
+                    n.fail_action = completeParseAction({
+                        kind: ParseActionKind.RECORD,
+                        next_rule: 
+                    })
+                }
+
             }
 
             return sub_node_rule;
         };
 
         for (let i = 0; i < node.sub_nodes.length; i++) {
-            const q = node.sub_quantifiers[i];
-            let sub_node_rule = sub_node_rules[i];
-
+            complete_sub_node_rule(sub_node_rules[i], node.sub_quantifiers[i] as Quantifier, i);
         }
     }
 
