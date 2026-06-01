@@ -1154,7 +1154,7 @@ export class ParserImpl implements Parser {
     }
 
     buildPatternSeqRule(node: PatternSeq): PatternSeqRule {
-        // TODO
+        throw "TODO";
     }
 
     newParsePatternSeq(node: PatternSeq): ASTNode | null {
@@ -1166,7 +1166,7 @@ export class ParserImpl implements Parser {
             this.pattern_seq_rule_cache.set(node, pattern_seq_rule);
         }
         const { first_rule } = pattern_seq_rule;
-
+        throw "TODO";
     }
 
     parsePatternSeq(node: PatternSeq): ASTNode | null {
