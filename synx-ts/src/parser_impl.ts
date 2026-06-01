@@ -138,7 +138,7 @@ interface PatternSeqRule {
     first_rule: ParseRule;
 }
 
-enum SeqVauleSlot {
+enum SeqValueSlot {
     IGNORE,
     SEP,
     LEFT_ENCLOSURE,
