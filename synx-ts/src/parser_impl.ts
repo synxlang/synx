@@ -1172,6 +1172,7 @@ export class ParserImpl implements Parser {
 
         const complete_sub_node_rule = (sub_node_rule: ParseRule, q: Quantifier, i: number): ParseRule => {
             let next_node_rule = null;
+            let sep_rule = null;
             let try_chain: ParseRule[] = [sub_node_rule];
 
             if (q === "+") {
@@ -1186,22 +1187,32 @@ export class ParserImpl implements Parser {
                 }
             }
 
+            let last_try_sub_node_i = i;
             for (let j = i; j + 1 < node.sub_nodes.length; j++) {
                 const loc_q = j === i ? q = q : node.sub_quantifiers[j];
                 if ("?*".includes(loc_q)) {
                     try_chain.push(sub_node_rules[j + 1]);
+                    last_try_sub_node_i = j + 1;
                 } else {
                     break;
                 }
             }
 
-            if (node.sep === null) {
+            const last_try_sub_node_optional = last_try_sub_node_i === sub_node_rules.length - 1 && "?*".includes(node.sub_quantifiers[last_try_sub_node_i]);
+
+
+            if (node.sep === null
+                // || (i + 1 === sub_node_rules.length && !node.accept_trailing_sep)
+            ) {
                 sub_node_rule.null_success_action = sub_node_rule.not_null_success_action = completeParseAction({
                     kind: ParseActionKind.RECORD,
                     next_rule: next_node_rule
                 });
+                if (right_enclosure_rule !== null && last_try_sub_node_optional) {
+                    try_chain.push(right_enclosure_rule);
+                }
             } else {
-                let sep_rule = completeParseRule({
+                sep_rule = completeParseRule({
                     node: node.sep,
                     value_slot: SeqVauleSlot.SEP,
                 });
@@ -1211,30 +1222,38 @@ export class ParserImpl implements Parser {
                     next_rule: next_node_rule,
                 });
 
-                if ("?*".includes(q)) {
-                    try_chain.push(sep_rule);
-                } else {
-                    set_fail_ignore_action(sep_rule);
-                }
+                set_fail_ignore_action(sep_rule);
 
                 sub_node_rule.null_success_action = sub_node_rule.not_null_success_action = completeParseAction({
                     kind: ParseActionKind.RECORD,
                     next_rule: sep_rule,
-                    rollback_here: true,
-                    rollback_next_rule: next_node_rule
+                    rollback_here: last_try_sub_node_i === sub_node_rules.length - 1,
+                    rollback_next_rule: right_enclosure_rule
                 });
+
+                if (right_enclosure_rule !== null && node.accept_trailing_sep && last_try_sub_node_i === sub_node_rules.length - 1) {
+                    try_chain.push(right_enclosure_rule);
+                }
             }
+
+            const accept_try_chain_fail = last_try_sub_node_optional 
+                && right_enclosure_rule === null 
+                && (node.accept_trailing_sep || node.sep === null); // TODO: 还未匹配任何sep时
 
             if (node.ignore !== null) {
                 let ignore_rule = mk_ignore_rule(try_chain[0]);
                 assert.ok(ignore_rule !== null);
+                ignore_rule.not_null_success_action = completeParseAction({
+                    kind: ParseActionKind.IGNORE,
+                    next_rule: sub_node_rule,
+                });
                 try_chain.push(ignore_rule);
             }
 
             for (let j = 0; j + 1 < try_chain.length; j++) {
                 let n = try_chain[j];
                 n.fail_action = completeParseAction({
-                    kind: ParseActionKind.RECORD,
+                    kind: ParseActionKind.IGNORE,
                     next_rule: try_chain[j + 1]
                 })
             }
