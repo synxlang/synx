@@ -107,8 +107,8 @@ enum ParseActionKind {
 }
 
 interface ParseAction {
-    kind: ParseActionKind;
-    next_rule: ParseRule | null; // kind为REJECT时必须为null
+    kind: ParseActionKind;       // REJECT时，以下字段都无效
+    next_rule: ParseRule | null;
     rollback_here: boolean;      // 后续REJECT的回滚点，回滚到next_rule开始解析前，如果没有回滚点，则REJECT直接失败
     rollback_next_rule: ParseRule | null; // rollback_here为true时才有效，如果非null，清空回滚点并执行rollback_next_rule
 }
@@ -138,22 +138,24 @@ interface PatternSeqRule {
     first_rule: ParseRule;
 }
 
+interface ParseStageAction {
+    kind: ParseActionKind;          // REJECT时，以下字段都无效，整个stage失败
+    next_stage: ParseStage | null; // 为null时表示为转移到下一个alt
+    rollback_here: boolean;
+    rollback_next_stage: ParseStage | null;
+}
+
 interface ParseStageAlt {
-    /** 当前候选要尝试解析的节点。 */
-    parser_node: ParserNode;
-    /** 当前候选成功后记录到的 value slot；IGNORE 类候选也保留该字段以复用 ParseRule 结构。 */
-    value_slot: number;
-    /** 当前候选成功后的动作；通常是 RECORD，ignore 候选使用 IGNORE。 */
-    success_action_kind: ParseActionKind.RECORD | ParseActionKind.IGNORE;
-    /** 当前候选成功后进入的下一个 stage；为 null 表示整个规则成功结束。 */
-    next_stage: ParseStage | null;
+    node: ParserNode;
+    value_slot: number;           // 记录的values对应索引
+    not_null_success_action: ParseStageAction | null; // null 表示不可能的路径，会直接报错
+    null_success_action: ParseStageAction | null; // null 表示不可能的路径，会直接报错
+    fail_action: ParseStageAction | null; // null 表示不可能的路径，会直接报错
 }
 
 interface ParseStage {
     /**
-     * 当前 stage 的候选列表，按顺序线性尝试。
-     * 某个候选解析成功后执行该候选的 success_action_kind，并进入该候选的 next_stage。
-     * 某个候选解析失败后尝试下一个候选；所有候选都失败则当前 stage 失败。
+     * 当前 stage 的候选列表，按顺序线性尝试，如果触发REJECT则stage失败，如果所有选项尝试后没有触发next_stage则终止并成功
      */
     alts: ParseStageAlt[];
 }
