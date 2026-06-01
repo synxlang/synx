@@ -138,6 +138,26 @@ interface PatternSeqRule {
     first_rule: ParseRule;
 }
 
+interface ParseStageAlt {
+    /** 当前候选要尝试解析的节点。 */
+    parser_node: ParserNode;
+    /** 当前候选成功后记录到的 value slot；IGNORE 类候选也保留该字段以复用 ParseRule 结构。 */
+    value_slot: number;
+    /** 当前候选成功后的动作；通常是 RECORD，ignore 候选使用 IGNORE。 */
+    success_action_kind: ParseActionKind.RECORD | ParseActionKind.IGNORE;
+    /** 当前候选成功后进入的下一个 stage；为 null 表示整个规则成功结束。 */
+    next_stage: ParseStage | null;
+}
+
+interface ParseStage {
+    /**
+     * 当前 stage 的候选列表，按顺序线性尝试。
+     * 某个候选解析成功后执行该候选的 success_action_kind，并进入该候选的 next_stage。
+     * 某个候选解析失败后尝试下一个候选；所有候选都失败则当前 stage 失败。
+     */
+    alts: ParseStageAlt[];
+}
+
 enum SeqValueSlot {
     IGNORE,
     SEP,
@@ -1132,225 +1152,6 @@ export class ParserImpl implements Parser {
     }
 
     buildPatternSeqRule(node: PatternSeq): PatternSeqRule {
-        /*
-         * buildPatternSeqRule 的职责：
-         * - 只构造 ParseRule 图，描述解析尝试顺序、成功跳转、失败 fallback、ignore / sep / enclosure 的插入位置。
-         * - 不组装 AST；ParsedElement.value_slot 到 children / seps / enclosure / bindings 的还原放在 newParsePatternSeq 中做。
-         *
-         * 约定：
-         * - 现有 value_slot 只表示结果记录位置：
-         *   IGNORE / SEP / LEFT_ENCLOSURE / RIGHT_ENCLOSURE / SUB_NODE_START + 原始 sub_node 下标。
-         * - value_slot 不是 body 内部步骤身份。因为 '+' 需要拆成两个内部步骤，但这两个步骤记录到同一个
-         *   SUB_NODE_START + i。
-         *
-         * 构造步骤：
-         *
-         * 1. 计算 BodyStep 列表。
-         *    用到：
-         *    - node.sub_nodes
-         *    - node.sub_quantifiers
-         *    - node.greedy_flags
-         *    - SeqValueSlot.SUB_NODE_START
-         *
-         *    产出：
-         *    - body_steps[]，每项表示 body 内部的一个匹配步骤，字段至少包含：
-         *      body_step_index：内部步骤位置，不是 value_slot。
-         *      sub_index：原始 sub_nodes 下标。
-         *      parser_node：node.sub_nodes[sub_index]。
-         *      q：内部量词，只允许 ' ' / '?' / '*'。
-         *      greedy：该内部步骤的贪婪标记。
-         *      value_slot：SUB_NODE_START + sub_index。
-         *    - first_body_step_of_sub[]：原始 sub_node 下标到其第一个 BodyStep 的映射。
-         *    - plus_tail_step_of_sub[]：原始 '+' 子节点到拆分出的 '*' tail step 的映射；非 '+' 为 null。
-         *
-         *    拆分规则：
-         *    - ' ' / '?' / '*' 各生成一个 BodyStep。
-         *    - '+' 生成两个 BodyStep：
-         *      第一段 q=' '，greedy=true，表示必选第一次。
-         *      第二段 q='*'，greedy=node.greedy_flags[i]，表示后续重复。
-         *      两段使用同一个 value_slot。
-         *
-         * 2. 准备非 body 元素的取用信息。
-         *    用到：
-         *    - node.sep
-         *    - node.ignore
-         *    - node.enclosure
-         *
-         *    产出：
-         *    - 后续构造 fragment 时直接使用：
-         *      SEP -> node.sep
-         *      IGNORE -> node.ignore
-         *      LEFT_ENCLOSURE -> node.enclosure[0]
-         *      RIGHT_ENCLOSURE -> node.enclosure[1]
-         *
-         *    注意：
-         *    - sep / ignore / enclosure 不参与 BodyStep。
-         *    - 它们没有 body 量词，也不参与 body boundary 的可空性计算。
-         *
-         * 3. 计算 body boundary 的空成功信息。
-         *    boundary 是 BodyStep 之间的位置，范围为 0..body_steps.length。
-         *
-         *    用到：
-         *    - body_steps[].q
-         *
-         *    产出：
-         *    - can_empty_from[b]：从 boundary b 到 body 结束，是否可以不再匹配任何真实 body step 而成功。
-         *
-         *    规则：
-         *    - q=' ' 不能跳过。
-         *    - q='?' / '*' 可以跳过。
-         *
-         *    用途：
-         *    - boundary 的真实尝试和 ignore 都失败后：
-         *      can_empty_from[b] 为 true，则进入 body end。
-         *      否则 REJECT。
-         *
-         * 4. 计算每个 boundary 的线性尝试顺序。
-         *    用到：
-         *    - body_steps
-         *    - body_steps[].q
-         *    - body_steps[].greedy
-         *    - node.ignore
-         *    - can_empty_from[b]
-         *    - body end fragment；如果有 enclosure，则 body end 实际是 RIGHT_ENCLOSURE fragment。
-         *
-         *    对每个 boundary b，从 b 开始向右扫描，生成同一输入位置的候选顺序：
-         *    - delayed = []
-         *    - 遇到 q 为 '?' 或 '*' 且 greedy=false 的 step：放入 delayed，继续扫描。
-         *    - 遇到其他 step：输出当前 step，再逆序输出 delayed，清空 delayed。
-         *    - 遇到 q=' '：输出后停止扫描。
-         *    - 扫描结束：
-         *      如果 can_empty_from[b] 为 true，先输出 BODY_END，再逆序输出剩余 delayed。
-         *      如果 can_empty_from[b] 为 false，只逆序输出剩余 delayed。
-         *    - 最后如果 node.ignore 非 null，追加 IGNORE 尝试。
-         *    - 尾部接 REJECT。
-         *
-         *    BODY_END 是一种线性候选项，不是固定排在所有真实节点之后的兜底结果：
-         *    - 没有 enclosure 时，BODY_END 表示 parseRule 结束成功。
-         *    - 有 enclosure 时，BODY_END 表示尝试 RIGHT_ENCLOSURE，成功才结束。
-         *    - 它必须参与非贪婪顺序调整。尤其末尾连续非贪婪可空 step 场景中，
-         *      BODY_END 要排在 delayed step 前面，例如 AnyChar* \enclosedby Quote，
-         *      到右引号位置应先尝试 BODY_END/RIGHT_ENCLOSURE，再尝试 AnyChar。
-         *
-         *    例子：
-         *    - a? b? c? 全贪婪：a, b, c, ignore, empty
-         *    - a 非贪婪：b, a, c, ignore, empty
-         *    - a、b 非贪婪：c, b, a, ignore, empty
-         *    - a? b? c? 且 c 非贪婪：a, b, BODY_END, c, ignore
-         *
-         *    关键语义：
-         *    - 同一输入位置必须先尝试完真实 body step，最后才尝试 ignore。
-         *    - 非贪婪只改变线性尝试顺序，不把规则图变成树。
-         *    - BODY_END 在这里被视为真实结束候选；因此它也在 ignore 前面。
-         *
-         * 5. 计算 leave continuation。
-         *    含义：
-         *    - 某个原始 sub_node 已经成功消费过，现在决定结束这个原始 sub_node，进入后续原始 sub_node。
-         *
-         *    用到：
-         *    - 当前 BodyStep 的 sub_index。
-         *    - node.sep。
-         *    - node.accept_trailing_sep。
-         *    - first_body_step_of_sub[sub_index + 1]。
-         *    - body end。
-         *
-         *    产出：
-         *    - leave continuation fragment。
-         *
-         *    规则：
-         *    - 没有 sep：跳到下一个原始 sub_node 的 boundary；如果没有下一个 sub_node，则跳 body end。
-         *    - 有 sep 且当前不是最后一个原始 sub_node：必须解析 SEP，成功后进入下一个原始 sub_node boundary。
-         *    - 有 sep 且当前是最后一个原始 sub_node：
-         *      accept_trailing_sep=true 时可选解析 SEP，然后进入 body end。
-         *      accept_trailing_sep=false 时直接进入 body end。
-         *
-         *    注意：
-         *    - 只要某个原始 sub_node 已经成功消费过，离开它时就必须经过这里，不能直接跳后续 boundary，
-         *      否则 sep 语义会错。
-         *
-         * 6. 计算 repeat continuation。
-         *    含义：
-         *    - 一个 q='*' 的 BodyStep 已经成功匹配一次，接下来决定继续重复，还是结束当前原始 sub_node。
-         *
-         *    用到：
-         *    - 当前 q='*' 的 BodyStep。
-         *    - body_step.greedy。
-         *    - node.sep。
-         *    - 第 5 步的 leave continuation。
-         *
-         *    产出：
-         *    - repeat continuation fragment。
-         *
-         *    规则：
-         *    - greedy=true：先尝试 more，失败后 fallback 到 leave。
-         *    - greedy=false：先尝试 leave，leave 失败后再尝试 more。
-         *
-         *    more 的规则：
-         *    - 没有 sep：再次尝试同一个 repeat BodyStep。
-         *    - 有 sep：先解析 repeat 间隔用的 SEP，再尝试同一个 repeat BodyStep。
-         *      如果后续 repeat BodyStep 失败，需要回滚到 SEP 前，再走 leave。
-         *
-         *    用途：
-         *    - 原始 '*' 每次成功后使用。
-         *    - 原始 '+' 的必选第一次成功后，进入拆分出的 '*' tail 的 repeat continuation。
-         *    - '+' tail 每次成功后继续使用同一个 repeat continuation。
-         *
-         * 7. 构造 boundary fallback 链。
-         *    用到：
-         *    - 第 4 步的每个 boundary 的尝试顺序。
-         *    - 第 5 步的 leave continuation。
-         *    - 第 6 步的 repeat continuation。
-         *    - node.ignore。
-         *
-         *    对每个 attempt：
-         *    - BodyStep 成功：
-         *      RECORD 到 body_step.value_slot。
-         *      q='*'：进入 repeat continuation。
-         *      q='?'：进入 leave continuation。
-         *      q=' '：
-         *        如果这是原始 '+' 拆出来的必选第一次，进入对应 '*' tail 的 repeat continuation。
-         *        否则进入 leave continuation。
-         *    - BodyStep 失败：跳到下一个 attempt。
-         *    - IGNORE 成功：执行 IGNORE action，不记录，并回到当前 boundary 入口。
-         *    - IGNORE 失败：进入 empty success 或 REJECT。
-         *
-         *    产出：
-         *    - boundaryEntry[b]。
-         *
-         * 8. 构造 enclosure / body end。
-         *    用到：
-         *    - node.enclosure。
-         *    - node.ignore。
-         *    - boundaryEntry[0]。
-         *    - BODY_END attempts。
-         *
-         *    规则：
-         *    - 没有 enclosure：
-         *      first_rule = boundaryEntry[0]。
-         *      BODY_END attempt 的 next_rule = null，表示 parseRule 成功结束。
-         *    - 有 enclosure：
-         *      first_rule 为 LEFT_ENCLOSURE fragment：
-         *        LEFT_ENCLOSURE 必须成功，RECORD 到 LEFT_ENCLOSURE，然后进入 boundaryEntry[0]。
-         *      BODY_END attempt 为 RIGHT_ENCLOSURE fragment：
-         *        RIGHT_ENCLOSURE 必须成功，RECORD 到 RIGHT_ENCLOSURE，然后结束。
-         *      left / right enclosure 解析失败时，也按 node.ignore fallback：
-         *        先尝试 IGNORE，成功后重试 enclosure；IGNORE 也失败才 REJECT。
-         *
-         * 9. 返回 PatternSeqRule。
-         *    产出：
-         *    - { first_rule }
-         *
-         *    newParsePatternSeq 后续负责：
-         *    - 执行 parseRule(first_rule)。
-         *    - 按 ParsedElement.value_slot 聚合：
-         *      SEP -> seps。
-         *      LEFT_ENCLOSURE / RIGHT_ENCLOSURE -> enclosure。
-         *      SUB_NODE_START + i -> children[i]。
-         *    - 缺失的原始 child 按原始 node.sub_quantifiers[i] 补默认值：
-         *      '?' -> null。
-         *      '*' -> []。
-         *      '+' / ' ' 理论上必须已有记录。
-         */
         // TODO
     }
 
