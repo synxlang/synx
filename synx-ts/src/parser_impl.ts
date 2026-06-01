@@ -228,6 +228,19 @@ function completeParseStageAlt(alt: Partial<ParseStageAlt>): ParseStageAlt {
     return alt as ParseStageAlt;
 }
 
+function completeParseStage(stage: Partial<ParseStage>|undefined = undefined): ParseStage {
+    if(stage === undefined){
+        stage = {};
+    }
+    if (stage.alts === undefined) {
+        stage.alts = [];
+    }
+    if (stage.accept_no_match === undefined) {
+        stage.accept_no_match = false;
+    }
+    return stage as ParseStage;
+}
+
 /**
  * ============================== EN ==============================
  *
@@ -1183,6 +1196,9 @@ export class ParserImpl implements Parser {
     }
 
     buildPatternSeqRule(node: PatternSeq): PatternSeqRule {
+        if (node.enclosure !== null) {
+            let right_enclosure_stage = completeParseStage();
+        }
         throw "TODO";
     }
 
