@@ -1154,7 +1154,7 @@ export class ParserImpl implements Parser {
     }
 
     buildPatternSeqRule(node: PatternSeq): PatternSeqRule {
-        // 只实现ParseStage的构建，不要实现其他的
+        // TODO: 先只实现ParseStage的构建，不要实现其他的，也不要动设计，也就是计算一些关于stage的局部变量即可
         throw "TODO";
     }
 
