@@ -1212,24 +1212,36 @@ export class ParserImpl implements Parser {
          *    - body_steps[].greedy
          *    - node.ignore
          *    - can_empty_from[b]
+         *    - body end fragment；如果有 enclosure，则 body end 实际是 RIGHT_ENCLOSURE fragment。
          *
          *    对每个 boundary b，从 b 开始向右扫描，生成同一输入位置的候选顺序：
          *    - delayed = []
          *    - 遇到 q 为 '?' 或 '*' 且 greedy=false 的 step：放入 delayed，继续扫描。
          *    - 遇到其他 step：输出当前 step，再逆序输出 delayed，清空 delayed。
          *    - 遇到 q=' '：输出后停止扫描。
-         *    - 扫描结束：逆序输出剩余 delayed。
+         *    - 扫描结束：
+         *      如果 can_empty_from[b] 为 true，先输出 BODY_END，再逆序输出剩余 delayed。
+         *      如果 can_empty_from[b] 为 false，只逆序输出剩余 delayed。
          *    - 最后如果 node.ignore 非 null，追加 IGNORE 尝试。
-         *    - 尾部根据 can_empty_from[b] 接 empty success 或 REJECT。
+         *    - 尾部接 REJECT。
+         *
+         *    BODY_END 是一种线性候选项，不是固定排在所有真实节点之后的兜底结果：
+         *    - 没有 enclosure 时，BODY_END 表示 parseRule 结束成功。
+         *    - 有 enclosure 时，BODY_END 表示尝试 RIGHT_ENCLOSURE，成功才结束。
+         *    - 它必须参与非贪婪顺序调整。尤其末尾连续非贪婪可空 step 场景中，
+         *      BODY_END 要排在 delayed step 前面，例如 AnyChar* \enclosedby Quote，
+         *      到右引号位置应先尝试 BODY_END/RIGHT_ENCLOSURE，再尝试 AnyChar。
          *
          *    例子：
          *    - a? b? c? 全贪婪：a, b, c, ignore, empty
          *    - a 非贪婪：b, a, c, ignore, empty
          *    - a、b 非贪婪：c, b, a, ignore, empty
+         *    - a? b? c? 且 c 非贪婪：a, b, BODY_END, c, ignore
          *
          *    关键语义：
          *    - 同一输入位置必须先尝试完真实 body step，最后才尝试 ignore。
          *    - 非贪婪只改变线性尝试顺序，不把规则图变成树。
+         *    - BODY_END 在这里被视为真实结束候选；因此它也在 ignore 前面。
          *
          * 5. 计算 leave continuation。
          *    含义：
@@ -1305,21 +1317,21 @@ export class ParserImpl implements Parser {
          *    产出：
          *    - boundaryEntry[b]。
          *
-         * 8. 构造 enclosure。
+         * 8. 构造 enclosure / body end。
          *    用到：
          *    - node.enclosure。
          *    - node.ignore。
          *    - boundaryEntry[0]。
-         *    - body end。
+         *    - BODY_END attempts。
          *
          *    规则：
          *    - 没有 enclosure：
          *      first_rule = boundaryEntry[0]。
-         *      body end = null。
+         *      BODY_END attempt 的 next_rule = null，表示 parseRule 成功结束。
          *    - 有 enclosure：
          *      first_rule 为 LEFT_ENCLOSURE fragment：
          *        LEFT_ENCLOSURE 必须成功，RECORD 到 LEFT_ENCLOSURE，然后进入 boundaryEntry[0]。
-         *      body end 为 RIGHT_ENCLOSURE fragment：
+         *      BODY_END attempt 为 RIGHT_ENCLOSURE fragment：
          *        RIGHT_ENCLOSURE 必须成功，RECORD 到 RIGHT_ENCLOSURE，然后结束。
          *      left / right enclosure 解析失败时，也按 node.ignore fallback：
          *        先尝试 IGNORE，成功后重试 enclosure；IGNORE 也失败才 REJECT。
