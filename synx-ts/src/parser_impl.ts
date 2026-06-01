@@ -155,9 +155,10 @@ interface ParseStageAlt {
 
 interface ParseStage {
     /**
-     * 当前 stage 的候选列表，按顺序线性尝试，如果触发REJECT则stage失败，如果所有选项尝试后没有触发next_stage则终止并成功
+     * 当前 stage 的候选列表，按顺序线性尝试，如果触发REJECT则stage失败，如果所有选项尝试后没有触发next_stage，如果accept_no_match为true则成功，否则失败
      */
     alts: ParseStageAlt[];
+    accept_no_match: boolean;
 }
 
 enum SeqValueSlot {
