@@ -222,7 +222,7 @@ function completeParseStageAlt(alt: Partial<ParseStageAlt>): ParseStageAlt {
         alt.null_success_action = null;
     }
     if (alt.fail_action === undefined) {
-        alt.fail_action = completeParseStageAction({ kind: ParseActionKind.REJECT });
+        alt.fail_action = completeParseStageAction({ kind: ParseActionKind.IGNORE });
     }
     return alt as ParseStageAlt;
 }
