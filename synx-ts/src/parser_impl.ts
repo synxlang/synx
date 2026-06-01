@@ -199,11 +199,32 @@ function completeParseRule(rule: Partial<ParseRule>): ParseRule {
 }
 
 function completeParseStageAction(action: Partial<ParseStageAction>): ParseStageAction {
-    // TODO
+    assert.ok(action.kind !== undefined);
+    if (action.next_stage === undefined) {
+        action.next_stage = null;
+    }
+    if (action.rollback_here === undefined) {
+        action.rollback_here = false;
+    }
+    if (action.rollback_next_stage === undefined) {
+        action.rollback_next_stage = null;
+    }
+    return action as ParseStageAction;
 }
 
 function completeParseStageAlt(alt: Partial<ParseStageAlt>): ParseStageAlt {
-    // TODO
+    assert.ok(alt.node !== undefined);
+    assert.ok(alt.value_slot !== undefined);
+    if (alt.not_null_success_action === undefined) {
+        alt.not_null_success_action = null;
+    }
+    if (alt.null_success_action === undefined) {
+        alt.null_success_action = null;
+    }
+    if (alt.fail_action === undefined) {
+        alt.fail_action = completeParseStageAction({ kind: ParseActionKind.REJECT });
+    }
+    return alt as ParseStageAlt;
 }
 
 /**
