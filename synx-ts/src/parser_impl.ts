@@ -1154,6 +1154,7 @@ export class ParserImpl implements Parser {
     }
 
     buildPatternSeqRule(node: PatternSeq): PatternSeqRule {
+        // 只实现ParseStage的构建，不要实现其他的
         throw "TODO";
     }
 
