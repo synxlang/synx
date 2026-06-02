@@ -1207,13 +1207,13 @@ export class ParserImpl implements Parser {
             right_enclosure_stage = completeParseStage();
         }
 
-        let accept_no_match_sub_node_max_idx: number = Number.MAX_SAFE_INTEGER;
+        let optional_sub_node_max_idx: number = Number.MAX_SAFE_INTEGER;
         if (right_enclosure_stage === null && (node.sep === null || node.accept_trailing_sep)) {
-            accept_no_match_sub_node_max_idx = node.sub_nodes.length;
+            optional_sub_node_max_idx = node.sub_nodes.length;
             for (let i = node.sub_nodes.length - 1; i >= 0; i--) {
                 const q = node.sub_quantifiers[i];
                 if ("?*".includes(q)) {
-                    accept_no_match_sub_node_max_idx = i;
+                    optional_sub_node_max_idx = i;
                 } else {
                     break;
                 }
@@ -1222,9 +1222,9 @@ export class ParserImpl implements Parser {
 
         for (let i = 0; i < node.sub_nodes.length; i++) {
             const q = node.sub_quantifiers[i];
-            sub_node_stages.push(completeParseStage({ accept_no_match: i >= accept_no_match_sub_node_max_idx }));
+            sub_node_stages.push(completeParseStage({ accept_no_match: node.ignore === null && i >= optional_sub_node_max_idx }));
             if (q === '+') {
-                sub_node_stages.push(completeParseStage({ accept_no_match: i >= accept_no_match_sub_node_max_idx - 1 }));
+                sub_node_stages.push(completeParseStage({ accept_no_match: node.ignore === null && i >= optional_sub_node_max_idx - 1 }));
             }
         }
 
@@ -1272,6 +1272,7 @@ export class ParserImpl implements Parser {
                 kind: ParseActionKind.RECORD,
                 next_stage: next_stage
             });
+            // TODO: rollback
             return alt;
         }
 
@@ -1325,6 +1326,33 @@ export class ParserImpl implements Parser {
             }
         }
 
+        function mk_ignore_alt(stage: ParseStage): ParseStageAlt {
+            assert.ok(node.ignore !== null);
+            return completeParseStageAlt({
+                node: node.ignore,
+                value_slot: SeqValueSlot.IGNORE,
+                not_null_success_action: completeParseStageAction({
+                    kind: ParseActionKind.IGNORE,
+                    next_stage: stage
+                }),
+                fail_action: completeParseStageAction({
+                    kind: ParseActionKind.REJECT
+                }),
+            })
+        }
+
+        if (left_enclosure_stage !== null) {
+            assert.ok(left_enclosure_alt !== null);
+            left_enclosure_stage.alts.push(left_enclosure_alt);
+            if (node.ignore !== null) {
+                // left_enclosure_stage.alts.push()
+            }
+        }
+
+        if (right_enclosure_stage !== null) {
+            assert.ok(right_enclosure_alt !== null);
+            right_enclosure_stage.alts.push(right_enclosure_alt);
+        }
 
         throw "TODO";
     }
