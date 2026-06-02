@@ -1197,12 +1197,6 @@ export class ParserImpl implements Parser {
     }
 
     buildPatternSeqRule(node: PatternSeq): PatternSeqRule {
-        // interface SubNodeStageInfo {
-        //     node: ParserNode;
-        //     value_slot: number;
-        //     q:Quantifier;
-        // };
-
         let left_enclosure_stage: ParseStage | null = null;
         let right_enclosure_stage: ParseStage | null = null;
         let sub_node_stages: ParseStage[] = [];
@@ -1245,10 +1239,10 @@ export class ParserImpl implements Parser {
         }
 
 
-        let left_enclosure_alt = null;
-        let right_enclosure_alt = null;
-        let sub_node_alts = [];
-        let sep_alts = [];
+        let left_enclosure_alt: ParseStageAlt | null = null;
+        let right_enclosure_alt: ParseStageAlt | null = null;
+        let sub_node_alts: ParseStageAlt[] = [];
+        let sep_alts: ParseStageAlt[] = [];
 
         if (node.enclosure !== null) {
             left_enclosure_alt = completeParseStageAlt({
@@ -1281,36 +1275,56 @@ export class ParserImpl implements Parser {
             return alt;
         }
 
+        function mk_sep_alt(next_stage: ParseStage | null): ParseStageAlt {
+            assert.ok(node.sep !== null);
+            let alt = completeParseStageAlt({
+                node: node.sep,
+                value_slot: SeqValueSlot.SEP,
+                not_null_success_action: completeParseStageAction({
+                    kind: ParseActionKind.RECORD,
+                    next_stage: next_stage
+                })
+            });
+            return alt;
+        }
+
         for (let i = 0; i < node.sub_nodes.length; i++) {
             const q = node.sub_quantifiers[i];
             const sub_node = node.sub_nodes[i];
-            let next_stage: ParseStage | null;
-            if (node.sep === null) {
-                if (q === '*') {
-                    next_stage = sub_node_stages[sub_node_alts.length];
-                } else {
-                    next_stage = sub_node_stages[sub_node_alts.length + 1] ?? right_enclosure_stage;
-                }
+            let sep_next_stage: ParseStage | null = null;
+            let sub_node_next_stage: ParseStage | null = null;
+
+            if (q === '*') {
+                sep_next_stage = sub_node_stages[sub_node_alts.length];
             } else {
+                sep_next_stage = sub_node_stages[sub_node_alts.length + 1] ?? right_enclosure_stage;
+            }
+            if (node.sep === null) {
+                sub_node_next_stage = sep_next_stage;
+            } else {
+                sep_alts.push(mk_sep_alt(sep_next_stage));
                 if (i === node.sub_nodes.length - 1
                     && !node.accept_trailing_sep
                     && ' ?'.includes(q)) {
-                    next_stage = right_enclosure_stage;
+                    sub_node_next_stage = right_enclosure_stage;
                 } else {
-                    next_stage = sep_stages[sub_node_alts.length];
+                    sub_node_next_stage = sep_stages[sub_node_alts.length];
                 }
             }
-            sub_node_alts.push(mk_sub_node_alt(sub_node, i, next_stage));
+            sub_node_alts.push(mk_sub_node_alt(sub_node, i, sub_node_next_stage));
             if (q === '+') {
-                let next_stage;
+                let sep_next_stage = sub_node_stages[sub_node_alts.length];
+                let sub_node_next_stage: ParseStage | null = null;
                 if (node.sep === null) {
-                    next_stage = sub_node_stages[sub_node_alts.length];
+                    sub_node_next_stage = sep_next_stage;
                 } else {
-                    next_stage = sep_stages[sub_node_alts.length];
+                    sep_alts.push(mk_sep_alt(sep_next_stage));
+                    sub_node_next_stage = sep_stages[sub_node_alts.length];
                 }
-                sub_node_alts.push(mk_sub_node_alt(sub_node, i, next_stage));
+                sub_node_alts.push(mk_sub_node_alt(sub_node, i, sub_node_next_stage));
             }
         }
+
 
         throw "TODO";
     }
