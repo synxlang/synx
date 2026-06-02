@@ -140,7 +140,7 @@ interface PatternSeqRule {
 
 interface ParseStageAction {
     kind: ParseActionKind;          // REJECT时，以下字段都无效，整个stage失败
-    next_stage: ParseStage | null; // 为null时表示为转移到下一个alt
+    next_stage: ParseStage | null;  // 非RECORD为null时表示为转移到下一个alt，如果为RECORD并且next_stage为null时表示成功
     rollback_here: boolean;
     rollback_next_stage: ParseStage | null;
 }
@@ -155,7 +155,8 @@ interface ParseStageAlt {
 
 interface ParseStage {
     /**
-     * 当前 stage 的候选列表，按顺序线性尝试，如果触发REJECT则stage失败，如果所有选项尝试后没有触发next_stage，如果accept_no_match为true则成功，否则失败
+     * 当前 stage 的候选列表，按顺序线性尝试，如果触发REJECT则stage失败。
+     * 当所有选项尝试后没有触发next_stage或者RECORD时，如果accept_no_match为true则成功，否则REJECT
      */
     alts: ParseStageAlt[];
     accept_no_match: boolean;
@@ -228,8 +229,8 @@ function completeParseStageAlt(alt: Partial<ParseStageAlt>): ParseStageAlt {
     return alt as ParseStageAlt;
 }
 
-function completeParseStage(stage: Partial<ParseStage>|undefined = undefined): ParseStage {
-    if(stage === undefined){
+function completeParseStage(stage: Partial<ParseStage> | undefined = undefined): ParseStage {
+    if (stage === undefined) {
         stage = {};
     }
     if (stage.alts === undefined) {
@@ -1196,9 +1197,121 @@ export class ParserImpl implements Parser {
     }
 
     buildPatternSeqRule(node: PatternSeq): PatternSeqRule {
+        // interface SubNodeStageInfo {
+        //     node: ParserNode;
+        //     value_slot: number;
+        //     q:Quantifier;
+        // };
+
+        let left_enclosure_stage: ParseStage | null = null;
+        let right_enclosure_stage: ParseStage | null = null;
+        let sub_node_stages: ParseStage[] = [];
+        let sep_stages: ParseStage[] = [];
+
         if (node.enclosure !== null) {
-            let right_enclosure_stage = completeParseStage();
+            left_enclosure_stage = completeParseStage();
+            right_enclosure_stage = completeParseStage();
         }
+
+        let accept_no_match_sub_node_max_idx: number = Number.MAX_SAFE_INTEGER;
+        if (right_enclosure_stage === null && (node.sep === null || node.accept_trailing_sep)) {
+            accept_no_match_sub_node_max_idx = node.sub_nodes.length;
+            for (let i = node.sub_nodes.length - 1; i >= 0; i--) {
+                const q = node.sub_quantifiers[i];
+                if ("?*".includes(q)) {
+                    accept_no_match_sub_node_max_idx = i;
+                } else {
+                    break;
+                }
+            }
+        }
+
+        for (let i = 0; i < node.sub_nodes.length; i++) {
+            const q = node.sub_quantifiers[i];
+            sub_node_stages.push(completeParseStage({ accept_no_match: i >= accept_no_match_sub_node_max_idx }));
+            if (q === '+') {
+                sub_node_stages.push(completeParseStage({ accept_no_match: i >= accept_no_match_sub_node_max_idx - 1 }));
+            }
+        }
+
+        if (node.sep !== null) {
+            for (let i = 0; i < node.sub_nodes.length; i++) {
+                const q = node.sub_quantifiers[i];
+                sep_stages.push(completeParseStage());
+                if (q === '+') {
+                    sep_stages.push(completeParseStage());
+                }
+            }
+        }
+
+
+        let left_enclosure_alt = null;
+        let right_enclosure_alt = null;
+        let sub_node_alts = [];
+        let sep_alts = [];
+
+        if (node.enclosure !== null) {
+            left_enclosure_alt = completeParseStageAlt({
+                node: node.enclosure[0],
+                value_slot: SeqValueSlot.LEFT_ENCLOSURE,
+                not_null_success_action: completeParseStageAction({
+                    kind: ParseActionKind.RECORD,
+                    next_stage: sub_node_stages[0] ?? null
+                }),
+            });
+
+            right_enclosure_alt = completeParseStageAlt({
+                node: node.enclosure[1],
+                value_slot: SeqValueSlot.RIGHT_ENCLOSURE,
+                not_null_success_action: completeParseStageAction({
+                    kind: ParseActionKind.RECORD
+                }),
+            });
+        }
+
+        function mk_sub_node_alt(sub_node: ParserNode, i: number, next_stage: ParseStage | null): ParseStageAlt {
+            let alt = completeParseStageAlt({
+                node: sub_node,
+                value_slot: SeqValueSlot.SUB_NODE_START + i,
+            });
+            alt.not_null_success_action = alt.null_success_action = completeParseStageAction({
+                kind: ParseActionKind.RECORD,
+                next_stage: next_stage
+            });
+            return alt;
+        }
+
+        for (let i = 0; i < node.sub_nodes.length; i++) {
+            const q = node.sub_quantifiers[i];
+            const sub_node = node.sub_nodes[i];
+            let next_stage: ParseStage | null;
+            if (node.sep === null) {
+                if (q === '*') {
+                    next_stage = sub_node_stages[sub_node_alts.length];
+                } else {
+                    next_stage = sub_node_stages[sub_node_alts.length + 1] ?? right_enclosure_stage;
+                }
+            } else {
+                if (i === node.sub_nodes.length - 1
+                    && !node.accept_trailing_sep
+                    && ' ?'.includes(q)) {
+                    next_stage = right_enclosure_stage;
+                } else {
+                    next_stage = sep_stages[sub_node_alts.length];
+                }
+            }
+            sub_node_alts.push(mk_sub_node_alt(sub_node, i, next_stage));
+            if (q === '+') {
+                let next_stage;
+                if (node.sep === null) {
+                    next_stage = sub_node_stages[sub_node_alts.length];
+                } else {
+                    next_stage = sep_stages[sub_node_alts.length];
+                }
+                sub_node_alts.push(mk_sub_node_alt(sub_node, i, next_stage));
+            }
+        }
+
         throw "TODO";
     }
 
