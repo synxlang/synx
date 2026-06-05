@@ -1352,7 +1352,7 @@ export class ParserImpl implements Parser {
         // TODO: 完成剩下的alts
 
 
-        throw "TODO";
+        throw "not done";
     }
 
     newParsePatternSeq(node: PatternSeq): ASTNode | null {
