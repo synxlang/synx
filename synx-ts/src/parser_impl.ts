@@ -1194,10 +1194,16 @@ export class ParserImpl implements Parser {
     }
 
     buildPatternSeqRule(node: PatternSeq): PatternSeqRule {
+        interface SubNodeStageInfo {
+            quantifier: ' ' | '?' | '*';
+            greedy: boolean;
+        };
+
         // clac ParseStage
         let left_enclosure_stage: ParseStage | null = null;
         let right_enclosure_stage: ParseStage | null = null;
         let sub_node_stages: ParseStage[] = [];
+        let sub_node_stage_infos: SubNodeStageInfo[] = [];
         let sep_stages: ParseStage[] = [];
 
         if (node.enclosure !== null) {
@@ -1220,16 +1226,20 @@ export class ParserImpl implements Parser {
 
         const sub_node_stage_possible_rollback_before = node.sep === null || node.accept_trailing_sep;
         for (let i = 0; i < node.sub_nodes.length; i++) {
-            const q = node.sub_quantifiers[i];
+            const quantifier = node.sub_quantifiers[i] as Quantifier;
             sub_node_stages.push(completeParseStage({
                 rollback_before: sub_node_stage_possible_rollback_before && i >= optional_sub_node_min_idx,
                 ignore_node: node.ignore
             }));
-            if (q === '+') {
+            if (quantifier === '+') {
+                sub_node_stage_infos.push({ quantifier: ' ', greedy: false });
                 sub_node_stages.push(completeParseStage({
                     rollback_before: sub_node_stage_possible_rollback_before && i >= optional_sub_node_min_idx - 1,
                     ignore_node: node.ignore,
                 }));
+                sub_node_stage_infos.push({ quantifier: '*', greedy: node.greedy_flags[i] });
+            } else {
+                sub_node_stage_infos.push({ quantifier: quantifier, greedy: node.greedy_flags[i] });
             }
         }
 
@@ -1349,8 +1359,9 @@ export class ParserImpl implements Parser {
             right_enclosure_stage.alts.push(right_enclosure_alt);
         }
 
-        // TODO: 完成剩下的alts
-
+        for (let i = 0; i < sub_node_stages.length; i++) {
+            // TODO 设置sub_node_stages的alts
+        }
 
         throw "not done";
     }
