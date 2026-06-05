@@ -141,8 +141,6 @@ interface PatternSeqRule {
 interface ParseStageAction {
     kind: ParseActionKind;          // REJECT时，以下字段都无效，整个stage失败
     next_stage: ParseStage | null;  // 非RECORD为null时表示为转移到下一个alt，如果为RECORD并且next_stage为null时表示成功
-    rollback_here: boolean;
-    rollback_next_stage: ParseStage | null;
 }
 
 interface ParseStageAlt {
@@ -155,11 +153,13 @@ interface ParseStageAlt {
 
 interface ParseStage {
     /**
-     * 当前 stage 的候选列表，按顺序线性尝试，如果触发REJECT则stage失败。
-     * 当所有选项尝试后没有触发next_stage或者RECORD时，如果accept_no_match为true则成功，否则REJECT
+     * 当前 stage 的候选列表，按顺序线性尝试，如果触发REJECT或则stage失败。
+     * 当所有选项尝试后没有触发next_stage或者RECORD时，会尝试ignore_node，进行忽略重试，如果忽略失败也失败。
+     * 当stage失败时，回滚到最新的rollback_before为true的stage解析前，没有则整体失败。
      */
     alts: ParseStageAlt[];
-    accept_no_match: boolean;
+    ignore_node: ParserNode | null;
+    rollback_before: boolean;
 }
 
 enum SeqValueSlot {
@@ -205,12 +205,6 @@ function completeParseStageAction(action: Partial<ParseStageAction>): ParseStage
     if (action.next_stage === undefined) {
         action.next_stage = null;
     }
-    if (action.rollback_here === undefined) {
-        action.rollback_here = false;
-    }
-    if (action.rollback_next_stage === undefined) {
-        action.rollback_next_stage = null;
-    }
     return action as ParseStageAction;
 }
 
@@ -236,8 +230,11 @@ function completeParseStage(stage: Partial<ParseStage> | undefined = undefined):
     if (stage.alts === undefined) {
         stage.alts = [];
     }
-    if (stage.accept_no_match === undefined) {
-        stage.accept_no_match = false;
+    if (stage.ignore_node === undefined) {
+        stage.ignore_node = null;
+    }
+    if (stage.rollback_before === undefined) {
+        stage.rollback_before = false;
     }
     return stage as ParseStage;
 }
@@ -1203,37 +1200,50 @@ export class ParserImpl implements Parser {
         let sep_stages: ParseStage[] = [];
 
         if (node.enclosure !== null) {
-            left_enclosure_stage = completeParseStage();
-            right_enclosure_stage = completeParseStage();
+            left_enclosure_stage = completeParseStage({ ignore_node: node.ignore });
+            right_enclosure_stage = completeParseStage({ ignore_node: node.ignore });
         }
 
-        let optional_sub_node_max_idx: number = Number.MAX_SAFE_INTEGER;
-        if (right_enclosure_stage === null && (node.sep === null || node.accept_trailing_sep)) {
-            optional_sub_node_max_idx = node.sub_nodes.length;
+        let optional_sub_node_min_idx: number = Number.MAX_SAFE_INTEGER;
+        if (right_enclosure_stage === null) {
+            optional_sub_node_min_idx = node.sub_nodes.length;
             for (let i = node.sub_nodes.length - 1; i >= 0; i--) {
                 const q = node.sub_quantifiers[i];
                 if ("?*".includes(q)) {
-                    optional_sub_node_max_idx = i;
+                    optional_sub_node_min_idx = i;
                 } else {
                     break;
                 }
             }
         }
 
+        const sub_node_stage_possible_rollback_before = node.sep === null || node.accept_trailing_sep;
         for (let i = 0; i < node.sub_nodes.length; i++) {
             const q = node.sub_quantifiers[i];
-            sub_node_stages.push(completeParseStage({ accept_no_match: node.ignore === null && i >= optional_sub_node_max_idx }));
+            sub_node_stages.push(completeParseStage({
+                rollback_before: sub_node_stage_possible_rollback_before && i >= optional_sub_node_min_idx,
+                ignore_node: node.ignore
+            }));
             if (q === '+') {
-                sub_node_stages.push(completeParseStage({ accept_no_match: node.ignore === null && i >= optional_sub_node_max_idx - 1 }));
+                sub_node_stages.push(completeParseStage({
+                    rollback_before: sub_node_stage_possible_rollback_before && i >= optional_sub_node_min_idx - 1,
+                    ignore_node: node.ignore,
+                }));
             }
         }
 
         if (node.sep !== null) {
             for (let i = 0; i < node.sub_nodes.length; i++) {
                 const q = node.sub_quantifiers[i];
-                sep_stages.push(completeParseStage());
+                sep_stages.push(completeParseStage({
+                    rollback_before: !node.accept_trailing_sep && i >= optional_sub_node_min_idx - 1,
+                    ignore_node: node.ignore,
+                }));
                 if (q === '+') {
-                    sep_stages.push(completeParseStage());
+                    sep_stages.push(completeParseStage({
+                        rollback_before: !node.accept_trailing_sep && i >= optional_sub_node_min_idx - 1,
+                        ignore_node: node.ignore
+                    }));
                 }
             }
         }
@@ -1272,7 +1282,6 @@ export class ParserImpl implements Parser {
                 kind: ParseActionKind.RECORD,
                 next_stage: next_stage
             });
-            // TODO: rollback
             return alt;
         }
 
@@ -1326,27 +1335,9 @@ export class ParserImpl implements Parser {
             }
         }
 
-        function mk_ignore_alt(stage: ParseStage): ParseStageAlt {
-            assert.ok(node.ignore !== null);
-            return completeParseStageAlt({
-                node: node.ignore,
-                value_slot: SeqValueSlot.IGNORE,
-                not_null_success_action: completeParseStageAction({
-                    kind: ParseActionKind.IGNORE,
-                    next_stage: stage
-                }),
-                fail_action: completeParseStageAction({
-                    kind: ParseActionKind.REJECT
-                }),
-            })
-        }
-
         if (left_enclosure_stage !== null) {
             assert.ok(left_enclosure_alt !== null);
             left_enclosure_stage.alts.push(left_enclosure_alt);
-            if (node.ignore !== null) {
-                // left_enclosure_stage.alts.push()
-            }
         }
 
         if (right_enclosure_stage !== null) {
