@@ -1194,6 +1194,7 @@ export class ParserImpl implements Parser {
     }
 
     buildPatternSeqRule(node: PatternSeq): PatternSeqRule {
+        // clac ParseStage
         let left_enclosure_stage: ParseStage | null = null;
         let right_enclosure_stage: ParseStage | null = null;
         let sub_node_stages: ParseStage[] = [];
@@ -1249,6 +1250,7 @@ export class ParserImpl implements Parser {
         }
 
 
+        // calc ParseStageAlt
         let left_enclosure_alt: ParseStageAlt | null = null;
         let right_enclosure_alt: ParseStageAlt | null = null;
         let sub_node_alts: ParseStageAlt[] = [];
@@ -1335,6 +1337,8 @@ export class ParserImpl implements Parser {
             }
         }
 
+
+        // assign stage.alts
         if (left_enclosure_stage !== null) {
             assert.ok(left_enclosure_alt !== null);
             left_enclosure_stage.alts.push(left_enclosure_alt);
@@ -1344,6 +1348,9 @@ export class ParserImpl implements Parser {
             assert.ok(right_enclosure_alt !== null);
             right_enclosure_stage.alts.push(right_enclosure_alt);
         }
+
+        // TODO: 完成剩下的alts
+
 
         throw "TODO";
     }
