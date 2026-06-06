@@ -130,7 +130,7 @@ interface ParsedElement {
 }
 
 
-interface ParseRuleResult {
+interface ParseStageResult {
     parsed_elements: ParsedElement[];
 }
 
@@ -837,7 +837,7 @@ export class ParserImpl implements Parser {
         return ret;
     }
 
-    parseRule(rule: ParseRule): ParseRuleResult {
+    parseRule(rule: ParseRule): ParseStageResult {
         const start = this.input.pos;
         const parsed_elements: ParsedElement[] = [];
         let last_value_node: ParserNode | null = null;
@@ -942,7 +942,7 @@ export class ParserImpl implements Parser {
         return { parsed_elements };
     }
 
-    parseStage(stage: ParseStage): ParseRuleResult {
+    parseStage(stage: ParseStage): ParseStageResult {
         const start = this.input.pos;
         const parsed_elements: ParsedElement[] = [];
         let last_value_node: ParserNode | null = null;
