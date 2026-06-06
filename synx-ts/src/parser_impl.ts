@@ -1000,11 +1000,7 @@ export class ParserImpl implements Parser {
                 };
             }
 
-            let selected_alt: ParseStageAlt | null = null;
-            let selected_action: ParseStageAction | null = null;
-            let selected_parsed_value: ParsedValueType = null;
-            let selected_alt_start = stage_start_pos;
-            let reject_pos = -1;
+            let stage_matched = false;
 
             for (let i = 0; i < current_stage.alts.length; i++) {
                 this.input.pos = stage_start_pos;
@@ -1031,63 +1027,55 @@ export class ParserImpl implements Parser {
                 assert.ok(action !== null);
 
                 if (action.kind === ParseActionKind.REJECT) {
-                    reject_pos = alt_start;
-                    break;
+                    return fail_stage(alt_start);
                 }
 
                 if (action.kind === ParseActionKind.IGNORE && action.next_stage === null) {
                     continue;
                 }
 
-                selected_alt = alt;
-                selected_action = action;
-                selected_parsed_value = parsed_value;
-                selected_alt_start = alt_start;
-                break;
-            }
-
-            if (reject_pos >= 0) {
-                return fail_stage(reject_pos);
-            }
-
-            if (selected_action !== null) {
-                assert.ok(selected_alt !== null);
-                if (selected_action.kind === ParseActionKind.IGNORE) {
-                    assert.ok(selected_action.next_stage !== null);
-                    if (this.input.pos > selected_alt_start) {
+                if (action.kind === ParseActionKind.IGNORE) {
+                    assert.ok(action.next_stage !== null);
+                    if (this.input.pos > alt_start) {
                         last_value_node = null;
                     }
-                    current_stage = selected_action.next_stage;
-                    continue;
+                    current_stage = action.next_stage;
+                    stage_matched = true;
+                    break;
                 }
 
                 assert.ok(this.isSuccess(), "use IGNORE instead of RECORD when fail.");
                 const last_element = parsed_elements[parsed_elements.length - 1];
                 let merged = false;
                 if (
-                    isGeneralCharMatchNode(selected_alt.node)
-                    && last_value_node === selected_alt.node
+                    isGeneralCharMatchNode(alt.node)
+                    && last_value_node === alt.node
                     && last_element !== undefined
-                    && last_element.slot === selected_alt.value_slot
+                    && last_element.slot === alt.value_slot
                 ) {
-                    assert.ok(is_range_value(last_element.value) && is_range_value(selected_parsed_value));
-                    if (last_element.value[1] === selected_parsed_value[0]) {
-                        last_element.value[1] = selected_parsed_value[1];
+                    assert.ok(is_range_value(last_element.value) && is_range_value(parsed_value));
+                    if (last_element.value[1] === parsed_value[0]) {
+                        last_element.value[1] = parsed_value[1];
                         merged = true;
                     }
                 }
                 if (!merged) {
-                    parsed_elements.push({ slot: selected_alt.value_slot, value: selected_parsed_value });
+                    parsed_elements.push({ slot: alt.value_slot, value: parsed_value });
                 }
-                last_value_node = selected_alt.node;
-                current_stage = selected_action.next_stage;
+                last_value_node = alt.node;
+                current_stage = action.next_stage;
+                stage_matched = true;
+                break;
+            }
+
+            if (stage_matched) {
                 continue;
             }
 
             this.input.pos = stage_start_pos;
-            if (current_stage.ignore_node !== null) {
+            if (current_stage!.ignore_node !== null) {
                 const ignore_start = this.input.pos;
-                this.parseSingleNodeSimple(current_stage.ignore_node);
+                this.parseSingleNodeSimple(current_stage!.ignore_node);
                 if (this.isSuccess()) {
                     assert.ok(this.input.pos > ignore_start);
                     last_value_node = null;
@@ -1570,14 +1558,6 @@ export class ParserImpl implements Parser {
     }
 
     newParsePatternSeq(node: PatternSeq): ASTNode | null {
-        const start = this.input.pos;
-        const bindings: Record<string, any> = {};
-        let pattern_seq_rule = this.pattern_seq_rule_cache.get(node);
-        if (pattern_seq_rule === undefined) {
-            pattern_seq_rule = this.buildPatternSeqStage(node);
-            this.pattern_seq_rule_cache.set(node, pattern_seq_rule);
-        }
-        const { first_rule } = pattern_seq_rule;
         throw "TODO";
     }
 
