@@ -106,21 +106,6 @@ enum ParseActionKind {
     REJECT,
 }
 
-interface ParseAction {
-    kind: ParseActionKind;       // REJECT时，以下字段都无效
-    next_rule: ParseRule | null;
-    rollback_here: boolean;      // 后续REJECT的回滚点，回滚到next_rule开始解析前，如果没有回滚点，则REJECT直接失败
-    rollback_next_rule: ParseRule | null; // rollback_here为true时才有效，如果非null，清空回滚点并执行rollback_next_rule
-}
-
-interface ParseRule {
-    node: ParserNode;
-    value_slot: number;           // 记录的values对应索引
-    not_null_success_action: ParseAction | null; // null 表示不可能的路径，会直接报错
-    null_success_action: ParseAction | null; // null 表示不可能的路径，会直接报错
-    fail_action: ParseAction | null; // null 表示不可能的路径，会直接报错
-}
-
 // [number, number]用于记录连续子字符串
 type ParsedValueType = [number, number] | ASTNode | null;
 
@@ -132,10 +117,6 @@ interface ParsedElement {
 
 interface ParseStageResult {
     parsed_elements: ParsedElement[];
-}
-
-interface PatternSeqRule {
-    first_rule: ParseRule;
 }
 
 interface ParseStageAction {
@@ -168,36 +149,6 @@ enum SeqValueSlot {
     LEFT_ENCLOSURE,
     RIGHT_ENCLOSURE,
     SUB_NODE_START,
-}
-
-
-function completeParseAction(action: Partial<ParseAction>): ParseAction {
-    assert.ok(action.kind !== undefined);
-    if (action.next_rule === undefined) {
-        action.next_rule = null;
-    }
-    if (action.rollback_here === undefined) {
-        action.rollback_here = false;
-    }
-    if (action.rollback_next_rule === undefined) {
-        action.rollback_next_rule = null;
-    }
-    return action as ParseAction;
-}
-
-function completeParseRule(rule: Partial<ParseRule>): ParseRule {
-    assert.ok(rule.node !== undefined);
-    assert.ok(rule.value_slot !== undefined);
-    if (rule.not_null_success_action === undefined) {
-        rule.not_null_success_action = null;
-    }
-    if (rule.null_success_action === undefined) {
-        rule.null_success_action = null;
-    }
-    if (rule.fail_action === undefined) {
-        rule.fail_action = completeParseAction({ kind: ParseActionKind.REJECT });
-    }
-    return rule as ParseRule;
 }
 
 function completeParseStageAction(action: Partial<ParseStageAction>): ParseStageAction {
@@ -304,7 +255,6 @@ export class ParserImpl implements Parser {
     private readonly debug_check_interval: number = 1024;
     private profile_node_ids = new WeakMap<ParserNode, number>();
     private profile_next_node_id: number = 1;
-    private pattern_seq_rule_cache = new WeakMap<PatternSeq, PatternSeqRule>();
 
     /**
      * ============================== EN ==============================
@@ -835,111 +785,6 @@ export class ParserImpl implements Parser {
         }
         this.setSuccess();
         return ret;
-    }
-
-    parseRule(rule: ParseRule): ParseStageResult {
-        const start = this.input.pos;
-        const parsed_elements: ParsedElement[] = [];
-        let last_value_node: ParserNode | null = null;
-        let current_rule: ParseRule | null = rule;
-        type RollbackRecord = {
-            pos: number;
-            parsed_elements_length: number;
-            last_value_node: ParserNode | null;
-            next_rule: ParseRule | null;
-            last_range_element_right_bound: number | null;
-        };
-        let rollback_record: RollbackRecord | null = null;
-
-        const is_range_value = (value: ParsedValueType): value is [number, number] => {
-            return Array.isArray(value);
-        };
-
-        while (current_rule !== null) {
-            const rule_start = this.input.pos;
-            let parsed_value: ParsedValueType = null;
-
-            if (isGeneralCharMatchNode(current_rule.node)) {
-                const char_start = this.input.pos;
-                this.parseSingleCharMatchNode(current_rule.node);
-                if (this.isSuccess()) {
-                    assert.ok(this.input.pos > char_start);
-                    parsed_value = [char_start, this.input.pos];
-                }
-            } else {
-                parsed_value = this.parseSingleNodeSimple(current_rule.node);
-            }
-
-            const action: ParseAction | null = this.isSuccess()
-                ? parsed_value === null
-                    ? current_rule.null_success_action
-                    : current_rule.not_null_success_action
-                : current_rule.fail_action;
-            assert.ok(action !== null);
-
-            if (action.kind === ParseActionKind.RECORD) {
-                assert.ok(this.isSuccess(), "use IGNORE instead of RECORD when fail.");
-                const last_element = parsed_elements[parsed_elements.length - 1];
-                let merged = false;
-                if (
-                    isGeneralCharMatchNode(current_rule.node)
-                    && last_value_node === current_rule.node
-                    && last_element !== undefined
-                    && last_element.slot === current_rule.value_slot
-                ) {
-                    assert.ok(is_range_value(last_element.value) && is_range_value(parsed_value));
-                    if (last_element.value[1] === parsed_value[0]) {
-                        last_element.value[1] = parsed_value[1];
-                        merged = true;
-                    }
-                }
-                if (!merged) {
-                    parsed_elements.push({ slot: current_rule.value_slot, value: parsed_value });
-                }
-                last_value_node = current_rule.node;
-            } else if (action.kind == ParseActionKind.IGNORE) {
-                if (this.input.pos > rule_start) {
-                    last_value_node = null;
-                }
-            } else if (action.kind === ParseActionKind.REJECT) {
-                if (rollback_record !== null) {
-                    const rollback: RollbackRecord = rollback_record;
-                    rollback_record = null;
-                    this.input.pos = rollback.pos;
-                    parsed_elements.length = rollback.parsed_elements_length;
-                    if (rollback.last_range_element_right_bound !== null) {
-                        assert.ok(parsed_elements.length > 0);
-                        const last_element = parsed_elements[parsed_elements.length - 1];
-                        assert.ok(is_range_value(last_element.value));
-                        last_element.value[1] = rollback.last_range_element_right_bound;
-                    }
-                    last_value_node = rollback.last_value_node;
-                    current_rule = rollback.next_rule;
-                    continue;
-                }
-                this.input.pos = start;
-                this.setError(rule_start);
-                return { parsed_elements };
-            }
-
-            if (action.rollback_here) {
-                const last_element = parsed_elements[parsed_elements.length - 1];
-                rollback_record = {
-                    pos: this.input.pos,
-                    parsed_elements_length: parsed_elements.length,
-                    last_value_node,
-                    next_rule: action.rollback_next_rule,
-                    last_range_element_right_bound: last_element !== undefined && is_range_value(last_element.value)
-                        ? last_element.value[1]
-                        : null,
-                };
-            }
-
-            current_rule = action.next_rule;
-        }
-
-        this.setSuccess();
-        return { parsed_elements };
     }
 
     parseStage(stage: ParseStage): ParseStageResult {
