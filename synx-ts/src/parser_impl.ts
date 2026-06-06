@@ -1193,7 +1193,7 @@ export class ParserImpl implements Parser {
         }
     }
 
-    buildPatternSeqRule(node: PatternSeq): PatternSeqRule {
+    buildPatternSeqStage(node: PatternSeq): ParseStage {
         interface SubNodeStageInfo {
             quantifier: ' ' | '?' | '*';
             greedy: boolean;
@@ -1402,7 +1402,11 @@ export class ParserImpl implements Parser {
             stage.alts.push(sep_alts[i]);
         }
 
-        throw "not done";
+        if(left_enclosure_stage === null){
+            return sub_node_stages[0];
+        }else{
+            return left_enclosure_stage;
+        }
     }
 
     newParsePatternSeq(node: PatternSeq): ASTNode | null {
@@ -1410,7 +1414,7 @@ export class ParserImpl implements Parser {
         const bindings: Record<string, any> = {};
         let pattern_seq_rule = this.pattern_seq_rule_cache.get(node);
         if (pattern_seq_rule === undefined) {
-            pattern_seq_rule = this.buildPatternSeqRule(node);
+            pattern_seq_rule = this.buildPatternSeqStage(node);
             this.pattern_seq_rule_cache.set(node, pattern_seq_rule);
         }
         const { first_rule } = pattern_seq_rule;
