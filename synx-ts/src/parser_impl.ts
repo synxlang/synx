@@ -948,13 +948,11 @@ export class ParserImpl implements Parser {
         let last_value_node: ParserNode | null = null;
         let current_stage: ParseStage | null = stage;
         let current_alt_idx = 0;
-        type Snapshot = {
+        type RollbackRecord = {
             pos: number;
             parsed_elements_length: number;
             last_value_node: ParserNode | null;
             last_range_element_right_bound: number | null;
-        };
-        type RollbackRecord = Snapshot & {
             stage: ParseStage;
             next_alt_idx: number;
         };
@@ -964,28 +962,21 @@ export class ParserImpl implements Parser {
             return Array.isArray(value);
         };
 
-        const make_snapshot = (): Snapshot => {
-            const last_element = parsed_elements[parsed_elements.length - 1];
-            return {
-                pos: this.input.pos,
-                parsed_elements_length: parsed_elements.length,
-                last_value_node,
-                last_range_element_right_bound: last_element !== undefined && is_range_value(last_element.value)
-                    ? last_element.value[1]
-                    : null,
-            };
-        };
-
-        const restore_snapshot = (snapshot: Snapshot): void => {
-            this.input.pos = snapshot.pos;
-            parsed_elements.length = snapshot.parsed_elements_length;
-            if (snapshot.last_range_element_right_bound !== null) {
+        const restore = (
+            pos: number,
+            parsed_elements_length: number,
+            snapshot_last_value_node: ParserNode | null,
+            last_range_element_right_bound: number | null,
+        ): void => {
+            this.input.pos = pos;
+            parsed_elements.length = parsed_elements_length;
+            if (last_range_element_right_bound !== null) {
                 assert.ok(parsed_elements.length > 0);
                 const last_element = parsed_elements[parsed_elements.length - 1];
                 assert.ok(is_range_value(last_element.value));
-                last_element.value[1] = snapshot.last_range_element_right_bound;
+                last_element.value[1] = last_range_element_right_bound;
             }
-            last_value_node = snapshot.last_value_node;
+            last_value_node = snapshot_last_value_node;
         };
 
         const fail_stage = (pos: number): boolean => {
@@ -996,7 +987,12 @@ export class ParserImpl implements Parser {
             }
             const rollback = rollback_record;
             rollback_record = null;
-            restore_snapshot(rollback);
+            restore(
+                rollback.pos,
+                rollback.parsed_elements_length,
+                rollback.last_value_node,
+                rollback.last_range_element_right_bound,
+            );
             current_stage = rollback.stage;
             current_alt_idx = rollback.next_alt_idx;
             return true;
@@ -1004,10 +1000,33 @@ export class ParserImpl implements Parser {
 
         while (current_stage !== null) {
             const stage = current_stage;
-            const stage_snapshot = make_snapshot();
-            let stage_advanced = false;
+            const stage_start_pos = this.input.pos;
+
+            let stage_rollback_record: RollbackRecord | null = null;
+            if (stage.rollback_before && current_alt_idx < stage.alts.length) {
+                const last_element = parsed_elements[parsed_elements.length - 1];
+                stage_rollback_record = {
+                    pos: stage_start_pos,
+                    parsed_elements_length: parsed_elements.length,
+                    last_value_node,
+                    last_range_element_right_bound: last_element !== undefined && is_range_value(last_element.value)
+                        ? last_element.value[1]
+                        : null,
+                    stage,
+                    next_alt_idx: current_alt_idx,
+                };
+                rollback_record = stage_rollback_record;
+            }
+
+            let selected_alt: ParseStageAlt | null = null;
+            let selected_action: ParseStageAction | null = null;
+            let selected_parsed_value: ParsedValueType = null;
+            let selected_alt_idx = -1;
+            let selected_alt_start = stage_start_pos;
+            let reject_pos = -1;
+
             for (let i = current_alt_idx; i < stage.alts.length; i++) {
-                restore_snapshot(stage_snapshot);
+                this.input.pos = stage_start_pos;
                 const alt: ParseStageAlt = stage.alts[i]!;
                 const alt_start = this.input.pos;
                 let parsed_value: ParsedValueType = null;
@@ -1031,72 +1050,70 @@ export class ParserImpl implements Parser {
                 assert.ok(action !== null);
 
                 if (action.kind === ParseActionKind.REJECT) {
-                    if (fail_stage(alt_start)) {
-                        stage_advanced = true;
-                        break;
-                    }
-                    return { parsed_elements };
+                    reject_pos = alt_start;
+                    break;
                 }
 
-                if (action.kind === ParseActionKind.IGNORE) {
-                    if (action.next_stage === null) {
-                        continue;
-                    }
-                    if (this.input.pos > alt_start) {
+                if (action.kind === ParseActionKind.IGNORE && action.next_stage === null) {
+                    continue;
+                }
+
+                selected_alt = alt;
+                selected_action = action;
+                selected_parsed_value = parsed_value;
+                selected_alt_idx = i;
+                selected_alt_start = alt_start;
+                break;
+            }
+
+            if (reject_pos >= 0) {
+                if (fail_stage(reject_pos)) {
+                    continue;
+                }
+                return { parsed_elements };
+            }
+
+            if (selected_action !== null) {
+                assert.ok(selected_alt !== null);
+                if (stage_rollback_record !== null) {
+                    stage_rollback_record.next_alt_idx = selected_alt_idx + 1;
+                }
+
+                if (selected_action.kind === ParseActionKind.IGNORE) {
+                    assert.ok(selected_action.next_stage !== null);
+                    if (this.input.pos > selected_alt_start) {
                         last_value_node = null;
                     }
-                    if (stage.rollback_before) {
-                        rollback_record = {
-                            ...stage_snapshot,
-                            stage,
-                            next_alt_idx: i + 1,
-                        };
-                    }
-                    current_stage = action.next_stage;
+                    current_stage = selected_action.next_stage;
                     current_alt_idx = 0;
-                    stage_advanced = true;
-                    break;
+                    continue;
                 }
 
                 assert.ok(this.isSuccess(), "use IGNORE instead of RECORD when fail.");
                 const last_element = parsed_elements[parsed_elements.length - 1];
                 let merged = false;
                 if (
-                    isGeneralCharMatchNode(alt.node)
-                    && last_value_node === alt.node
+                    isGeneralCharMatchNode(selected_alt.node)
+                    && last_value_node === selected_alt.node
                     && last_element !== undefined
-                    && last_element.slot === alt.value_slot
+                    && last_element.slot === selected_alt.value_slot
                 ) {
-                    assert.ok(is_range_value(last_element.value) && is_range_value(parsed_value));
-                    if (last_element.value[1] === parsed_value[0]) {
-                        last_element.value[1] = parsed_value[1];
+                    assert.ok(is_range_value(last_element.value) && is_range_value(selected_parsed_value));
+                    if (last_element.value[1] === selected_parsed_value[0]) {
+                        last_element.value[1] = selected_parsed_value[1];
                         merged = true;
                     }
                 }
                 if (!merged) {
-                    parsed_elements.push({ slot: alt.value_slot, value: parsed_value });
+                    parsed_elements.push({ slot: selected_alt.value_slot, value: selected_parsed_value });
                 }
-                last_value_node = alt.node;
-
-                if (stage.rollback_before) {
-                    rollback_record = {
-                        ...stage_snapshot,
-                        stage,
-                        next_alt_idx: i + 1,
-                    };
-                }
-
-                current_stage = action.next_stage;
+                last_value_node = selected_alt.node;
+                current_stage = selected_action.next_stage;
                 current_alt_idx = 0;
-                stage_advanced = true;
-                break;
-            }
-
-            if (stage_advanced) {
                 continue;
             }
 
-            restore_snapshot(stage_snapshot);
+            this.input.pos = stage_start_pos;
             if (stage.ignore_node !== null) {
                 const ignore_start = this.input.pos;
                 this.parseSingleNodeSimple(stage.ignore_node);
