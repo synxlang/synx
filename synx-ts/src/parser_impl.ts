@@ -1393,7 +1393,7 @@ export class ParserImpl implements Parser {
             let stage = sub_node_stages[i];
             const info = sub_node_stage_infos[i];
             let try_cnt = info.try_seq_end - i;
-            stage.alts.concat(sub_node_alt_try_order.slice(0, try_cnt));
+            stage.alts = sub_node_alt_try_order.slice(0, try_cnt);
             sub_node_alt_try_order.splice(sub_node_alt_try_order.findIndex(alt => alt === sub_node_alts[i]), 1);
         }
 
