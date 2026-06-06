@@ -1197,13 +1197,38 @@ export class ParserImpl implements Parser {
         interface SubNodeStageInfo {
             quantifier: ' ' | '?' | '*';
             greedy: boolean;
+            try_seq_end: number;    // not included idx
         };
+        let sub_node_stage_infos: SubNodeStageInfo[] = [];
+        let partial_sub_node_stage_infos: Partial<SubNodeStageInfo>[] = [];
+
+        for (let i = 0; i < node.sub_nodes.length; i++) {
+            const quantifier = node.sub_quantifiers[i] as Quantifier;
+            if (quantifier === '+') {
+                partial_sub_node_stage_infos.push({ quantifier: ' ', greedy: false });
+                partial_sub_node_stage_infos.push({ quantifier: '*', greedy: node.greedy_flags[i] });
+            } else {
+                partial_sub_node_stage_infos.push({ quantifier: quantifier, greedy: node.greedy_flags[i] });
+            }
+        }
+
+        {
+            let last_try_seq_end = partial_sub_node_stage_infos.length;
+            for (let i = partial_sub_node_stage_infos.length - 1; i >= 0; i--) {
+                let info = partial_sub_node_stage_infos[i];
+                if (info.quantifier === ' ') {
+                    info.try_seq_end = last_try_seq_end = i + 1;
+                } else {
+                    info.try_seq_end = last_try_seq_end;
+                }
+            }
+        }
+        sub_node_stage_infos = partial_sub_node_stage_infos as SubNodeStageInfo[];
 
         // clac ParseStage
         let left_enclosure_stage: ParseStage | null = null;
         let right_enclosure_stage: ParseStage | null = null;
         let sub_node_stages: ParseStage[] = [];
-        let sub_node_stage_infos: SubNodeStageInfo[] = [];
         let sep_stages: ParseStage[] = [];
 
         if (node.enclosure !== null) {
@@ -1224,38 +1249,29 @@ export class ParserImpl implements Parser {
             }
         }
 
-        const sub_node_stage_possible_rollback_before = node.sep === null || node.accept_trailing_sep;
-        for (let i = 0; i < node.sub_nodes.length; i++) {
-            const quantifier = node.sub_quantifiers[i] as Quantifier;
+        const sub_node_stage_possible_rollback_before = right_enclosure_stage === null
+            && (node.sep === null || node.accept_trailing_sep)
+            && sub_node_stage_infos.at(-1)?.quantifier !== ' ';
+
+        for (let i = 0; i < sub_node_stage_infos.length; i++) {
             sub_node_stages.push(completeParseStage({
-                rollback_before: sub_node_stage_possible_rollback_before && i >= optional_sub_node_min_idx,
+                rollback_before: sub_node_stage_possible_rollback_before
+                    && sub_node_stage_infos[i].try_seq_end === sub_node_stage_infos.length,
                 ignore_node: node.ignore
             }));
-            if (quantifier === '+') {
-                sub_node_stage_infos.push({ quantifier: ' ', greedy: false });
-                sub_node_stages.push(completeParseStage({
-                    rollback_before: sub_node_stage_possible_rollback_before && i >= optional_sub_node_min_idx - 1,
-                    ignore_node: node.ignore,
-                }));
-                sub_node_stage_infos.push({ quantifier: '*', greedy: node.greedy_flags[i] });
-            } else {
-                sub_node_stage_infos.push({ quantifier: quantifier, greedy: node.greedy_flags[i] });
-            }
         }
 
+        const sep_stage_possible_rollback_before = right_enclosure_stage === null
+            && node.accept_trailing_sep
+            && sub_node_stage_infos.at(-1)?.quantifier !== ' ';
+
         if (node.sep !== null) {
-            for (let i = 0; i < node.sub_nodes.length; i++) {
-                const q = node.sub_quantifiers[i];
+            for (let i = 0; i < sub_node_stage_infos.length; i++) {
                 sep_stages.push(completeParseStage({
-                    rollback_before: !node.accept_trailing_sep && i >= optional_sub_node_min_idx - 1,
+                    rollback_before: sep_stage_possible_rollback_before
+                        && (sub_node_stage_infos[i + 1] ?? sub_node_stage_infos[i]).try_seq_end === sub_node_stage_infos.length,
                     ignore_node: node.ignore,
                 }));
-                if (q === '+') {
-                    sep_stages.push(completeParseStage({
-                        rollback_before: !node.accept_trailing_sep && i >= optional_sub_node_min_idx - 1,
-                        ignore_node: node.ignore
-                    }));
-                }
             }
         }
 
@@ -1359,8 +1375,31 @@ export class ParserImpl implements Parser {
             right_enclosure_stage.alts.push(right_enclosure_alt);
         }
 
+        let sub_node_alt_try_order = [];
+        for (let i = 0; i < sub_node_alts.length; i++) {
+            const i_start = i;
+            for (; ; i++) {
+                const info = sub_node_stage_infos[i];
+                if (info.greedy || i >= sub_node_alts.length) {
+                    break;
+                }
+            }
+            for (let j = i; j >= i_start; j--) {
+                sub_node_alt_try_order.push(sub_node_alts[j]);
+            }
+        }
+
         for (let i = 0; i < sub_node_stages.length; i++) {
-            // TODO 设置sub_node_stages的alts
+            let stage = sub_node_stages[i];
+            const info = sub_node_stage_infos[i];
+            let try_cnt = info.try_seq_end - i;
+            stage.alts.concat(sub_node_alt_try_order.slice(0, try_cnt));
+            sub_node_alt_try_order.splice(sub_node_alt_try_order.findIndex(alt => alt === sub_node_alts[i]), 1);
+        }
+
+        for (let i = 0; i < sep_stages.length; i++) {
+            let stage = sep_stages[i];
+            stage.alts.push(sep_alts[i]);
         }
 
         throw "not done";
