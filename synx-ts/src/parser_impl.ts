@@ -1351,19 +1351,20 @@ export class ParserImpl implements Parser {
             try_seq_end: number;    // not included idx
         };
         let sub_node_stage_infos: SubNodeStageInfo[] = [];
-        let partial_sub_node_stage_infos: Partial<SubNodeStageInfo>[] = [];
 
-        for (let i = 0; i < node.sub_nodes.length; i++) {
-            const quantifier = node.sub_quantifiers[i] as Quantifier;
-            if (quantifier === '+') {
-                partial_sub_node_stage_infos.push({ quantifier: ' ', greedy: true });
-                partial_sub_node_stage_infos.push({ quantifier: '*', greedy: node.greedy_flags[i] });
-            } else {
-                partial_sub_node_stage_infos.push({ quantifier: quantifier, greedy: node.greedy_flags[i] });
-            }
-        }
-
+        // calc sub_node_stage_infos
         {
+            let partial_sub_node_stage_infos: Partial<SubNodeStageInfo>[] = [];
+            for (let i = 0; i < node.sub_nodes.length; i++) {
+                const quantifier = node.sub_quantifiers[i] as Quantifier;
+                if (quantifier === '+') {
+                    partial_sub_node_stage_infos.push({ quantifier: ' ', greedy: true });
+                    partial_sub_node_stage_infos.push({ quantifier: '*', greedy: node.greedy_flags[i] });
+                } else {
+                    partial_sub_node_stage_infos.push({ quantifier: quantifier, greedy: node.greedy_flags[i] });
+                }
+            }
+
             let last_try_seq_end = partial_sub_node_stage_infos.length;
             for (let i = partial_sub_node_stage_infos.length - 1; i >= 0; i--) {
                 let info = partial_sub_node_stage_infos[i];
@@ -1373,8 +1374,9 @@ export class ParserImpl implements Parser {
                     info.try_seq_end = last_try_seq_end;
                 }
             }
+            sub_node_stage_infos = partial_sub_node_stage_infos as SubNodeStageInfo[];
         }
-        sub_node_stage_infos = partial_sub_node_stage_infos as SubNodeStageInfo[];
+
 
         // clac ParseStage
         let left_enclosure_stage: ParseStage | null = null;
@@ -1413,7 +1415,7 @@ export class ParserImpl implements Parser {
         }
 
         const sep_stage_possible_rollback_before = right_enclosure_stage === null
-            && node.accept_trailing_sep
+            && !node.accept_trailing_sep
             && sub_node_stage_infos.at(-1)?.quantifier !== ' ';
 
         if (node.sep !== null) {
@@ -1553,9 +1555,9 @@ export class ParserImpl implements Parser {
             stage.alts.push(sep_alts[i]);
         }
 
-        if(left_enclosure_stage === null){
+        if (left_enclosure_stage === null) {
             return sub_node_stages[0];
-        }else{
+        } else {
             return left_enclosure_stage;
         }
     }
