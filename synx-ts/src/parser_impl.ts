@@ -139,7 +139,7 @@ interface PatternSeqRule {
 }
 
 interface ParseStageAction {
-    kind: ParseActionKind;          // REJECT时，以下字段都无效，整个stage失败
+    kind: ParseActionKind;          // REJECT时，next_stage必须为null，整个stage失败
     next_stage: ParseStage | null;  // 非RECORD为null时表示为转移到下一个alt，如果为RECORD并且next_stage为null时表示成功
 }
 
@@ -959,30 +959,16 @@ export class ParserImpl implements Parser {
             return Array.isArray(value);
         };
 
-        const restore_rollback = (): void => {
+        const rollback = (): void => {
             assert.ok(rollback_record !== null);
             this.input.pos = rollback_record.pos;
             parsed_elements.length = rollback_record.parsed_elements_length;
             if (rollback_record.last_range_element_right_bound !== null) {
-                assert.ok(parsed_elements.length > 0);
                 const last_element = parsed_elements[parsed_elements.length - 1];
                 assert.ok(is_range_value(last_element.value));
                 last_element.value[1] = rollback_record.last_range_element_right_bound;
             }
             last_value_node = rollback_record.last_value_node;
-        };
-
-        const fail_stage = (pos: number): ParseRuleResult => {
-            if (rollback_record === null) {
-                this.input.pos = start;
-                this.setError(pos);
-                return { parsed_elements };
-            }
-            restore_rollback();
-            rollback_record = null;
-            this.setSuccess();
-            current_stage = null;
-            return { parsed_elements };
         };
 
         while (current_stage !== null) {
@@ -1001,13 +987,10 @@ export class ParserImpl implements Parser {
             }
 
             for (; ;) {
-                const retry_pos = this.input.pos;
-                let stage_matched = false;
-
+                let action: ParseStageAction | null = null;
+                const alt_start = this.input.pos;
                 for (let i = 0; i < current_stage.alts.length; i++) {
-                    this.input.pos = retry_pos;
                     const alt: ParseStageAlt = current_stage.alts[i]!;
-                    const alt_start = this.input.pos;
                     let parsed_value: ParsedValueType = null;
 
                     if (isGeneralCharMatchNode(alt.node)) {
@@ -1021,75 +1004,70 @@ export class ParserImpl implements Parser {
                         parsed_value = this.parseSingleNodeSimple(alt.node);
                     }
 
-                    const action: ParseStageAction | null = this.isSuccess()
+                    action = this.isSuccess()
                         ? parsed_value === null
                             ? alt.null_success_action
                             : alt.not_null_success_action
                         : alt.fail_action;
                     assert.ok(action !== null);
 
-                    if (action.kind === ParseActionKind.REJECT) {
-                        return fail_stage(alt_start);
-                    }
-
-                    if (action.kind === ParseActionKind.IGNORE && action.next_stage === null) {
-                        continue;
-                    }
-
-                    if (action.kind === ParseActionKind.IGNORE) {
-                        assert.ok(action.next_stage !== null);
-                        if (this.input.pos > alt_start) {
-                            last_value_node = null;
+                    if (action.kind === ParseActionKind.RECORD) {
+                        assert.ok(this.isSuccess(), "use IGNORE instead of RECORD when fail.");
+                        const last_element = parsed_elements[parsed_elements.length - 1];
+                        let merged = false;
+                        if (
+                            isGeneralCharMatchNode(alt.node)
+                            && last_value_node === alt.node
+                            && last_element !== undefined
+                            && last_element.slot === alt.value_slot
+                        ) {
+                            assert.ok(is_range_value(last_element.value) && is_range_value(parsed_value));
+                            if (last_element.value[1] === parsed_value[0]) {
+                                last_element.value[1] = parsed_value[1];
+                                merged = true;
+                            }
                         }
-                        current_stage = action.next_stage;
-                        stage_matched = true;
+                        if (!merged) {
+                            parsed_elements.push({ slot: alt.value_slot, value: parsed_value });
+                        }
+                        last_value_node = alt.node;
+                        break;
+                    } else if (action.kind === ParseActionKind.IGNORE) {
+                        if (action.next_stage !== null) {
+                            break;
+                        }
+                    } else {
+                        assert.ok(action.kind === ParseActionKind.REJECT);
                         break;
                     }
+                }
 
-                    assert.ok(this.isSuccess(), "use IGNORE instead of RECORD when fail.");
-                    const last_element = parsed_elements[parsed_elements.length - 1];
-                    let merged = false;
-                    if (
-                        isGeneralCharMatchNode(alt.node)
-                        && last_value_node === alt.node
-                        && last_element !== undefined
-                        && last_element.slot === alt.value_slot
-                    ) {
-                        assert.ok(is_range_value(last_element.value) && is_range_value(parsed_value));
-                        if (last_element.value[1] === parsed_value[0]) {
-                            last_element.value[1] = parsed_value[1];
-                            merged = true;
+                assert.ok(action !== null);
+                if (action.next_stage === null) {
+                    if (action.kind === ParseActionKind.REJECT) {
+                        this.setError(alt_start);
+                    } else if (action.kind === ParseActionKind.IGNORE) {
+                        if (current_stage.ignore_node !== null) {
+                            this.parseSingleNodeSimple(current_stage.ignore_node);
+                            if (this.isSuccess()) {
+                                continue;
+                            }
                         }
                     }
-                    if (!merged) {
-                        parsed_elements.push({ slot: alt.value_slot, value: parsed_value });
-                    }
-                    last_value_node = alt.node;
-                    current_stage = action.next_stage;
-                    stage_matched = true;
-                    break;
                 }
 
-                if (stage_matched) {
-                    break;
+                current_stage = action.next_stage;
+                if (!this.isSuccess() && rollback_record !== null) {
+                    rollback();
+                    this.setSuccess();
                 }
-
-                this.input.pos = retry_pos;
-                if (current_stage!.ignore_node !== null) {
-                    const ignore_start = this.input.pos;
-                    this.parseSingleNodeSimple(current_stage!.ignore_node);
-                    if (this.isSuccess()) {
-                        assert.ok(this.input.pos > ignore_start);
-                        last_value_node = null;
-                        continue;
-                    }
-                }
-
-                return fail_stage(this.input.pos);
+                break;
             }
         }
 
-        this.setSuccess();
+        if (!this.isSuccess()) {
+            this.input.pos = start;
+        }
         return { parsed_elements };
     }
 
