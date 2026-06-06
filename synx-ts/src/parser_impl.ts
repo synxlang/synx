@@ -942,6 +942,182 @@ export class ParserImpl implements Parser {
         return { parsed_elements };
     }
 
+    parseStage(stage: ParseStage): ParseRuleResult {
+        const start = this.input.pos;
+        const parsed_elements: ParsedElement[] = [];
+        let last_value_node: ParserNode | null = null;
+        let current_stage: ParseStage | null = stage;
+        let current_alt_idx = 0;
+        type Snapshot = {
+            pos: number;
+            parsed_elements_length: number;
+            last_value_node: ParserNode | null;
+            last_range_element_right_bound: number | null;
+        };
+        type RollbackRecord = Snapshot & {
+            stage: ParseStage;
+            next_alt_idx: number;
+        };
+        let rollback_record: RollbackRecord | null = null;
+
+        const is_range_value = (value: ParsedValueType): value is [number, number] => {
+            return Array.isArray(value);
+        };
+
+        const make_snapshot = (): Snapshot => {
+            const last_element = parsed_elements[parsed_elements.length - 1];
+            return {
+                pos: this.input.pos,
+                parsed_elements_length: parsed_elements.length,
+                last_value_node,
+                last_range_element_right_bound: last_element !== undefined && is_range_value(last_element.value)
+                    ? last_element.value[1]
+                    : null,
+            };
+        };
+
+        const restore_snapshot = (snapshot: Snapshot): void => {
+            this.input.pos = snapshot.pos;
+            parsed_elements.length = snapshot.parsed_elements_length;
+            if (snapshot.last_range_element_right_bound !== null) {
+                assert.ok(parsed_elements.length > 0);
+                const last_element = parsed_elements[parsed_elements.length - 1];
+                assert.ok(is_range_value(last_element.value));
+                last_element.value[1] = snapshot.last_range_element_right_bound;
+            }
+            last_value_node = snapshot.last_value_node;
+        };
+
+        const fail_stage = (pos: number): boolean => {
+            if (rollback_record === null) {
+                this.input.pos = start;
+                this.setError(pos);
+                return false;
+            }
+            const rollback = rollback_record;
+            rollback_record = null;
+            restore_snapshot(rollback);
+            current_stage = rollback.stage;
+            current_alt_idx = rollback.next_alt_idx;
+            return true;
+        };
+
+        while (current_stage !== null) {
+            const stage = current_stage;
+            const stage_snapshot = make_snapshot();
+            let stage_advanced = false;
+            for (let i = current_alt_idx; i < stage.alts.length; i++) {
+                restore_snapshot(stage_snapshot);
+                const alt: ParseStageAlt = stage.alts[i]!;
+                const alt_start = this.input.pos;
+                let parsed_value: ParsedValueType = null;
+
+                if (isGeneralCharMatchNode(alt.node)) {
+                    const char_start = this.input.pos;
+                    this.parseSingleCharMatchNode(alt.node);
+                    if (this.isSuccess()) {
+                        assert.ok(this.input.pos > char_start);
+                        parsed_value = [char_start, this.input.pos];
+                    }
+                } else {
+                    parsed_value = this.parseSingleNodeSimple(alt.node);
+                }
+
+                const action: ParseStageAction | null = this.isSuccess()
+                    ? parsed_value === null
+                        ? alt.null_success_action
+                        : alt.not_null_success_action
+                    : alt.fail_action;
+                assert.ok(action !== null);
+
+                if (action.kind === ParseActionKind.REJECT) {
+                    if (fail_stage(alt_start)) {
+                        stage_advanced = true;
+                        break;
+                    }
+                    return { parsed_elements };
+                }
+
+                if (action.kind === ParseActionKind.IGNORE) {
+                    if (action.next_stage === null) {
+                        continue;
+                    }
+                    if (this.input.pos > alt_start) {
+                        last_value_node = null;
+                    }
+                    if (stage.rollback_before) {
+                        rollback_record = {
+                            ...stage_snapshot,
+                            stage,
+                            next_alt_idx: i + 1,
+                        };
+                    }
+                    current_stage = action.next_stage;
+                    current_alt_idx = 0;
+                    stage_advanced = true;
+                    break;
+                }
+
+                assert.ok(this.isSuccess(), "use IGNORE instead of RECORD when fail.");
+                const last_element = parsed_elements[parsed_elements.length - 1];
+                let merged = false;
+                if (
+                    isGeneralCharMatchNode(alt.node)
+                    && last_value_node === alt.node
+                    && last_element !== undefined
+                    && last_element.slot === alt.value_slot
+                ) {
+                    assert.ok(is_range_value(last_element.value) && is_range_value(parsed_value));
+                    if (last_element.value[1] === parsed_value[0]) {
+                        last_element.value[1] = parsed_value[1];
+                        merged = true;
+                    }
+                }
+                if (!merged) {
+                    parsed_elements.push({ slot: alt.value_slot, value: parsed_value });
+                }
+                last_value_node = alt.node;
+
+                if (stage.rollback_before) {
+                    rollback_record = {
+                        ...stage_snapshot,
+                        stage,
+                        next_alt_idx: i + 1,
+                    };
+                }
+
+                current_stage = action.next_stage;
+                current_alt_idx = 0;
+                stage_advanced = true;
+                break;
+            }
+
+            if (stage_advanced) {
+                continue;
+            }
+
+            restore_snapshot(stage_snapshot);
+            if (stage.ignore_node !== null) {
+                const ignore_start = this.input.pos;
+                this.parseSingleNodeSimple(stage.ignore_node);
+                if (this.isSuccess()) {
+                    assert.ok(this.input.pos > ignore_start);
+                    last_value_node = null;
+                    current_alt_idx = 0;
+                    continue;
+                }
+            }
+
+            if (fail_stage(this.input.pos)) {
+                continue;
+            }
+            return { parsed_elements };
+        }
+
+        this.setSuccess();
+        return { parsed_elements };
+    }
+
     /**
      * ============================== EN ==============================
      *
@@ -1205,7 +1381,7 @@ export class ParserImpl implements Parser {
         for (let i = 0; i < node.sub_nodes.length; i++) {
             const quantifier = node.sub_quantifiers[i] as Quantifier;
             if (quantifier === '+') {
-                partial_sub_node_stage_infos.push({ quantifier: ' ', greedy: false });
+                partial_sub_node_stage_infos.push({ quantifier: ' ', greedy: true });
                 partial_sub_node_stage_infos.push({ quantifier: '*', greedy: node.greedy_flags[i] });
             } else {
                 partial_sub_node_stage_infos.push({ quantifier: quantifier, greedy: node.greedy_flags[i] });
