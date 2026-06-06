@@ -947,14 +947,11 @@ export class ParserImpl implements Parser {
         const parsed_elements: ParsedElement[] = [];
         let last_value_node: ParserNode | null = null;
         let current_stage: ParseStage | null = stage;
-        let current_alt_idx = 0;
         type RollbackRecord = {
             pos: number;
             parsed_elements_length: number;
             last_value_node: ParserNode | null;
             last_range_element_right_bound: number | null;
-            stage: ParseStage;
-            next_alt_idx: number;
         };
         let rollback_record: RollbackRecord | null = null;
 
@@ -979,11 +976,11 @@ export class ParserImpl implements Parser {
             last_value_node = snapshot_last_value_node;
         };
 
-        const fail_stage = (pos: number): boolean => {
+        const fail_stage = (pos: number): ParseRuleResult => {
             if (rollback_record === null) {
                 this.input.pos = start;
                 this.setError(pos);
-                return false;
+                return { parsed_elements };
             }
             const rollback = rollback_record;
             rollback_record = null;
@@ -993,9 +990,9 @@ export class ParserImpl implements Parser {
                 rollback.last_value_node,
                 rollback.last_range_element_right_bound,
             );
-            current_stage = rollback.stage;
-            current_alt_idx = rollback.next_alt_idx;
-            return true;
+            this.setSuccess();
+            current_stage = null;
+            return { parsed_elements };
         };
 
         while (current_stage !== null) {
@@ -1003,7 +1000,7 @@ export class ParserImpl implements Parser {
             const stage_start_pos = this.input.pos;
 
             let stage_rollback_record: RollbackRecord | null = null;
-            if (stage.rollback_before && current_alt_idx < stage.alts.length) {
+            if (stage.rollback_before) {
                 const last_element = parsed_elements[parsed_elements.length - 1];
                 stage_rollback_record = {
                     pos: stage_start_pos,
@@ -1012,8 +1009,6 @@ export class ParserImpl implements Parser {
                     last_range_element_right_bound: last_element !== undefined && is_range_value(last_element.value)
                         ? last_element.value[1]
                         : null,
-                    stage,
-                    next_alt_idx: current_alt_idx,
                 };
                 rollback_record = stage_rollback_record;
             }
@@ -1021,11 +1016,10 @@ export class ParserImpl implements Parser {
             let selected_alt: ParseStageAlt | null = null;
             let selected_action: ParseStageAction | null = null;
             let selected_parsed_value: ParsedValueType = null;
-            let selected_alt_idx = -1;
             let selected_alt_start = stage_start_pos;
             let reject_pos = -1;
 
-            for (let i = current_alt_idx; i < stage.alts.length; i++) {
+            for (let i = 0; i < stage.alts.length; i++) {
                 this.input.pos = stage_start_pos;
                 const alt: ParseStageAlt = stage.alts[i]!;
                 const alt_start = this.input.pos;
@@ -1061,31 +1055,22 @@ export class ParserImpl implements Parser {
                 selected_alt = alt;
                 selected_action = action;
                 selected_parsed_value = parsed_value;
-                selected_alt_idx = i;
                 selected_alt_start = alt_start;
                 break;
             }
 
             if (reject_pos >= 0) {
-                if (fail_stage(reject_pos)) {
-                    continue;
-                }
-                return { parsed_elements };
+                return fail_stage(reject_pos);
             }
 
             if (selected_action !== null) {
                 assert.ok(selected_alt !== null);
-                if (stage_rollback_record !== null) {
-                    stage_rollback_record.next_alt_idx = selected_alt_idx + 1;
-                }
-
                 if (selected_action.kind === ParseActionKind.IGNORE) {
                     assert.ok(selected_action.next_stage !== null);
                     if (this.input.pos > selected_alt_start) {
                         last_value_node = null;
                     }
                     current_stage = selected_action.next_stage;
-                    current_alt_idx = 0;
                     continue;
                 }
 
@@ -1109,7 +1094,6 @@ export class ParserImpl implements Parser {
                 }
                 last_value_node = selected_alt.node;
                 current_stage = selected_action.next_stage;
-                current_alt_idx = 0;
                 continue;
             }
 
@@ -1120,15 +1104,11 @@ export class ParserImpl implements Parser {
                 if (this.isSuccess()) {
                     assert.ok(this.input.pos > ignore_start);
                     last_value_node = null;
-                    current_alt_idx = 0;
                     continue;
                 }
             }
 
-            if (fail_stage(this.input.pos)) {
-                continue;
-            }
-            return { parsed_elements };
+            return fail_stage(this.input.pos);
         }
 
         this.setSuccess();
