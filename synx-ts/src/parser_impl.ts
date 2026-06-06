@@ -959,21 +959,17 @@ export class ParserImpl implements Parser {
             return Array.isArray(value);
         };
 
-        const restore = (
-            pos: number,
-            parsed_elements_length: number,
-            snapshot_last_value_node: ParserNode | null,
-            last_range_element_right_bound: number | null,
-        ): void => {
-            this.input.pos = pos;
-            parsed_elements.length = parsed_elements_length;
-            if (last_range_element_right_bound !== null) {
+        const restore_rollback = (): void => {
+            assert.ok(rollback_record !== null);
+            this.input.pos = rollback_record.pos;
+            parsed_elements.length = rollback_record.parsed_elements_length;
+            if (rollback_record.last_range_element_right_bound !== null) {
                 assert.ok(parsed_elements.length > 0);
                 const last_element = parsed_elements[parsed_elements.length - 1];
                 assert.ok(is_range_value(last_element.value));
-                last_element.value[1] = last_range_element_right_bound;
+                last_element.value[1] = rollback_record.last_range_element_right_bound;
             }
-            last_value_node = snapshot_last_value_node;
+            last_value_node = rollback_record.last_value_node;
         };
 
         const fail_stage = (pos: number): ParseRuleResult => {
@@ -982,14 +978,8 @@ export class ParserImpl implements Parser {
                 this.setError(pos);
                 return { parsed_elements };
             }
-            const rollback = rollback_record;
+            restore_rollback();
             rollback_record = null;
-            restore(
-                rollback.pos,
-                rollback.parsed_elements_length,
-                rollback.last_value_node,
-                rollback.last_range_element_right_bound,
-            );
             this.setSuccess();
             current_stage = null;
             return { parsed_elements };
@@ -999,10 +989,9 @@ export class ParserImpl implements Parser {
             const stage = current_stage;
             const stage_start_pos = this.input.pos;
 
-            let stage_rollback_record: RollbackRecord | null = null;
             if (stage.rollback_before) {
                 const last_element = parsed_elements[parsed_elements.length - 1];
-                stage_rollback_record = {
+                rollback_record = {
                     pos: stage_start_pos,
                     parsed_elements_length: parsed_elements.length,
                     last_value_node,
@@ -1010,7 +999,6 @@ export class ParserImpl implements Parser {
                         ? last_element.value[1]
                         : null,
                 };
-                rollback_record = stage_rollback_record;
             }
 
             let selected_alt: ParseStageAlt | null = null;
