@@ -986,10 +986,9 @@ export class ParserImpl implements Parser {
         };
 
         while (current_stage !== null) {
-            const stage = current_stage;
             const stage_start_pos = this.input.pos;
 
-            if (stage.rollback_before) {
+            if (current_stage.rollback_before) {
                 const last_element = parsed_elements[parsed_elements.length - 1];
                 rollback_record = {
                     pos: stage_start_pos,
@@ -1007,9 +1006,9 @@ export class ParserImpl implements Parser {
             let selected_alt_start = stage_start_pos;
             let reject_pos = -1;
 
-            for (let i = 0; i < stage.alts.length; i++) {
+            for (let i = 0; i < current_stage.alts.length; i++) {
                 this.input.pos = stage_start_pos;
-                const alt: ParseStageAlt = stage.alts[i]!;
+                const alt: ParseStageAlt = current_stage.alts[i]!;
                 const alt_start = this.input.pos;
                 let parsed_value: ParsedValueType = null;
 
@@ -1086,9 +1085,9 @@ export class ParserImpl implements Parser {
             }
 
             this.input.pos = stage_start_pos;
-            if (stage.ignore_node !== null) {
+            if (current_stage.ignore_node !== null) {
                 const ignore_start = this.input.pos;
-                this.parseSingleNodeSimple(stage.ignore_node);
+                this.parseSingleNodeSimple(current_stage.ignore_node);
                 if (this.isSuccess()) {
                     assert.ok(this.input.pos > ignore_start);
                     last_value_node = null;
