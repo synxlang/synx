@@ -834,7 +834,7 @@ export class ParserImpl implements Parser {
     }
 
     parsePatternSet(node: PatternSet): ASTNode | null {
-        return this.newParsePatternSet(node);
+        return this.oldParsePatternSet(node);
     }
 
     newParsePatternSet(node: PatternSet): ASTNode | null {
@@ -944,17 +944,15 @@ export class ParserImpl implements Parser {
                 return null;
             }
 
-            const parse_alternative = (start: number): ASTNode | null => {
+            const parse_alternative = (): ASTNode | null => {
                 for (let i = alt_idx; i < node.sub_nodes.length; i++) {
                     this.profileRecordPatternSetAlternativeEnter(node, node_start, i);
                     const child = this.parseSingleNode(node.sub_nodes[i]);
                     if (!this.isSuccess()) {
-                        this.input.pos = start;
                         this.profileRecordPatternSetAlternativeExit(node, node_start, i, false);
                         continue;
                     }
                     if (node.neg_flags[i]) {
-                        this.input.pos = start;
                         this.setError(this.input.pos, "negated alternative matched");
                         this.profileRecordPatternSetAlternativeExit(node, node_start, i, false);
                         return null;
@@ -979,11 +977,11 @@ export class ParserImpl implements Parser {
                 return null;
             };
 
+            const direct = parse_alternative();
             if (node.associateby === null || alt_idx !== 0) {
-                return parse_alternative(node_start);
+                return direct;
             }
 
-            const direct = parse_alternative(node_start);
             if (this.isSuccess()) {
                 return direct;
             }
