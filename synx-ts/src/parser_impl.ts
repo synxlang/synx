@@ -151,6 +151,11 @@ enum SeqValueSlot {
     SUB_NODE_START,
 }
 
+interface PatternSeqParseInfo {
+    entry_stage: ParseStage;
+    single_child_flags: boolean[];
+}
+
 function completeParseStageAction(action: Partial<ParseStageAction>): ParseStageAction {
     assert.ok(action.kind !== undefined);
     if (action.next_stage === undefined) {
@@ -1403,6 +1408,10 @@ export class ParserImpl implements Parser {
         } else {
             return left_enclosure_stage;
         }
+    }
+
+    buildPatternSeqParseInfo(node: PatternSeq): PatternSeqParseInfo{
+        // TODO
     }
 
     newParsePatternSeq(node: PatternSeq): ASTNode | null {
