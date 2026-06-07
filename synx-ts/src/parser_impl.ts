@@ -1514,8 +1514,6 @@ export class ParserImpl implements Parser {
             }
             break;
         }
-        // const body_start = left_enclosure !== null ? left_enclosure.range[1] : start;
-        // const body_end = right_enclosure !== null ? right_enclosure.range[0] : this.input.pos;
 
         if (node.sub_node_bindings !== null) {
             for (let i = 0; i < node.sub_node_bindings.length; i++) {
