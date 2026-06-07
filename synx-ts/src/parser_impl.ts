@@ -824,7 +824,7 @@ export class ParserImpl implements Parser {
         };
     }
 
-    buildPatternSetStage(node: PatternSet, alt_idx: number): ParseStage {
+    buildPatternSetBodyStage(node: PatternSet, alt_idx: number): ParseStage {
         const stage = completeParseStage({ ignore_node: node.ignore });
         const alts: ParseStageAlt[] = [];
 
@@ -868,7 +868,7 @@ export class ParserImpl implements Parser {
             }
 
             const parse_alternative = (): ASTNode | null => {
-                const stage = this.buildPatternSetStage(node, alt_idx);
+                const stage = this.buildPatternSetBodyStage(node, alt_idx);
                 const parse_res = this.parseStage(stage);
                 if (!this.isSuccess()) {
                     return null;
