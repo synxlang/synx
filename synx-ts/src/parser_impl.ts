@@ -1499,7 +1499,7 @@ export class ParserImpl implements Parser {
             break;
         }
 
-        for (let i = children.length; i >= 0; i--) {
+        for (let i = children.length - 1; i >= 0; i--) {
             const child = children[i];
             if (child === null) {
                 continue;
