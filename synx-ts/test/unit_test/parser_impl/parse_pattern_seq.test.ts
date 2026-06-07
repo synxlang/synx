@@ -1142,6 +1142,48 @@ function test_parsePatternSeq_enclosure(): void {
         bindings: {},
     });
 }
+function test_parsePatternSeq_enclosure_greedy_star_stops_at_right_enclosure(): void {
+    const Quote = completeCharSeq({ literal: '"' });
+    const QuotedRaw = completePatternSeq({ sub_nodes: [Letter], sub_quantifiers: '*', raw: true, sep: null, accept_trailing_sep: false, ignore: null, enclosure: [Quote, Quote] });
+    const parser = new ParserImpl({ parser_nodes: [] });
+    parser.initParse({ src: '"a"', pos: 0 });
+    const result = parser.parsePatternSeq(QuotedRaw);
+    assert(parser.isSuccess());
+    assert.deepStrictEqual(result, {
+        parser_nodes: [QuotedRaw],
+        range: [0, 3],
+        value: 'a',
+        raw_value: [{
+                parser_nodes: [Letter],
+                range: [1, 2],
+                value: 'a',
+                raw_value: 'a',
+                seps: [],
+                enclosure: null, associate_enclosures: null, bindings: {},
+            }],
+        seps: [],
+        enclosure: [
+            {
+                parser_nodes: [Quote],
+                range: [0, 1],
+                value: '"',
+                raw_value: '"',
+                seps: [],
+                enclosure: null, associate_enclosures: null, bindings: {},
+            },
+            {
+                parser_nodes: [Quote],
+                range: [2, 3],
+                value: '"',
+                raw_value: '"',
+                seps: [],
+                enclosure: null, associate_enclosures: null, bindings: {},
+            },
+        ],
+        associate_enclosures: null,
+        bindings: {},
+    });
+}
 function test_parsePatternSeq_enclosure_ignores_before_left(): void {
     const Quote = completeCharSeq({ literal: '"' });
     const Space = completeCharSeq({ literal: ' ' });
@@ -1317,6 +1359,7 @@ function runAllTests(): void {
     test_mkPatternSeq_validates_shape();
     test_parsePatternSeq();
     test_parsePatternSeq_enclosure();
+    test_parsePatternSeq_enclosure_greedy_star_stops_at_right_enclosure();
     test_parsePatternSeq_enclosure_ignores_before_left();
     test_parsePatternSeq_enclosure_end_applies_to_last_nongreedy_child();
     test_parsePatternSeq_binding_assignment_isolated_scope();

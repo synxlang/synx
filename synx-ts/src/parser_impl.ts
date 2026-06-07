@@ -1388,6 +1388,9 @@ export class ParserImpl implements Parser {
                 sub_node_alt_candidates.push(sub_node_alts[j]);
             }
         }
+        if (right_enclosure_alt !== null && sub_node_alt_candidates.length < sub_node_alts.length + 1) {
+            sub_node_alt_candidates.push(right_enclosure_alt);
+        }
 
         for (let i = 0; i < sub_node_stages.length; i++) {
             const info = sub_node_stage_infos[i];
