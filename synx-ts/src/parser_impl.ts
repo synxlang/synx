@@ -1439,13 +1439,19 @@ export class ParserImpl implements Parser {
             return null;
         }
 
-        const children: (ASTNode[] | ASTNode | null)[] = [];
+        const single_child_flags: boolean[] = [];
         for (let i = 0; i < node.sub_nodes.length; i++) {
             const q = node.sub_quantifiers[i] as Quantifier;
             const sub_node = node.sub_nodes[i];
-            if (q === " " || q === "?"
+            single_child_flags.push(
+                q === " " || q === "?"
                 || (isGeneralCharMatchNode(sub_node) && node.sep === null && node.ignore === null)
-            ) {
+            );
+        }
+
+        const children: (ASTNode[] | ASTNode | null)[] = [];
+        for (let i = 0; i < node.sub_nodes.length; i++) {
+            if (single_child_flags[i]) {
                 children.push(null);
             } else {
                 children.push([]);
@@ -1468,12 +1474,9 @@ export class ParserImpl implements Parser {
             } else if (element.slot >= SeqValueSlot.SUB_NODE_START) {
                 const i = element.slot - SeqValueSlot.SUB_NODE_START;
                 assert.ok(i >= 0 && i < node.sub_nodes.length);
-                const q = node.sub_quantifiers[i] as Quantifier;
                 const sub_node = node.sub_nodes[i];
                 const child = make_ast_node(sub_node, element.value);
-                if (q === " " || q === "?"
-                    || (isGeneralCharMatchNode(sub_node) && node.sep === null && node.ignore === null)
-                ) {
+                if (single_child_flags[i]) {
                     children[i] = child;
                 } else {
                     assert.ok(Array.isArray(children[i]));
