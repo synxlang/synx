@@ -1271,7 +1271,6 @@ export class ParserImpl implements Parser {
         // calc ParseStageAlt
         let left_enclosure_alt: ParseStageAlt | null = null;
         let right_enclosure_alt: ParseStageAlt | null = null;
-        let first_match_sub_node_alts: ParseStageAlt[] = [];
         let sub_node_alts: ParseStageAlt[] = [];
         let sep_alts: ParseStageAlt[] = [];
 
@@ -1281,7 +1280,7 @@ export class ParserImpl implements Parser {
                 value_slot: SeqValueSlot.LEFT_ENCLOSURE,
                 not_null_success_action: completeParseStageAction({
                     kind: ParseActionKind.RECORD,
-                    next_stage: sub_node_stages[0] ?? null
+                    next_stage: first_match_sub_node_stages[0] ?? sub_node_stages[0] ?? null
                 }),
             });
 
@@ -1342,7 +1341,8 @@ export class ParserImpl implements Parser {
                     sub_node_next_stage = sep_stages[sub_node_alts.length];
                 }
             }
-            sub_node_alts.push(mk_sub_node_alt(sub_node, i, sub_node_next_stage));
+            const sub_node_alt = mk_sub_node_alt(sub_node, i, sub_node_next_stage);
+            sub_node_alts.push(sub_node_alt);
             if (q === '+') {
                 let sep_next_stage = sub_node_stages[sub_node_alts.length];
                 let sub_node_next_stage: ParseStage | null = null;
@@ -1352,7 +1352,8 @@ export class ParserImpl implements Parser {
                     sep_alts.push(mk_sep_alt(sep_next_stage));
                     sub_node_next_stage = sep_stages[sub_node_alts.length];
                 }
-                sub_node_alts.push(mk_sub_node_alt(sub_node, i, sub_node_next_stage));
+                const sub_node_alt = mk_sub_node_alt(sub_node, i, sub_node_next_stage);
+                sub_node_alts.push(sub_node_alt);
             }
         }
 
@@ -1388,6 +1389,8 @@ export class ParserImpl implements Parser {
             }
         }
 
+        let first_match_sub_node_alt_try_order = sub_node_alt_try_order.slice();
+
         for (let i = 0; i < sub_node_stages.length; i++) {
             let stage = sub_node_stages[i];
             const info = sub_node_stage_infos[i];
@@ -1405,13 +1408,21 @@ export class ParserImpl implements Parser {
             sub_node_alt_try_order.splice(sub_node_alt_try_order.findIndex(alt => alt === sub_node_alts[i]), 1);
         }
 
+        for (let i = 0; i < first_match_sub_node_stages.length; i++) {
+            let stage = first_match_sub_node_stages[i];
+            const info = sub_node_stage_infos[i];
+            let try_cnt = info.try_seq_end - i;
+            stage.alts = first_match_sub_node_alt_try_order.slice(0, try_cnt);
+            first_match_sub_node_alt_try_order.splice(first_match_sub_node_alt_try_order.findIndex(alt => alt === sub_node_alts[i]), 1);
+        }
+
         for (let i = 0; i < sep_stages.length; i++) {
             let stage = sep_stages[i];
             stage.alts.push(sep_alts[i]);
         }
 
         if (left_enclosure_stage === null) {
-            return sub_node_stages[0];
+            return first_match_sub_node_stages[0] ?? sub_node_stages[0];
         } else {
             return left_enclosure_stage;
         }
