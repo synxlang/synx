@@ -25,6 +25,16 @@ import type {
 import { ParseResultKind } from "./common";
 import type { Parser } from "./parser";
 
+function reverseRangeIncludeEnd<T>(arr: T[], start: number, end: number) {
+    let left = start;
+    let right = end;
+    while (left < right) {
+        [arr[left], arr[right]] = [arr[right], arr[left]];
+        left++;
+        right--;
+    }
+}
+
 class ParseTimeoutError extends Error {
     constructor(message: string) {
         super(message);
@@ -90,6 +100,101 @@ interface ParseCharMatchNodeExResult {
     end_idx: number;
 }
 
+enum ParseActionKind {
+    IGNORE,
+    RECORD,     // 对于字符，相同ParserNode并且连续匹配总是合并到同一range
+    REJECT,
+}
+
+// [number, number]用于记录连续子字符串
+type ParsedValueType = [number, number] | ASTNode | null;
+
+interface ParsedElement {
+    slot: number;
+    value: ParsedValueType;
+}
+
+
+interface ParseStageResult {
+    parsed_elements: ParsedElement[];
+}
+
+interface ParseStageAction {
+    kind: ParseActionKind;          // REJECT时，next_stage必须为null，整个stage失败
+    next_stage: ParseStage | null;  // 非RECORD为null时表示为转移到下一个alt，如果为RECORD并且next_stage为null时表示成功
+}
+
+interface ParseStageAlt {
+    node: ParserNode;
+    value_slot: number;           // 记录的values对应索引
+    not_null_success_action: ParseStageAction | null; // null 表示不可能的路径，会直接报错
+    null_success_action: ParseStageAction | null; // null 表示不可能的路径，会直接报错
+    fail_action: ParseStageAction | null; // null 表示不可能的路径，会直接报错
+}
+
+interface ParseStage {
+    /**
+     * 当前 stage 的候选列表，按顺序线性尝试，如果触发REJECT或则stage失败。
+     * 当所有选项尝试后没有触发next_stage或者RECORD时，会尝试ignore_node，进行忽略重试，如果忽略失败也失败。
+     * 当stage失败时，回滚到最新的rollback_before为true的stage解析前，没有则整体失败。
+     */
+    alts: ParseStageAlt[];
+    ignore_node: ParserNode | null;
+    rollback_before: boolean;
+}
+
+enum SeqValueSlot {
+    IGNORE,
+    SEP,
+    LEFT_ENCLOSURE,
+    RIGHT_ENCLOSURE,
+    SUB_NODE_START,
+}
+
+interface PatternSeqParseInfo {
+    entry_stage: ParseStage;
+    single_child_flags: boolean[];
+}
+
+function completeParseStageAction(action: Partial<ParseStageAction>): ParseStageAction {
+    assert.ok(action.kind !== undefined);
+    if (action.next_stage === undefined) {
+        action.next_stage = null;
+    }
+    return action as ParseStageAction;
+}
+
+function completeParseStageAlt(alt: Partial<ParseStageAlt>): ParseStageAlt {
+    assert.ok(alt.node !== undefined);
+    assert.ok(alt.value_slot !== undefined);
+    if (alt.not_null_success_action === undefined) {
+        alt.not_null_success_action = null;
+    }
+    if (alt.null_success_action === undefined) {
+        alt.null_success_action = null;
+    }
+    if (alt.fail_action === undefined) {
+        alt.fail_action = completeParseStageAction({ kind: ParseActionKind.IGNORE });
+    }
+    return alt as ParseStageAlt;
+}
+
+function completeParseStage(stage: Partial<ParseStage> | undefined = undefined): ParseStage {
+    if (stage === undefined) {
+        stage = {};
+    }
+    if (stage.alts === undefined) {
+        stage.alts = [];
+    }
+    if (stage.ignore_node === undefined) {
+        stage.ignore_node = null;
+    }
+    if (stage.rollback_before === undefined) {
+        stage.rollback_before = false;
+    }
+    return stage as ParseStage;
+}
+
 /**
  * ============================== EN ==============================
  *
@@ -145,6 +250,7 @@ export class ParserImpl implements Parser {
     private error: string | null = null;
     private error_pos: number = 0;
     private parse_records: ASTNode[][] = [];
+    private pattern_seq_parse_info_cache = new Map<PatternSeq, PatternSeqParseInfo>();
     private parse_single_node_stack: Array<{ node: ParserNode; pos: number; profile_record?: ParseSingleNodeProfiling }> = [];
     private profiling: ParseProfiling = this.profileCreate();
     private parse_start_time_ms: number = 0;
@@ -687,6 +793,135 @@ export class ParserImpl implements Parser {
         return ret;
     }
 
+    parseStage(stage: ParseStage): ParseStageResult {
+        const start = this.input.pos;
+        const parsed_elements: ParsedElement[] = [];
+        let last_value_node: ParserNode | null = null;
+        let current_stage: ParseStage | null = stage;
+        type RollbackRecord = {
+            pos: number;
+            parsed_elements_length: number;
+            last_value_node: ParserNode | null;
+            last_range_element_right_bound: number | null;
+        };
+        let rollback_record: RollbackRecord | null = null;
+
+        const is_range_value = (value: ParsedValueType): value is [number, number] => {
+            return Array.isArray(value);
+        };
+
+        const rollback = (): void => {
+            assert.ok(rollback_record !== null);
+            this.input.pos = rollback_record.pos;
+            parsed_elements.length = rollback_record.parsed_elements_length;
+            if (rollback_record.last_range_element_right_bound !== null) {
+                const last_element = parsed_elements[parsed_elements.length - 1];
+                assert.ok(is_range_value(last_element.value));
+                last_element.value[1] = rollback_record.last_range_element_right_bound;
+            }
+            last_value_node = rollback_record.last_value_node;
+        };
+
+        while (current_stage !== null) {
+            const stage_start_pos = this.input.pos;
+
+            if (current_stage.rollback_before) {
+                const last_element = parsed_elements[parsed_elements.length - 1];
+                rollback_record = {
+                    pos: stage_start_pos,
+                    parsed_elements_length: parsed_elements.length,
+                    last_value_node,
+                    last_range_element_right_bound: last_element !== undefined && is_range_value(last_element.value)
+                        ? last_element.value[1]
+                        : null,
+                };
+            }
+
+            for (; ;) {
+                let action: ParseStageAction | null = null;
+                const alt_start = this.input.pos;
+                for (let i = 0; i < current_stage.alts.length; i++) {
+                    const alt: ParseStageAlt = current_stage.alts[i]!;
+                    let parsed_value: ParsedValueType = null;
+
+                    if (isGeneralCharMatchNode(alt.node)) {
+                        const char_start = this.input.pos;
+                        this.parseSingleCharMatchNode(alt.node);
+                        if (this.isSuccess()) {
+                            assert.ok(this.input.pos > char_start);
+                            parsed_value = [char_start, this.input.pos];
+                        }
+                    } else {
+                        parsed_value = this.parseSingleNodeSimple(alt.node);
+                    }
+
+                    action = this.isSuccess()
+                        ? parsed_value === null
+                            ? alt.null_success_action
+                            : alt.not_null_success_action
+                        : alt.fail_action;
+                    assert.ok(action !== null);
+
+                    if (action.kind === ParseActionKind.RECORD) {
+                        assert.ok(this.isSuccess(), "use IGNORE instead of RECORD when fail.");
+                        const last_element = parsed_elements[parsed_elements.length - 1];
+                        let merged = false;
+                        if (
+                            isGeneralCharMatchNode(alt.node)
+                            && last_value_node === alt.node
+                            && last_element !== undefined
+                            && last_element.slot === alt.value_slot
+                        ) {
+                            assert.ok(is_range_value(last_element.value) && is_range_value(parsed_value));
+                            if (last_element.value[1] === parsed_value[0]) {
+                                last_element.value[1] = parsed_value[1];
+                                merged = true;
+                            }
+                        }
+                        if (!merged) {
+                            parsed_elements.push({ slot: alt.value_slot, value: parsed_value });
+                        }
+                        last_value_node = alt.node;
+                        break;
+                    } else if (action.kind === ParseActionKind.IGNORE) {
+                        if (action.next_stage !== null) {
+                            break;
+                        }
+                    } else {
+                        assert.ok(action.kind === ParseActionKind.REJECT);
+                        break;
+                    }
+                }
+
+                assert.ok(action !== null);
+                if (action.next_stage === null) {
+                    if (action.kind === ParseActionKind.REJECT) {
+                        this.setError(alt_start);
+                    } else if (action.kind === ParseActionKind.IGNORE) {
+                        if (current_stage.ignore_node !== null) {
+                            this.parseSingleNodeSimple(current_stage.ignore_node);
+                            if (this.isSuccess()) {
+                                continue;
+                            }
+                        }
+                    }
+                }
+
+                current_stage = action.next_stage;
+                if (!this.isSuccess() && rollback_record !== null) {
+                    rollback();
+                    this.setSuccess();
+                }
+                break;
+            }
+        }
+
+        if (!this.isSuccess()) {
+            this.input.pos = start;
+        }
+        return { parsed_elements };
+    }
+
     /**
      * ============================== EN ==============================
      *
@@ -938,7 +1173,432 @@ export class ParserImpl implements Parser {
         }
     }
 
+    buildPatternSeqStage(node: PatternSeq): ParseStage {
+        interface SubNodeStageInfo {
+            node: ParserNode;
+            slot: number;
+            quantifier: ' ' | '?' | '*';
+            greedy: boolean;
+            try_seq_end: number;    // not included idx
+        };
+        let sub_node_stage_infos: SubNodeStageInfo[] = [];
+
+        // calc sub_node_stage_infos
+        {
+            let partial_sub_node_stage_infos: Partial<SubNodeStageInfo>[] = [];
+            for (let i = 0; i < node.sub_nodes.length; i++) {
+                const quantifier = node.sub_quantifiers[i] as Quantifier;
+                const sub_node = node.sub_nodes[i];
+                const slot = SeqValueSlot.SUB_NODE_START + i;
+                if (quantifier === '+') {
+                    partial_sub_node_stage_infos.push({ node: sub_node, slot: slot, quantifier: ' ', greedy: true });
+                    partial_sub_node_stage_infos.push({ node: sub_node, slot: slot, quantifier: '*', greedy: node.greedy_flags[i] });
+                } else {
+                    partial_sub_node_stage_infos.push({ node: sub_node, slot: slot, quantifier: quantifier, greedy: node.greedy_flags[i] });
+                }
+            }
+
+            let last_try_seq_end = partial_sub_node_stage_infos.length;
+            if (node.enclosure !== null) {
+                last_try_seq_end += 1;
+            }
+            for (let i = partial_sub_node_stage_infos.length - 1; i >= 0; i--) {
+                let info = partial_sub_node_stage_infos[i];
+                if (info.quantifier === ' ') {
+                    info.try_seq_end = last_try_seq_end = i + 1;
+                } else {
+                    info.try_seq_end = last_try_seq_end;
+                }
+            }
+            sub_node_stage_infos = partial_sub_node_stage_infos as SubNodeStageInfo[];
+        }
+
+
+        // clac ParseStage
+        let left_enclosure_stage: ParseStage | null = null;
+        let right_enclosure_stage: ParseStage | null = null;
+        let first_match_sub_node_stages: ParseStage[] = [];
+        let sub_node_stages: ParseStage[] = [];
+        let sep_stages: ParseStage[] = [];
+
+        if (node.enclosure !== null) {
+            left_enclosure_stage = completeParseStage({ ignore_node: node.ignore });
+            right_enclosure_stage = completeParseStage({ ignore_node: node.ignore });
+        }
+
+        let optional_tail_sub_node_min_idx: number = Number.MAX_SAFE_INTEGER;
+        if (right_enclosure_stage === null) {
+            optional_tail_sub_node_min_idx = node.sub_nodes.length;
+            for (let i = node.sub_nodes.length - 1; i >= 0; i--) {
+                const q = node.sub_quantifiers[i];
+                if ("?*".includes(q)) {
+                    optional_tail_sub_node_min_idx = i;
+                } else {
+                    break;
+                }
+            }
+        }
+
+        const first_match_sub_node_stage_possible_rollback_before = right_enclosure_stage === null
+            && sub_node_stage_infos.at(-1)?.quantifier !== ' ';
+
+        for (let i = 0; i < sub_node_stage_infos.length; i++) {
+            first_match_sub_node_stages.push(completeParseStage({
+                rollback_before: first_match_sub_node_stage_possible_rollback_before
+                    && sub_node_stage_infos[i].try_seq_end === sub_node_stage_infos.length,
+                ignore_node: node.ignore
+            }));
+
+            const q = node.sub_quantifiers[i];
+            if (q === ' ') {
+                break;
+            }
+        }
+
+        const sub_node_stage_possible_rollback_before = right_enclosure_stage === null
+            && (node.sep === null || node.accept_trailing_sep)
+            && sub_node_stage_infos.at(-1)?.quantifier !== ' ';
+
+        for (let i = 0; i < sub_node_stage_infos.length; i++) {
+            sub_node_stages.push(completeParseStage({
+                rollback_before: sub_node_stage_possible_rollback_before
+                    && sub_node_stage_infos[i].try_seq_end === sub_node_stage_infos.length,
+                ignore_node: node.ignore
+            }));
+        }
+
+        const sep_stage_possible_rollback_before = right_enclosure_stage === null
+            && (node.accept_trailing_sep || sub_node_stage_infos.at(-1)?.quantifier !== ' ');
+
+        if (node.sep !== null) {
+            for (let i = 0; i < sub_node_stage_infos.length; i++) {
+                sep_stages.push(completeParseStage({
+                    rollback_before: sep_stage_possible_rollback_before
+                        && (sub_node_stage_infos[i + 1] ?? sub_node_stage_infos[i]).try_seq_end === sub_node_stage_infos.length,
+                    ignore_node: node.ignore,
+                }));
+            }
+        }
+
+
+        // calc ParseStageAlt
+        let left_enclosure_alt: ParseStageAlt | null = null;
+        let right_enclosure_alt: ParseStageAlt | null = null;
+        let sub_node_alts: ParseStageAlt[] = [];
+        let sep_alts: ParseStageAlt[] = [];
+
+        if (node.enclosure !== null) {
+            left_enclosure_alt = completeParseStageAlt({
+                node: node.enclosure[0],
+                value_slot: SeqValueSlot.LEFT_ENCLOSURE,
+                not_null_success_action: completeParseStageAction({
+                    kind: ParseActionKind.RECORD,
+                    next_stage: first_match_sub_node_stages[0] ?? sub_node_stages[0] ?? null
+                }),
+            });
+
+            right_enclosure_alt = completeParseStageAlt({
+                node: node.enclosure[1],
+                value_slot: SeqValueSlot.RIGHT_ENCLOSURE,
+                not_null_success_action: completeParseStageAction({
+                    kind: ParseActionKind.RECORD
+                }),
+            });
+        }
+
+        function mk_sub_node_alt(sub_node: ParserNode, slot: number, next_stage: ParseStage | null): ParseStageAlt {
+            let alt = completeParseStageAlt({
+                node: sub_node,
+                value_slot: slot,
+            });
+            alt.not_null_success_action = alt.null_success_action = completeParseStageAction({
+                kind: ParseActionKind.RECORD,
+                next_stage: next_stage
+            });
+            return alt;
+        }
+
+        function mk_sep_alt(next_stage: ParseStage | null): ParseStageAlt {
+            assert.ok(node.sep !== null);
+            let alt = completeParseStageAlt({
+                node: node.sep,
+                value_slot: SeqValueSlot.SEP,
+                not_null_success_action: completeParseStageAction({
+                    kind: ParseActionKind.RECORD,
+                    next_stage: next_stage
+                })
+            });
+            return alt;
+        }
+
+        for (let i = 0; i < sub_node_stage_infos.length; i++) {
+            const info = sub_node_stage_infos[i];
+            const sub_node = info.node;
+            const q = info.quantifier;
+            let sep_next_stage: ParseStage | null = null;
+            let sub_node_next_stage: ParseStage | null = null;
+            if (q === '*') {
+                sep_next_stage = sub_node_stages[sub_node_alts.length];
+            } else {
+                sep_next_stage = sub_node_stages[sub_node_alts.length + 1] ?? right_enclosure_stage;
+            }
+            if (node.sep === null) {
+                sub_node_next_stage = sep_next_stage;
+            } else {
+                sep_alts.push(mk_sep_alt(sep_next_stage));
+                if (i === sub_node_stage_infos.length - 1
+                    && !node.accept_trailing_sep
+                    && ' ?'.includes(q)) {
+                    sub_node_next_stage = right_enclosure_stage;
+                } else {
+                    sub_node_next_stage = sep_stages[sub_node_alts.length];
+                }
+            }
+            const sub_node_alt = mk_sub_node_alt(sub_node, info.slot, sub_node_next_stage);
+            sub_node_alts.push(sub_node_alt);
+        }
+
+        // assign stage.alts
+        if (left_enclosure_stage !== null) {
+            assert.ok(left_enclosure_alt !== null);
+            left_enclosure_stage.alts.push(left_enclosure_alt);
+        }
+
+        if (right_enclosure_stage !== null) {
+            assert.ok(right_enclosure_alt !== null);
+            right_enclosure_stage.alts.push(right_enclosure_alt);
+        }
+
+        let sub_node_alt_candidates: ParseStageAlt[] = [];
+        for (let i = 0; i < sub_node_alts.length; i++) {
+            const i_start = i;
+            for (; i < sub_node_alts.length; i++) {
+                const info = sub_node_stage_infos[i];
+                if (info.greedy) {
+                    break;
+                }
+            }
+            if (i >= sub_node_alts.length) {
+                if (right_enclosure_alt !== null) {
+                    sub_node_alt_candidates.push(right_enclosure_alt);
+                }
+                i = sub_node_alts.length - 1;
+            }
+            for (let j = i; j >= i_start; j--) {
+                sub_node_alt_candidates.push(sub_node_alts[j]);
+            }
+        }
+
+        for (let i = 0; i < sub_node_stages.length; i++) {
+            const info = sub_node_stage_infos[i];
+            let try_cnt = info.try_seq_end - i;
+            sub_node_stages[i].alts = sub_node_alt_candidates.slice(0, try_cnt);
+            if (i < first_match_sub_node_stages.length) {
+                first_match_sub_node_stages[i].alts = sub_node_alt_candidates.slice(0, try_cnt);
+            }
+            sub_node_alt_candidates.splice(sub_node_alt_candidates.findIndex(alt => alt === sub_node_alts[i]), 1);
+        }
+
+        for (let i = 0; i < sep_stages.length; i++) {
+            let stage = sep_stages[i];
+            stage.alts.push(sep_alts[i]);
+        }
+
+        if (left_enclosure_stage === null) {
+            return first_match_sub_node_stages[0] ?? sub_node_stages[0];
+        } else {
+            return left_enclosure_stage;
+        }
+    }
+
+    buildPatternSeqParseInfo(node: PatternSeq): PatternSeqParseInfo {
+        const single_child_flags: boolean[] = [];
+        for (let i = 0; i < node.sub_nodes.length; i++) {
+            const q = node.sub_quantifiers[i] as Quantifier;
+            const sub_node = node.sub_nodes[i];
+            single_child_flags.push(
+                q === " " || q === "?"
+                || (isGeneralCharMatchNode(sub_node) && node.sep === null && node.ignore === null)
+            );
+        }
+
+        return {
+            entry_stage: this.buildPatternSeqStage(node),
+            single_child_flags,
+        };
+    }
+
+    acquirePatternSeqParseInfo(node: PatternSeq): PatternSeqParseInfo {
+        const cached = this.pattern_seq_parse_info_cache.get(node);
+        if (cached !== undefined) {
+            return cached;
+        }
+
+        const parse_info = this.buildPatternSeqParseInfo(node);
+        this.pattern_seq_parse_info_cache.set(node, parse_info);
+        return parse_info;
+    }
+
+    newParsePatternSeq(node: PatternSeq): ASTNode | null {
+        const start = this.input.pos;
+        const bindings: Record<string, any> = {};
+        const parse_info = this.acquirePatternSeqParseInfo(node);
+
+        const is_range_value = (value: ParsedValueType): value is [number, number] => {
+            return Array.isArray(value);
+        };
+
+        const make_ast_node = (parser_node: ParserNode, value: ParsedValueType): ASTNode | null => {
+            if (value === null) {
+                return null;
+            }
+            if (!is_range_value(value)) {
+                return value;
+            }
+            return {
+                parser_nodes: [parser_node],
+                range: [value[0], value[1]],
+                value: this.input.src.slice(value[0], value[1]),
+                raw_value: this.input.src.slice(value[0], value[1]),
+                seps: [],
+                enclosure: null,
+                associate_enclosures: null,
+                bindings: {},
+            };
+        };
+
+        const parse_res = this.parseStage(parse_info.entry_stage);
+        if (!this.isSuccess()) {
+            this.input.pos = start;
+            return null;
+        }
+
+        const children: (ASTNode[] | ASTNode | null)[] = [];
+        for (let i = 0; i < node.sub_nodes.length; i++) {
+            if (parse_info.single_child_flags[i]) {
+                children.push(null);
+            } else {
+                children.push([]);
+            }
+        }
+
+        const seps: ASTNode[] = [];
+        let left_enclosure: ASTNode | null = null;
+        let right_enclosure: ASTNode | null = null;
+        for (const element of parse_res.parsed_elements) {
+            if (element.slot === SeqValueSlot.SEP) {
+                assert.ok(node.sep !== null);
+                seps.push(make_ast_node(node.sep, element.value)!);
+            } else if (element.slot === SeqValueSlot.LEFT_ENCLOSURE) {
+                assert.ok(node.enclosure !== null && left_enclosure === null);
+                left_enclosure = make_ast_node(node.enclosure[0], element.value)!;
+            } else if (element.slot === SeqValueSlot.RIGHT_ENCLOSURE) {
+                assert.ok(node.enclosure !== null && right_enclosure === null);
+                right_enclosure = make_ast_node(node.enclosure[1], element.value)!;
+            } else if (element.slot >= SeqValueSlot.SUB_NODE_START) {
+                const i = element.slot - SeqValueSlot.SUB_NODE_START;
+                assert.ok(i >= 0 && i < node.sub_nodes.length);
+                const sub_node = node.sub_nodes[i];
+                const child = make_ast_node(sub_node, element.value);
+                if (parse_info.single_child_flags[i]) {
+                    children[i] = child;
+                } else {
+                    assert.ok(Array.isArray(children[i]));
+                    children[i].push(child!);
+                }
+            }
+        }
+
+        let body_start: number = start;
+        let body_end: number = start;
+        for (const child of children) {
+            if (child === null) {
+                continue;
+            }
+            if (Array.isArray(child)) {
+                if (child.length === 0) {
+                    continue;
+                }
+                body_start = child[0].range[0];
+            } else {
+                body_start = child.range[0];
+            }
+            break;
+        }
+
+        for (let i = children.length - 1; i >= 0; i--) {
+            const child = children[i];
+            if (child === null) {
+                continue;
+            }
+            if (Array.isArray(child)) {
+                if (child.length === 0) {
+                    continue;
+                }
+                body_end = child.at(-1)!.range[1];
+            } else {
+                body_end = child.range[1];
+            }
+            break;
+        }
+
+        if (node.sub_node_bindings !== null) {
+            for (let i = 0; i < node.sub_node_bindings.length; i++) {
+                const binding = node.sub_node_bindings[i];
+                const isolated = node.sub_node_isolated_scope_flags?.[i] ?? true;
+                if (!isolated) {
+                    const child = children[i];
+                    assert.ok(!Array.isArray(child), "non-isolated repeated PatternSeq binding scope is not implemented yet");
+                    if (child !== null) {
+                        Object.assign(bindings, child.bindings);
+                    }
+                }
+                if (binding === null) {
+                    continue;
+                }
+                assert.ok(!Object.prototype.hasOwnProperty.call(bindings, binding), `duplicate PatternSeq binding: ${binding}`);
+                bindings[binding] = children[i];
+            }
+        }
+
+        let value: any = node.raw
+            ? this.input.src.slice(body_start, body_end)
+            : children;
+        if (node.assignment_map !== null) {
+            if (typeof node.assignment_map === "string") {
+                if (Object.prototype.hasOwnProperty.call(bindings, node.assignment_map)) {
+                    value = bindings[node.assignment_map];
+                }
+            } else {
+                value = {};
+                for (const [target, source] of node.assignment_map) {
+                    if (Object.prototype.hasOwnProperty.call(bindings, source)) {
+                        value[target] = bindings[source];
+                    }
+                }
+            }
+        }
+
+        this.setSuccess();
+        return {
+            parser_nodes: [node],
+            range: [start, this.input.pos],
+            value,
+            raw_value: children,
+            seps,
+            enclosure: node.enclosure !== null
+                ? [left_enclosure!, right_enclosure!]
+                : null,
+            associate_enclosures: null,
+            bindings,
+        };
+    }
+
     parsePatternSeq(node: PatternSeq): ASTNode | null {
+        return this.newParsePatternSeq(node);
+    }
+
+    oldParsePatternSeq(node: PatternSeq): ASTNode | null {
         const start = this.input.pos;
         const children: (ASTNode[] | ASTNode | null)[] = [];
         const seps: ASTNode[] = [];
