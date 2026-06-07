@@ -1410,14 +1410,27 @@ export class ParserImpl implements Parser {
         }
     }
 
-    buildPatternSeqParseInfo(node: PatternSeq): PatternSeqParseInfo{
-        // TODO
+    buildPatternSeqParseInfo(node: PatternSeq): PatternSeqParseInfo {
+        const single_child_flags: boolean[] = [];
+        for (let i = 0; i < node.sub_nodes.length; i++) {
+            const q = node.sub_quantifiers[i] as Quantifier;
+            const sub_node = node.sub_nodes[i];
+            single_child_flags.push(
+                q === " " || q === "?"
+                || (isGeneralCharMatchNode(sub_node) && node.sep === null && node.ignore === null)
+            );
+        }
+
+        return {
+            entry_stage: this.buildPatternSeqStage(node),
+            single_child_flags,
+        };
     }
 
     newParsePatternSeq(node: PatternSeq): ASTNode | null {
         const start = this.input.pos;
         const bindings: Record<string, any> = {};
-        const stage = this.buildPatternSeqStage(node);
+        const parse_info = this.buildPatternSeqParseInfo(node);
 
         const is_range_value = (value: ParsedValueType): value is [number, number] => {
             return Array.isArray(value);
@@ -1442,25 +1455,15 @@ export class ParserImpl implements Parser {
             };
         };
 
-        const parse_res = this.parseStage(stage);
+        const parse_res = this.parseStage(parse_info.entry_stage);
         if (!this.isSuccess()) {
             this.input.pos = start;
             return null;
         }
 
-        const single_child_flags: boolean[] = [];
-        for (let i = 0; i < node.sub_nodes.length; i++) {
-            const q = node.sub_quantifiers[i] as Quantifier;
-            const sub_node = node.sub_nodes[i];
-            single_child_flags.push(
-                q === " " || q === "?"
-                || (isGeneralCharMatchNode(sub_node) && node.sep === null && node.ignore === null)
-            );
-        }
-
         const children: (ASTNode[] | ASTNode | null)[] = [];
         for (let i = 0; i < node.sub_nodes.length; i++) {
-            if (single_child_flags[i]) {
+            if (parse_info.single_child_flags[i]) {
                 children.push(null);
             } else {
                 children.push([]);
@@ -1485,7 +1488,7 @@ export class ParserImpl implements Parser {
                 assert.ok(i >= 0 && i < node.sub_nodes.length);
                 const sub_node = node.sub_nodes[i];
                 const child = make_ast_node(sub_node, element.value);
-                if (single_child_flags[i]) {
+                if (parse_info.single_child_flags[i]) {
                     children[i] = child;
                 } else {
                     assert.ok(Array.isArray(children[i]));
