@@ -1414,7 +1414,7 @@ export class ParserImpl implements Parser {
             return Array.isArray(value);
         };
 
-        const make_ast_value = (parser_node: ParserNode, value: ParsedValueType): ASTNode | null => {
+        const make_ast_node = (parser_node: ParserNode, value: ParsedValueType): ASTNode | null => {
             if (value === null) {
                 return null;
             }
@@ -1442,16 +1442,14 @@ export class ParserImpl implements Parser {
         const children: (ASTNode[] | ASTNode | null)[] = [];
         for (let i = 0; i < node.sub_nodes.length; i++) {
             const q = node.sub_quantifiers[i] as Quantifier;
-            const sub_node = node.sub_nodes[i]!;
-            if (q === " " || q === "?") {
+            const sub_node = node.sub_nodes[i];
+            if (q === " " || q === "?"
+                || (isGeneralCharMatchNode(sub_node) && node.sep === null && node.ignore === null)
+            ) {
                 children.push(null);
-                continue;
+            } else {
+                children.push([]);
             }
-            if (isGeneralCharMatchNode(sub_node) && node.sep === null && node.ignore === null) {
-                children.push(null);
-                continue;
-            }
-            children.push([]);
         }
 
         const seps: ASTNode[] = [];
@@ -1460,24 +1458,22 @@ export class ParserImpl implements Parser {
         for (const element of parse_res.parsed_elements) {
             if (element.slot === SeqValueSlot.SEP) {
                 assert.ok(node.sep !== null);
-                seps.push(make_ast_value(node.sep, element.value)!);
+                seps.push(make_ast_node(node.sep, element.value)!);
             } else if (element.slot === SeqValueSlot.LEFT_ENCLOSURE) {
                 assert.ok(node.enclosure !== null && left_enclosure === null);
-                left_enclosure = make_ast_value(node.enclosure[0], element.value)!;
+                left_enclosure = make_ast_node(node.enclosure[0], element.value)!;
             } else if (element.slot === SeqValueSlot.RIGHT_ENCLOSURE) {
                 assert.ok(node.enclosure !== null && right_enclosure === null);
-                right_enclosure = make_ast_value(node.enclosure[1], element.value)!;
+                right_enclosure = make_ast_node(node.enclosure[1], element.value)!;
             } else if (element.slot >= SeqValueSlot.SUB_NODE_START) {
                 const i = element.slot - SeqValueSlot.SUB_NODE_START;
                 assert.ok(i >= 0 && i < node.sub_nodes.length);
                 const q = node.sub_quantifiers[i] as Quantifier;
-                const sub_node = node.sub_nodes[i]!;
-                const child = make_ast_value(sub_node, element.value);
-                if (q === " " || q === "?") {
-                    assert.ok(children[i] === null);
-                    children[i] = child;
-                } else if (isGeneralCharMatchNode(sub_node) && node.sep === null && node.ignore === null) {
-                    assert.ok(children[i] === null);
+                const sub_node = node.sub_nodes[i];
+                const child = make_ast_node(sub_node, element.value);
+                if (q === " " || q === "?"
+                    || (isGeneralCharMatchNode(sub_node) && node.sep === null && node.ignore === null)
+                ) {
                     children[i] = child;
                 } else {
                     assert.ok(Array.isArray(children[i]));
@@ -1486,8 +1482,40 @@ export class ParserImpl implements Parser {
             }
         }
 
-        const body_start = left_enclosure !== null ? left_enclosure.range[1] : start;
-        const body_end = right_enclosure !== null ? right_enclosure.range[0] : this.input.pos;
+        let body_start: number = start;
+        let body_end: number = start;
+        for (const child of children) {
+            if (child === null) {
+                continue;
+            }
+            if (Array.isArray(child)) {
+                if (child.length === 0) {
+                    continue;
+                }
+                body_start = child[0].range[0];
+            } else {
+                body_start = child.range[0];
+            }
+            break;
+        }
+
+        for (let i = children.length; i >= 0; i--) {
+            const child = children[i];
+            if (child === null) {
+                continue;
+            }
+            if (Array.isArray(child)) {
+                if (child.length === 0) {
+                    continue;
+                }
+                body_end = child.at(-1)!.range[1];
+            } else {
+                body_end = child.range[1];
+            }
+            break;
+        }
+        // const body_start = left_enclosure !== null ? left_enclosure.range[1] : start;
+        // const body_end = right_enclosure !== null ? right_enclosure.range[0] : this.input.pos;
 
         if (node.sub_node_bindings !== null) {
             for (let i = 0; i < node.sub_node_bindings.length; i++) {
