@@ -250,6 +250,7 @@ export class ParserImpl implements Parser {
     private error: string | null = null;
     private error_pos: number = 0;
     private parse_records: ASTNode[][] = [];
+    private pattern_seq_parse_info_cache = new Map<PatternSeq, PatternSeqParseInfo>();
     private parse_single_node_stack: Array<{ node: ParserNode; pos: number; profile_record?: ParseSingleNodeProfiling }> = [];
     private profiling: ParseProfiling = this.profileCreate();
     private parse_start_time_ms: number = 0;
@@ -1427,10 +1428,21 @@ export class ParserImpl implements Parser {
         };
     }
 
+    acquirePatternSeqParseInfo(node: PatternSeq): PatternSeqParseInfo {
+        const cached = this.pattern_seq_parse_info_cache.get(node);
+        if (cached !== undefined) {
+            return cached;
+        }
+
+        const parse_info = this.buildPatternSeqParseInfo(node);
+        this.pattern_seq_parse_info_cache.set(node, parse_info);
+        return parse_info;
+    }
+
     newParsePatternSeq(node: PatternSeq): ASTNode | null {
         const start = this.input.pos;
         const bindings: Record<string, any> = {};
-        const parse_info = this.buildPatternSeqParseInfo(node);
+        const parse_info = this.acquirePatternSeqParseInfo(node);
 
         const is_range_value = (value: ParsedValueType): value is [number, number] => {
             return Array.isArray(value);
