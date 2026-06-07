@@ -1395,19 +1395,13 @@ export class ParserImpl implements Parser {
         let first_match_sub_node_alt_try_order = sub_node_alt_try_order.slice();
 
         for (let i = 0; i < sub_node_stages.length; i++) {
-            let stage = sub_node_stages[i];
             const info = sub_node_stage_infos[i];
             let try_cnt = info.try_seq_end - i;
-            stage.alts = sub_node_alt_try_order.slice(0, try_cnt);
+            sub_node_stages[i].alts = sub_node_alt_try_order.slice(0, try_cnt);
+            if(i < first_match_sub_node_stages.length){
+                first_match_sub_node_stages[i].alts = sub_node_alt_try_order.slice(0, try_cnt);
+            }
             sub_node_alt_try_order.splice(sub_node_alt_try_order.findIndex(alt => alt === sub_node_alts[i]), 1);
-        }
-
-        for (let i = 0; i < first_match_sub_node_stages.length; i++) {
-            let stage = first_match_sub_node_stages[i];
-            const info = sub_node_stage_infos[i];
-            let try_cnt = info.try_seq_end - i;
-            stage.alts = first_match_sub_node_alt_try_order.slice(0, try_cnt);
-            first_match_sub_node_alt_try_order.splice(first_match_sub_node_alt_try_order.findIndex(alt => alt === sub_node_alts[i]), 1);
         }
 
         for (let i = 0; i < sep_stages.length; i++) {
