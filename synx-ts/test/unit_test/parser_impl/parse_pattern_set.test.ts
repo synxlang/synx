@@ -48,6 +48,23 @@ function test_parsePatternSet_basic(): void {
         }
     }
 }
+function test_parsePatternSet_direct_char_match_alt(): void {
+    const lower = completeCharRange({ start: 'a', end: 'z' });
+    const fallback = completeCharSeq({ literal: 'ab' });
+    const set: PatternSet = completePatternSet({ sub_nodes: [lower, fallback] });
+    assert.strictEqual(set.charset_flag, false);
+    const parser = new ParserImpl({ parser_nodes: [] });
+    parser.initParse({ src: 'a', pos: 0 });
+    const result = parser.parsePatternSet(set);
+    assert(parser.isSuccess());
+    assert.deepStrictEqual(result, {
+        parser_nodes: [lower, set],
+        range: [0, 1],
+        value: 'a',
+        raw_value: 'a',
+        seps: [], enclosure: null, associate_enclosures: null, bindings: {},
+    });
+}
 function test_parsePatternSet_associateby(): void {
     const A = completeCharSeq({ literal: 'a' });
     const Left = completeCharSeq({ literal: '(' });
@@ -592,6 +609,7 @@ function test_parsePatternSet_charset_flag_repetition_merges_like_char_match_set
 function runAllTests(): void {
     console.log('Running parsePatternSet tests...\n');
     test_parsePatternSet_basic();
+    test_parsePatternSet_direct_char_match_alt();
     test_parsePatternSet_associateby();
     test_parsePatternSet_associateby_ignore();
     test_parsePatternSet_infinite_recursion_self();

@@ -805,6 +805,25 @@ export class ParserImpl implements Parser {
         return ret;
     }
 
+    makeParsedValueASTNode(parser_node: ParserNode, value: ParsedValueType): ASTNode | null {
+        if (value === null) {
+            return null;
+        }
+        if (!Array.isArray(value)) {
+            return value;
+        }
+        return {
+            parser_nodes: [parser_node],
+            range: [value[0], value[1]],
+            value: this.input.src.slice(value[0], value[1]),
+            raw_value: this.input.src.slice(value[0], value[1]),
+            seps: [],
+            enclosure: null,
+            associate_enclosures: null,
+            bindings: {},
+        };
+    }
+
     buildPatternSetStage(node: PatternSet, alt_idx: number): ParseStage {
         const stage = completeParseStage({ ignore_node: node.ignore });
         const alts: ParseStageAlt[] = [];
@@ -834,7 +853,7 @@ export class ParserImpl implements Parser {
     }
 
     parsePatternSet(node: PatternSet): ASTNode | null {
-        return this.oldParsePatternSet(node);
+        return this.newParsePatternSet(node);
     }
 
     newParsePatternSet(node: PatternSet): ASTNode | null {
@@ -849,36 +868,28 @@ export class ParserImpl implements Parser {
             }
 
             const parse_alternative = (): ASTNode | null => {
-                for (let i = alt_idx; i < node.sub_nodes.length; i++) {
-                    this.profileRecordPatternSetAlternativeEnter(node, node_start, i);
-                    const child = this.parseSingleNode(node.sub_nodes[i]);
-                    if (!this.isSuccess()) {
-                        this.profileRecordPatternSetAlternativeExit(node, node_start, i, false);
-                        continue;
-                    }
-                    if (node.neg_flags[i]) {
-                        this.setError(this.input.pos, "negated alternative matched");
-                        this.profileRecordPatternSetAlternativeExit(node, node_start, i, false);
-                        return null;
-                    }
-                    if (child === null) {
-                        this.profileRecordPatternSetAlternativeExit(node, node_start, i, false);
-                        return null;
-                    }
-                    if (!child.parser_nodes.includes(node)) {
-                        child.parser_nodes.push(node);
-                    }
-                    if (alt_idx === 0) {
-                        // Only alt_idx=0 covers the full alternative list. Later alternatives
-                        // are left-recursion fallback results and must not populate the
-                        // ordinary (node, pos) success memo.
-                        this.recordParse(child.range[0], child);
-                    }
-                    this.profileRecordPatternSetAlternativeExit(node, node_start, i, true);
-                    return child;
+                const stage = this.buildPatternSetStage(node, alt_idx);
+                const parse_res = this.parseStage(stage);
+                if (!this.isSuccess()) {
+                    return null;
                 }
-                assert.ok(!this.isSuccess());
-                return null;
+
+                assert.ok(parse_res.parsed_elements.length === 1);
+                const element = parse_res.parsed_elements[0];
+                const child = this.makeParsedValueASTNode(node.sub_nodes[element.slot - ParseValueSlot.SUB_NODE_START], element.value);
+                if (child === null) {
+                    return null;
+                }
+                if (!child.parser_nodes.includes(node)) {
+                    child.parser_nodes.push(node);
+                }
+                if (alt_idx === 0) {
+                    // Only alt_idx=0 covers the full alternative list. Later alternatives
+                    // are left-recursion fallback results and must not populate the
+                    // ordinary (node, pos) success memo.
+                    this.recordParse(child.range[0], child);
+                }
+                return child;
             };
 
             const direct = parse_alternative();
@@ -1351,29 +1362,6 @@ export class ParserImpl implements Parser {
         const bindings: Record<string, any> = {};
         const parse_info = this.acquirePatternSeqParseInfo(node);
 
-        const is_range_value = (value: ParsedValueType): value is [number, number] => {
-            return Array.isArray(value);
-        };
-
-        const make_ast_node = (parser_node: ParserNode, value: ParsedValueType): ASTNode | null => {
-            if (value === null) {
-                return null;
-            }
-            if (!is_range_value(value)) {
-                return value;
-            }
-            return {
-                parser_nodes: [parser_node],
-                range: [value[0], value[1]],
-                value: this.input.src.slice(value[0], value[1]),
-                raw_value: this.input.src.slice(value[0], value[1]),
-                seps: [],
-                enclosure: null,
-                associate_enclosures: null,
-                bindings: {},
-            };
-        };
-
         const parse_res = this.parseStage(parse_info.entry_stage);
         if (!this.isSuccess()) {
             this.input.pos = start;
@@ -1395,18 +1383,18 @@ export class ParserImpl implements Parser {
         for (const element of parse_res.parsed_elements) {
             if (element.slot === ParseValueSlot.SEP) {
                 assert.ok(node.sep !== null);
-                seps.push(make_ast_node(node.sep, element.value)!);
+                seps.push(this.makeParsedValueASTNode(node.sep, element.value)!);
             } else if (element.slot === ParseValueSlot.LEFT_ENCLOSURE) {
                 assert.ok(node.enclosure !== null && left_enclosure === null);
-                left_enclosure = make_ast_node(node.enclosure[0], element.value)!;
+                left_enclosure = this.makeParsedValueASTNode(node.enclosure[0], element.value)!;
             } else if (element.slot === ParseValueSlot.RIGHT_ENCLOSURE) {
                 assert.ok(node.enclosure !== null && right_enclosure === null);
-                right_enclosure = make_ast_node(node.enclosure[1], element.value)!;
+                right_enclosure = this.makeParsedValueASTNode(node.enclosure[1], element.value)!;
             } else if (element.slot >= ParseValueSlot.SUB_NODE_START) {
                 const i = element.slot - ParseValueSlot.SUB_NODE_START;
                 assert.ok(i >= 0 && i < node.sub_nodes.length);
                 const sub_node = node.sub_nodes[i];
-                const child = make_ast_node(sub_node, element.value);
+                const child = this.makeParsedValueASTNode(sub_node, element.value);
                 if (parse_info.single_child_flags[i]) {
                     children[i] = child;
                 } else {
