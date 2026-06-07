@@ -1225,11 +1225,27 @@ export class ParserImpl implements Parser {
                 }
             }
         }
+        
+        const first_match_sub_node_stage_possible_rollback_before = right_enclosure_stage === null
+            && sub_node_stage_infos.at(-1)?.quantifier !== ' ';
+
+        for (let i= 0; i < sub_node_stage_infos.length; i++){
+            first_match_sub_node_stages.push(completeParseStage({
+                rollback_before: first_match_sub_node_stage_possible_rollback_before
+                    && sub_node_stage_infos[i].try_seq_end === sub_node_stage_infos.length,
+                ignore_node: node.ignore
+            }));
+
+            const q = node.sub_quantifiers[i];
+            if(q === ' '){
+                break;
+            }
+        }
 
         const sub_node_stage_possible_rollback_before = right_enclosure_stage === null
             && (node.sep === null || node.accept_trailing_sep)
             && sub_node_stage_infos.at(-1)?.quantifier !== ' ';
-
+        
         for (let i = 0; i < sub_node_stage_infos.length; i++) {
             sub_node_stages.push(completeParseStage({
                 rollback_before: sub_node_stage_possible_rollback_before
@@ -1255,6 +1271,7 @@ export class ParserImpl implements Parser {
         // calc ParseStageAlt
         let left_enclosure_alt: ParseStageAlt | null = null;
         let right_enclosure_alt: ParseStageAlt | null = null;
+        let first_match_sub_node_alts: ParseStageAlt[] = [];
         let sub_node_alts: ParseStageAlt[] = [];
         let sep_alts: ParseStageAlt[] = [];
 
