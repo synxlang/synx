@@ -1204,6 +1204,7 @@ export class ParserImpl implements Parser {
         // clac ParseStage
         let left_enclosure_stage: ParseStage | null = null;
         let right_enclosure_stage: ParseStage | null = null;
+        let first_match_sub_node_stages: ParseStage[] = [];
         let sub_node_stages: ParseStage[] = [];
         let sep_stages: ParseStage[] = [];
 
@@ -1226,6 +1227,7 @@ export class ParserImpl implements Parser {
         }
 
         const sub_node_stage_possible_rollback_before = right_enclosure_stage === null
+            && (node.sep === null || node.accept_trailing_sep)
             && sub_node_stage_infos.at(-1)?.quantifier !== ' ';
 
         for (let i = 0; i < sub_node_stage_infos.length; i++) {
