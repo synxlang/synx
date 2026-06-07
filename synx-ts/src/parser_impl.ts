@@ -75,7 +75,7 @@ interface ParseStage {
     rollback_before: boolean;
 }
 
-enum SeqValueSlot {
+enum ParseValueSlot {
     IGNORE,
     SEP,
     LEFT_ENCLOSURE,
@@ -967,7 +967,7 @@ export class ParserImpl implements Parser {
             for (let i = 0; i < node.sub_nodes.length; i++) {
                 const quantifier = node.sub_quantifiers[i] as Quantifier;
                 const sub_node = node.sub_nodes[i];
-                const slot = SeqValueSlot.SUB_NODE_START + i;
+                const slot = ParseValueSlot.SUB_NODE_START + i;
                 if (quantifier === '+') {
                     partial_sub_node_stage_infos.push({ node: sub_node, slot: slot, quantifier: ' ', greedy: true });
                     partial_sub_node_stage_infos.push({ node: sub_node, slot: slot, quantifier: '*', greedy: node.greedy_flags[i] });
@@ -1068,7 +1068,7 @@ export class ParserImpl implements Parser {
         if (node.enclosure !== null) {
             left_enclosure_alt = completeParseStageAlt({
                 node: node.enclosure[0],
-                value_slot: SeqValueSlot.LEFT_ENCLOSURE,
+                value_slot: ParseValueSlot.LEFT_ENCLOSURE,
                 not_null_success_action: completeParseStageAction({
                     kind: ParseActionKind.RECORD,
                     next_stage: first_match_sub_node_stages[0] ?? sub_node_stages[0] ?? null
@@ -1077,7 +1077,7 @@ export class ParserImpl implements Parser {
 
             right_enclosure_alt = completeParseStageAlt({
                 node: node.enclosure[1],
-                value_slot: SeqValueSlot.RIGHT_ENCLOSURE,
+                value_slot: ParseValueSlot.RIGHT_ENCLOSURE,
                 not_null_success_action: completeParseStageAction({
                     kind: ParseActionKind.RECORD
                 }),
@@ -1100,7 +1100,7 @@ export class ParserImpl implements Parser {
             assert.ok(node.sep !== null);
             let alt = completeParseStageAlt({
                 node: node.sep,
-                value_slot: SeqValueSlot.SEP,
+                value_slot: ParseValueSlot.SEP,
                 not_null_success_action: completeParseStageAction({
                     kind: ParseActionKind.RECORD,
                     next_stage: next_stage
@@ -1267,17 +1267,17 @@ export class ParserImpl implements Parser {
         let left_enclosure: ASTNode | null = null;
         let right_enclosure: ASTNode | null = null;
         for (const element of parse_res.parsed_elements) {
-            if (element.slot === SeqValueSlot.SEP) {
+            if (element.slot === ParseValueSlot.SEP) {
                 assert.ok(node.sep !== null);
                 seps.push(make_ast_node(node.sep, element.value)!);
-            } else if (element.slot === SeqValueSlot.LEFT_ENCLOSURE) {
+            } else if (element.slot === ParseValueSlot.LEFT_ENCLOSURE) {
                 assert.ok(node.enclosure !== null && left_enclosure === null);
                 left_enclosure = make_ast_node(node.enclosure[0], element.value)!;
-            } else if (element.slot === SeqValueSlot.RIGHT_ENCLOSURE) {
+            } else if (element.slot === ParseValueSlot.RIGHT_ENCLOSURE) {
                 assert.ok(node.enclosure !== null && right_enclosure === null);
                 right_enclosure = make_ast_node(node.enclosure[1], element.value)!;
-            } else if (element.slot >= SeqValueSlot.SUB_NODE_START) {
-                const i = element.slot - SeqValueSlot.SUB_NODE_START;
+            } else if (element.slot >= ParseValueSlot.SUB_NODE_START) {
+                const i = element.slot - ParseValueSlot.SUB_NODE_START;
                 assert.ok(i >= 0 && i < node.sub_nodes.length);
                 const sub_node = node.sub_nodes[i];
                 const child = make_ast_node(sub_node, element.value);
