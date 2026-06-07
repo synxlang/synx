@@ -25,79 +25,11 @@ import type {
 import { ParseResultKind } from "./common";
 import type { Parser } from "./parser";
 
-function reverseRangeIncludeEnd<T>(arr: T[], start: number, end: number) {
-    let left = start;
-    let right = end;
-    while (left < right) {
-        [arr[left], arr[right]] = [arr[right], arr[left]];
-        left++;
-        right--;
-    }
-}
-
 class ParseTimeoutError extends Error {
     constructor(message: string) {
         super(message);
         this.name = "ParseTimeoutError";
     }
-}
-
-/**
- * ============================== EN ==============================
- *
- * - With `*` / `+` quantifiers, returns `ASTNode[]`; with ` ` / `?`, returns `ASTNode` or `null`.
- * - GeneralCharMatchNode special case: when `ignored` is null, repeated character matches are merged into one `ASTNode`;
- *   when `ignored` is non-null, `*` / `+` returns `ASTNode[]` so separated runs remain observable.
- * - `end_idx` is the matched end-node index, or `-1` if no end node matched.
- *
- * ============================== 中文 ==============================
- *
- * `*`、`+` 量词时返回 `ASTNode[]`；`' '` 或 `?` 量词时返回 `ASTNode` 或 `null`。
- * GeneralCharMatchNode 特殊处理：`ignored` 为空时，重复字符匹配会合并为一个 `ASTNode`；
- * `ignored` 非空时，`*` / `+` 返回 `ASTNode[]`，以保留被 ignored 分隔的多段结果。
- * `end_idx` 为结束节点匹配索引；未匹配到结束节点时为 `-1`。
- */
-interface ParseNodeResult {
-    ast_node_res: ASTNode[] | ASTNode | null;
-    seps: ASTNode[];
-    end_idx: number;
-}
-
-/**
- * ============================== EN ==============================
- *
- * Result of peeking end nodes.
- * `end_idx` is the matched end-node index, or `-1` if no end node matched.
- *
- * ============================== 中文 ==============================
- *
- * 探测结束节点的结果。
- * `end_idx` 为结束节点匹配索引；未匹配到结束节点时为 `-1`。
- */
-interface PeekEndNodesResult {
-    end_ast_node: ASTNode | null;
-    end_idx: number;
-}
-
-/**
- * ============================== EN ==============================
- *
- * `start` is the matched node start position on success, or the whole-match start position on failure.
- * `end_idx` is the matched end-node index, or `-1` if no end node matched.
- *
- * ============================== 中文 ==============================
- *
- * `start` 成功时为匹配 `node` 的起始匹配位置，失败时为总匹配初始位置。
- * `end_idx` 为结束节点匹配索引；未匹配到结束节点时为 `-1`。
- */
-interface ParseCharMatchNodeConsecutiveResult {
-    start: number;
-    end_idx: number;
-}
-
-interface ParseCharMatchNodeExResult {
-    ast_node_res: ASTNode[] | ASTNode | null;
-    end_idx: number;
 }
 
 enum ParseActionKind {
@@ -212,11 +144,6 @@ function completeParseStage(stage: Partial<ParseStage> | undefined = undefined):
  *   - Success must be determined only with `isSuccess()`; do not use any other rule.
  *   - On success, `isSuccess()` is true; on failure, `isSuccess()` is false.
  *
- * - `ends` parameter:
- *   - Used for non-greedy matching: prefer matching nodes in the `ends` list; the last item in the list has the highest priority.
- *   - If a node in `ends` matches, stop matching and return the current result.
- *   - `ends` does not consume input (matching is probed without advancing the read position).
- *
  * ============================== 中文 ==============================
  *
  * 解析器实现类，供 mkParser 与测试使用；不作为对外公开 API 导出。
@@ -232,11 +159,6 @@ function completeParseStage(stage: Partial<ParseStage> | undefined = undefined):
  *   - `setError(error_pos, …)` / `getError` 设置与读取失败状态；`error_pos` 须为判定出错时的 `input.pos`。
  *   - 是否成功只能用 `isSuccess()` 判定，不得以其他方式。
  *   - 成功时 `isSuccess()` 为真；失败时 `isSuccess()` 为假。
- *
- * - ends 参数：
- *   - 用于非贪婪匹配，优先匹配 ends 列表中的节点，列表末端的节点优先级最高。
- *   - 如果匹配到 ends 列表中的节点，则停止匹配并返回当前结果。
- *   - ends不消耗输入。
  *
  */
 export class ParserImpl implements Parser {
@@ -624,7 +546,7 @@ export class ParserImpl implements Parser {
         this.initParse(input);
         let parse_node_res: ASTNode[] | ASTNode | null = null;
         try {
-            parse_node_res = this.parseSingleNode(root);
+            parse_node_res = this.parseSingleNodeSimple(root);
         } catch (err) {
             this.profileRecordElapsed();
             if (err instanceof ParseTimeoutError) {
@@ -667,7 +589,7 @@ export class ParserImpl implements Parser {
 
         while (this.input.pos < this.input.src.length) {
             const start = this.input.pos;
-            const parse_node_res = this.parseSingleNode(node);
+            const parse_node_res = this.parseSingleNodeSimple(node);
 
             if (this.isSuccess()) {
                 results.push(parse_node_res as ASTNode);
@@ -678,119 +600,6 @@ export class ParserImpl implements Parser {
 
         this.setSuccess();
         return results;
-    }
-
-    /**
-     * ============================== EN ==============================
-     *
-     * When `sep` is non-null, it is parsed only between successive matches of the same `node` while expanding `*` / `+` (the loop below).
-     *
-     * `ends` is the end-node list. For non-greedy `*`, `+`, and `?`, end nodes are tried before the current node;
-     * if any end node matches, parsing stops and returns the current result. The last item in `ends` has the highest priority.
-     * When an end node matches, `input.pos` is the end position that excludes the end node.
-     *
-     * ============================== 中文 ==============================
-     *
-     * 当 `sep` 非 null 时，仅在本函数展开 `*` / `+` 的循环中、于同一 `node` 的相邻两次匹配之间解析分隔符。
-     *
-     * `ends` 为结束节点列表。非贪婪匹配量词 `*`、`+`、`?` 时，优先匹配结束节点；
-     * 如果匹配到结束节点，则停止匹配并返回当前结果。列表末端的节点优先级最高。
-     * 匹配到结束节点时，`input.pos` 为不包含 `ends` 的结束匹配位置。
-     */
-    parseNode(
-        node: ParserNode,
-        quantifier: Quantifier,
-        ignored: ParserNode | null = null,
-        sep: ParserNode | null = null,
-        ends: ParserNode[] = [],
-    ): ParseNodeResult {
-        if (ends.length > 0) {
-            assert.ok(quantifier !== " ");
-        }
-        if (sep === null && isGeneralCharMatchNode(node)) {
-            const result = this.parseCharMatchNodeEx(node, quantifier, ignored, ends);
-            return {
-                ast_node_res: result.ast_node_res,
-                seps: [],
-                end_idx: result.end_idx,
-            }
-        }
-
-        let ret: ParseNodeResult = {
-            ast_node_res: null,
-            seps: [],
-            end_idx: -1,
-        };
-
-        let peek_ends = () => {
-            let peek_res = this.peekEndNodes(ends, ignored);
-            ret.end_idx = peek_res.end_idx;
-            return ret.end_idx >= 0;
-        }
-
-        if (quantifier === "?" || quantifier === "*") {
-            if (peek_ends()) {
-                return ret;
-            }
-        }
-
-        let first = this.parseSingleNode(node, ignored);
-        if (!this.isSuccess()) {
-            if (quantifier === "?" || quantifier === "*") {
-                this.setSuccess();
-            }
-            first = null;
-        }
-        if (quantifier === " " || quantifier === "?") {
-            ret.ast_node_res = first;
-            return ret;
-        }
-
-        ret.ast_node_res = [] as ASTNode[];
-        if (quantifier === "+" && !this.isSuccess()) {
-            return ret;
-        }
-        let push_node = (ast_node: ASTNode | null) => {
-            if (ast_node !== null) {
-                (ret.ast_node_res as ASTNode[]).push(ast_node);
-            }
-        };
-        let push_sep_node = (sep_node: ASTNode | null) => {
-            if (sep_node !== null) {
-                ret.seps.push(sep_node);
-            }
-        };
-        push_node(first);
-
-        for (; ;) {
-            const sep_retry_pos = this.input.pos;
-            let sep_node: ASTNode | null = null;
-            if (sep !== null) {
-                sep_node = this.parseSingleNode(sep, ignored);
-                if (!this.isSuccess()) {
-                    this.input.pos = sep_retry_pos;
-                    break;
-                }
-            }
-
-            if (peek_ends()) {
-                if (sep !== null) {
-                    this.input.pos = sep_retry_pos;
-                }
-                break;
-            }
-            let n = this.parseSingleNode(node, ignored);
-            if (!this.isSuccess()) {
-                if (sep !== null) {
-                    this.input.pos = sep_retry_pos;
-                }
-                break;
-            }
-            push_sep_node(sep_node);
-            push_node(n);
-        }
-        this.setSuccess();
-        return ret;
     }
 
     parseStage(stage: ParseStage): ParseStageResult {
@@ -920,37 +729,6 @@ export class ParserImpl implements Parser {
             this.input.pos = start;
         }
         return { parsed_elements };
-    }
-
-    /**
-     * ============================== EN ==============================
-     *
-     * Peek whether any end node matches at the current input position without consuming input. 
-     * `ends` is tried from right to left because the last item has the highest priority.
-     * This function does not guarantee the error-state convention; use `end_idx` in the return value to determine success.
-     *
-     * ============================== 中文 ==============================
-     *
-     * 探测当前位置是否能匹配任一结束节点，但不消费输入。
-     * `ends` 从右向左尝试，列表末尾节点优先级最高。
-     * 此函数不会确保错误状态约定，应当通过返回值中的 `end_idx` 判定是否成功。
-     */
-    peekEndNodes(ends: ParserNode[], ignored: ParserNode | null = null): PeekEndNodesResult {
-        const start = this.input.pos;
-        let ret: PeekEndNodesResult = {
-            end_ast_node: null,
-            end_idx: -1,
-        };
-        for (let i = ends.length - 1; i >= 0; i--) {
-            let res = this.parseSingleNode(ends[i], ignored);
-            if (this.isSuccess()) {
-                ret.end_ast_node = res;
-                ret.end_idx = i;
-                break;
-            }
-        }
-        this.input.pos = start;
-        return ret;
     }
 
     /**
@@ -1214,7 +992,7 @@ export class ParserImpl implements Parser {
         }
 
 
-        // clac ParseStage
+        // calc ParseStage
         let left_enclosure_stage: ParseStage | null = null;
         let right_enclosure_stage: ParseStage | null = null;
         let first_match_sub_node_stages: ParseStage[] = [];
@@ -1442,7 +1220,7 @@ export class ParserImpl implements Parser {
         return parse_info;
     }
 
-    newParsePatternSeq(node: PatternSeq): ASTNode | null {
+    parsePatternSeq(node: PatternSeq): ASTNode | null {
         const start = this.input.pos;
         const bindings: Record<string, any> = {};
         const parse_info = this.acquirePatternSeqParseInfo(node);
@@ -1597,151 +1375,6 @@ export class ParserImpl implements Parser {
         };
     }
 
-    parsePatternSeq(node: PatternSeq): ASTNode | null {
-        return this.newParsePatternSeq(node);
-    }
-
-    oldParsePatternSeq(node: PatternSeq): ASTNode | null {
-        const start = this.input.pos;
-        const children: (ASTNode[] | ASTNode | null)[] = [];
-        const seps: ASTNode[] = [];
-        let left_enclosure: ASTNode | null = null;
-        let right_enclosure: ASTNode | null = null;
-        const bindings: Record<string, any> = {};
-
-        const push_child = (child: ASTNode[] | ASTNode | null): void => {
-            children.push(child);
-        };
-
-        if (node.enclosure !== null) {
-            const left = this.parseSingleNode(node.enclosure[0], node.ignore);
-            if (!this.isSuccess() || left === null) {
-                this.input.pos = start;
-                return null;
-            }
-            left_enclosure = left;
-        }
-
-        const body_start = this.input.pos;
-        let last_sep_end: number = body_start;
-        for (let i = 0; i < node.sub_nodes.length; i++) {
-            const q = node.sub_quantifiers[i] as Quantifier;
-            const sub_node = node.sub_nodes[i];
-            const ends: ParserNode[] = [];
-            if (node.greedy_flags[i] === false) {
-                for (let j = i + 1; j < node.sub_nodes.length; j++) {
-                    ends.push(node.sub_nodes[j]);
-                    const qj = node.sub_quantifiers[j] as Quantifier;
-                    if (node.greedy_flags[j] || qj === " " || qj === "+") {
-                        break;
-                    }
-                }
-                if (i === node.sub_nodes.length - 1 && node.enclosure !== null) {
-                    ends.push(node.enclosure[1]);
-                }
-            }
-            const parse_res = this.parseNode(sub_node, q, node.ignore, node.sep, ends);
-            const ast_res = parse_res.ast_node_res;
-            if (!this.isSuccess()) {
-                this.input.pos = start;
-                return null;
-            }
-
-            seps.push(...parse_res.seps);
-            push_child(ast_res);
-            let next_i = i;
-            if (parse_res.end_idx >= 0) {
-                const end_node_idx = i + 1 + parse_res.end_idx;
-                for (let j = i + 1; j < end_node_idx; j++) {
-                    const qj = node.sub_quantifiers[j] as Quantifier;
-                    push_child(qj === "*" ? [] : null);
-                }
-                next_i = end_node_idx - 1;
-            }
-
-            if (node.sep !== null && this.input.pos > last_sep_end) {   // check last_sep_end for consecutive empty child nodes case
-                if (i < node.sub_nodes.length - 1) {
-                    const sep = this.parseSingleNode(node.sep, node.ignore);
-                    if (!this.isSuccess()) {
-                        this.input.pos = start;
-                        return null;
-                    }
-                    if (sep !== null) {
-                        seps.push(sep);
-                    }
-                } else if (node.accept_trailing_sep) {
-                    const sep = this.parseSingleNode(node.sep, node.ignore);
-                    if (sep !== null) {
-                        seps.push(sep);
-                    }
-                }
-                last_sep_end = this.input.pos;
-            }
-            i = next_i;
-        }
-
-        const body_end = this.input.pos;
-        if (node.enclosure !== null) {
-            const right = this.parseSingleNode(node.enclosure[1], node.ignore);
-            if (!this.isSuccess() || right === null) {
-                this.input.pos = start;
-                return null;
-            }
-            right_enclosure = right;
-        }
-
-        if (node.sub_node_bindings !== null) {
-            for (let i = 0; i < node.sub_node_bindings.length; i++) {
-                const binding = node.sub_node_bindings[i];
-                const isolated = node.sub_node_isolated_scope_flags?.[i] ?? true;
-                if (!isolated) {
-                    const child = children[i];
-                    assert.ok(!Array.isArray(child), "non-isolated repeated PatternSeq binding scope is not implemented yet");
-                    if (child !== null) {
-                        Object.assign(bindings, child.bindings);
-                    }
-                }
-                if (binding === null) {
-                    continue;
-                }
-                assert.ok(!Object.prototype.hasOwnProperty.call(bindings, binding), `duplicate PatternSeq binding: ${binding}`);
-                bindings[binding] = children[i];
-            }
-        }
-
-        let value: any = node.raw
-            ? this.input.src.slice(body_start, body_end)
-            : children;
-        if (node.assignment_map !== null) {
-            if (typeof node.assignment_map === "string") {
-                if (Object.prototype.hasOwnProperty.call(bindings, node.assignment_map)) {
-                    value = bindings[node.assignment_map];
-                }
-            } else {
-                value = {};
-                for (const [target, source] of node.assignment_map) {
-                    if (Object.prototype.hasOwnProperty.call(bindings, source)) {
-                        value[target] = bindings[source];
-                    }
-                }
-            }
-        }
-
-        this.setSuccess();
-        return {
-            parser_nodes: [node],
-            range: [start, this.input.pos],
-            value,
-            raw_value: children,
-            seps,
-            enclosure: node.enclosure !== null
-                ? [left_enclosure!, right_enclosure!]
-                : null,
-            associate_enclosures: null,
-            bindings: bindings,
-        };
-    }
-
     /**
      * Character matching: match according to quantifier and merge into a string, returns an ASTNode (value/raw_value is the matched string); 
      *
@@ -1789,169 +1422,6 @@ export class ParserImpl implements Parser {
         return make_returned();
     }
 
-    /**
-     * ============================== EN ==============================
-     *
-     * Extended CharMatch parsing used by parseNode.
-     *
-     * Return shape convention:
-     * - When ignored is null, return a single merged ASTNode for matched runs with `*` / `+` quantifiers.
-     * - If non-greedy ends stops a `*` quantifier before any character is consumed, return null.
-     * - When ignored is non-null, return ASTNode[] for `*` / `+` quantifiers so runs split by ignored text stay separate;
-     *   zero matched runs are represented as [].
-     *
-     * ============================== 中文 ==============================
-     *
-     * parseNode 使用的扩展字符匹配。
-     *
-     * 返回形状约定：
-     * - ignored 为空时，量词为 `*` 或 `+` 的匹配返回合并后的单个 ASTNode。
-     * - 非贪婪 ends 让 `*` 量词在消费任何字符前停止时，返回 null。
-     * - ignored 非空时，量词为 `*` 或 `+` 的匹配返回 ASTNode[]，以保留被 ignored 文本分隔的多段结果；
-     *   零段匹配表示为 []。
-     */
-    parseCharMatchNodeEx(
-        node: GeneralCharMatchNode,
-        quantifier: Quantifier,
-        ignored: ParserNode | null,
-        ends: ParserNode[] = [],
-    ): ParseCharMatchNodeExResult {
-        const ret: ParseCharMatchNodeExResult = {
-            ast_node_res: null,
-            end_idx: -1,
-        };
-        if (ignored === null && ends.length === 0) {
-            ret.ast_node_res = this.parseCharMatchNode(node, quantifier);
-            return ret;
-        }
-
-        const make_ast_node = (start: number): ASTNode => {
-            const end = this.input.pos;
-            return {
-                parser_nodes: [node],
-                range: [start, end],
-                value: this.input.src.slice(start, end),
-                raw_value: this.input.src.slice(start, end),
-                seps: [],
-                enclosure: null,
-                associate_enclosures: null,
-                bindings: {},
-            };
-        }
-
-        const single = quantifier === " " || quantifier === "?";
-        const match_res = this.parseCharMatchNodeConsecutive(node, ignored, single, ends, quantifier !== "+");
-        ret.end_idx = match_res.end_idx;
-        if (!this.isSuccess()) {
-            if (quantifier === "?" || quantifier === "*") {
-                this.setSuccess();
-            }
-            if (single) {
-                return ret;
-            }
-            if (ignored !== null) {
-                ret.ast_node_res = [];
-            }
-            return ret;
-        }
-
-        const first = make_ast_node(match_res.start);
-        if (single) {
-            ret.ast_node_res = first;
-            return ret;
-        }
-
-        if (ignored === null) {
-            ret.ast_node_res = first;
-            return ret;
-        }
-
-        ret.ast_node_res = [first];
-        for (; ;) {
-            const match_res = this.parseCharMatchNodeConsecutive(node, ignored, false, ends);
-            if (!this.isSuccess()) {
-                ret.end_idx = match_res.end_idx;
-                break;
-            }
-            ret.ast_node_res.push(make_ast_node(match_res.start))
-            ret.end_idx = match_res.end_idx;
-            if (ret.end_idx >= 0) {
-                break;
-            }
-        }
-        this.setSuccess();
-        return ret;
-    }
-
-    /**
-     * ============================== EN ==============================
-     *
-     * Match `node` many times. On each failed match, try consuming `ignored` once until matching succeeds or cannot succeed even after ignoring.
-     * If matching succeeds, keep matching until failure. On success, at least one `node` is matched.
-     * See `ParseCharMatchNodeConsecutiveResult` for the return value.
-     *
-     * ============================== 中文 ==============================
-     *
-     * 多次匹配 `node`。每次匹配失败时，尝试忽略一次 `ignored` 节点，直到匹配成功，或即使忽略也不可能匹配成功。
-     * 如果匹配成功，则重复匹配直到失败。成功时至少匹配到一次 `node`。
-     * 返回值参考 `ParseCharMatchNodeConsecutiveResult` 定义。
-     */
-    parseCharMatchNodeConsecutive(
-        node: GeneralCharMatchNode,
-        ignored: ParserNode | null,
-        single: boolean,
-        ends: ParserNode[] = [],
-        first_peek_ends: boolean = true,
-    ): ParseCharMatchNodeConsecutiveResult {
-        const start = this.input.pos;
-        const ret: ParseCharMatchNodeConsecutiveResult = {
-            start,
-            end_idx: -1,
-        };
-
-        let peek_ends = (): boolean => {
-            const peek_res = this.peekEndNodes(ends);
-            ret.end_idx = peek_res.end_idx;
-            return peek_res.end_idx >= 0;
-        };
-
-        for (; ;) {
-            if (first_peek_ends && peek_ends()) {
-                this.setError(this.input.pos);
-                return ret;
-            }
-
-            const retry_pos = this.input.pos;
-            this.parseSingleCharMatchNode(node);
-            if (this.isSuccess()) {
-                ret.start = retry_pos;
-                if (single) {
-                    return ret;
-                }
-
-                do {
-                    if (peek_ends()) {
-                        break;
-                    }
-                    this.parseSingleCharMatchNode(node);
-                } while (this.isSuccess());
-                this.setSuccess();
-                return ret;
-            }
-
-            if (ignored === null) {
-                this.input.pos = start;
-                return ret;
-            }
-            this.parseSingleNodeSimple(ignored);
-            if (!this.isSuccess()) {
-                this.input.pos = start;
-                return ret;
-            }
-            assert.ok(this.input.pos > retry_pos);
-        }
-    }
-
     parseSingleCharMatchNode(node: GeneralCharMatchNode): ParserNode[] {
         if (node.kind === ParserNodeKind.CharMatchSet) {
             return this.parseCharMatchSet(node as CharMatchSet);
@@ -1976,10 +1446,8 @@ export class ParserImpl implements Parser {
 
     /**
      * Match a fixed `CharSeq.literal` once (`startsWith` at current byte offset in the binary-string model).
-     * Quantifiers are handled in `parseNode`, like `PatternSeq`.
      *
      * 匹配 `CharSeq.literal` 一次（在二进制串模型下于当前字节偏移处 `startsWith`）。
-     * 量词在 `parseNode` 中处理，与 `PatternSeq` 相同。
      */
     parseCharSeq(node: CharSeq): ASTNode | null {
         const { src, pos } = this.input;
