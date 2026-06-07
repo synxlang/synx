@@ -1169,6 +1169,8 @@ export class ParserImpl implements Parser {
 
     buildPatternSeqStage(node: PatternSeq): ParseStage {
         interface SubNodeStageInfo {
+            node: ParserNode;
+            slot: number;
             quantifier: ' ' | '?' | '*';
             greedy: boolean;
             try_seq_end: number;    // not included idx
@@ -1180,11 +1182,13 @@ export class ParserImpl implements Parser {
             let partial_sub_node_stage_infos: Partial<SubNodeStageInfo>[] = [];
             for (let i = 0; i < node.sub_nodes.length; i++) {
                 const quantifier = node.sub_quantifiers[i] as Quantifier;
+                const sub_node = node.sub_nodes[i];
+                const slot = SeqValueSlot.SUB_NODE_START + i;
                 if (quantifier === '+') {
-                    partial_sub_node_stage_infos.push({ quantifier: ' ', greedy: true });
-                    partial_sub_node_stage_infos.push({ quantifier: '*', greedy: node.greedy_flags[i] });
+                    partial_sub_node_stage_infos.push({ node: sub_node, slot: slot, quantifier: ' ', greedy: true });
+                    partial_sub_node_stage_infos.push({ node: sub_node, slot: slot, quantifier: '*', greedy: node.greedy_flags[i] });
                 } else {
-                    partial_sub_node_stage_infos.push({ quantifier: quantifier, greedy: node.greedy_flags[i] });
+                    partial_sub_node_stage_infos.push({ node: sub_node, slot: slot, quantifier: quantifier, greedy: node.greedy_flags[i] });
                 }
             }
 
@@ -1296,10 +1300,10 @@ export class ParserImpl implements Parser {
             });
         }
 
-        function mk_sub_node_alt(sub_node: ParserNode, i: number, next_stage: ParseStage | null): ParseStageAlt {
+        function mk_sub_node_alt(sub_node: ParserNode, slot: number, next_stage: ParseStage | null): ParseStageAlt {
             let alt = completeParseStageAlt({
                 node: sub_node,
-                value_slot: SeqValueSlot.SUB_NODE_START + i,
+                value_slot: slot,
             });
             alt.not_null_success_action = alt.null_success_action = completeParseStageAction({
                 kind: ParseActionKind.RECORD,
@@ -1321,12 +1325,12 @@ export class ParserImpl implements Parser {
             return alt;
         }
 
-        for (let i = 0; i < node.sub_nodes.length; i++) {
-            const q = node.sub_quantifiers[i];
-            const sub_node = node.sub_nodes[i];
+        for (let i = 0; i < sub_node_stage_infos.length; i++) {
+            const info = sub_node_stage_infos[i];
+            const sub_node = info.node;
+            const q = info.quantifier;
             let sep_next_stage: ParseStage | null = null;
             let sub_node_next_stage: ParseStage | null = null;
-
             if (q === '*') {
                 sep_next_stage = sub_node_stages[sub_node_alts.length];
             } else {
@@ -1336,7 +1340,7 @@ export class ParserImpl implements Parser {
                 sub_node_next_stage = sep_next_stage;
             } else {
                 sep_alts.push(mk_sep_alt(sep_next_stage));
-                if (i === node.sub_nodes.length - 1
+                if (i === sub_node_stage_infos.length - 1
                     && !node.accept_trailing_sep
                     && ' ?'.includes(q)) {
                     sub_node_next_stage = right_enclosure_stage;
@@ -1344,22 +1348,9 @@ export class ParserImpl implements Parser {
                     sub_node_next_stage = sep_stages[sub_node_alts.length];
                 }
             }
-            const sub_node_alt = mk_sub_node_alt(sub_node, i, sub_node_next_stage);
+            const sub_node_alt = mk_sub_node_alt(sub_node, info.slot, sub_node_next_stage);
             sub_node_alts.push(sub_node_alt);
-            if (q === '+') {
-                let sep_next_stage = sub_node_stages[sub_node_alts.length];
-                let sub_node_next_stage: ParseStage | null = null;
-                if (node.sep === null) {
-                    sub_node_next_stage = sep_next_stage;
-                } else {
-                    sep_alts.push(mk_sep_alt(sep_next_stage));
-                    sub_node_next_stage = sep_stages[sub_node_alts.length];
-                }
-                const sub_node_alt = mk_sub_node_alt(sub_node, i, sub_node_next_stage);
-                sub_node_alts.push(sub_node_alt);
-            }
         }
-
 
         // assign stage.alts
         if (left_enclosure_stage !== null) {
@@ -1398,7 +1389,7 @@ export class ParserImpl implements Parser {
             const info = sub_node_stage_infos[i];
             let try_cnt = info.try_seq_end - i;
             sub_node_stages[i].alts = sub_node_alt_try_order.slice(0, try_cnt);
-            if(i < first_match_sub_node_stages.length){
+            if (i < first_match_sub_node_stages.length) {
                 first_match_sub_node_stages[i].alts = sub_node_alt_try_order.slice(0, try_cnt);
             }
             sub_node_alt_try_order.splice(sub_node_alt_try_order.findIndex(alt => alt === sub_node_alts[i]), 1);
