@@ -1226,7 +1226,6 @@ export class ParserImpl implements Parser {
         }
 
         const sub_node_stage_possible_rollback_before = right_enclosure_stage === null
-            && (node.sep === null || node.accept_trailing_sep)
             && sub_node_stage_infos.at(-1)?.quantifier !== ' ';
 
         for (let i = 0; i < sub_node_stage_infos.length; i++) {
@@ -1238,8 +1237,7 @@ export class ParserImpl implements Parser {
         }
 
         const sep_stage_possible_rollback_before = right_enclosure_stage === null
-            && !node.accept_trailing_sep
-            && sub_node_stage_infos.at(-1)?.quantifier !== ' ';
+            && (node.accept_trailing_sep || sub_node_stage_infos.at(-1)?.quantifier !== ' ');
 
         if (node.sep !== null) {
             for (let i = 0; i < sub_node_stage_infos.length; i++) {
@@ -1355,10 +1353,16 @@ export class ParserImpl implements Parser {
         for (let i = 0; i < sub_node_alts.length; i++) {
             const i_start = i;
             for (; ; i++) {
-                const info = sub_node_stage_infos[i];
-                if (info.greedy || i >= sub_node_alts.length) {
+                if (i >= sub_node_alts.length) {
                     break;
                 }
+                const info = sub_node_stage_infos[i];
+                if (info.greedy) {
+                    break;
+                }
+            }
+            if (i >= sub_node_alts.length) {
+                i = sub_node_alts.length - 1;
             }
             for (let j = i; j >= i_start; j--) {
                 sub_node_alt_try_order.push(sub_node_alts[j]);
@@ -1370,6 +1374,15 @@ export class ParserImpl implements Parser {
             const info = sub_node_stage_infos[i];
             let try_cnt = info.try_seq_end - i;
             stage.alts = sub_node_alt_try_order.slice(0, try_cnt);
+            if (right_enclosure_alt !== null
+                && info.quantifier !== ' '
+                && info.try_seq_end === sub_node_stages.length) {
+                if (info.greedy) {
+                    stage.alts.push(right_enclosure_alt);
+                } else {
+                    stage.alts.unshift(right_enclosure_alt);
+                }
+            }
             sub_node_alt_try_order.splice(sub_node_alt_try_order.findIndex(alt => alt === sub_node_alts[i]), 1);
         }
 
@@ -1386,7 +1399,129 @@ export class ParserImpl implements Parser {
     }
 
     newParsePatternSeq(node: PatternSeq): ASTNode | null {
-        throw "TODO";
+        const start = this.input.pos;
+        const bindings: Record<string, any> = {};
+        const stage = this.buildPatternSeqStage(node);
+
+        const is_range_value = (value: ParsedValueType): value is [number, number] => {
+            return Array.isArray(value);
+        };
+
+        const make_ast_value = (parser_node: ParserNode, value: ParsedValueType): ASTNode | null => {
+            if (value === null) {
+                return null;
+            }
+            if (!is_range_value(value)) {
+                return value;
+            }
+            return {
+                parser_nodes: [parser_node],
+                range: [value[0], value[1]],
+                value: this.input.src.slice(value[0], value[1]),
+                raw_value: this.input.src.slice(value[0], value[1]),
+                seps: [],
+                enclosure: null,
+                associate_enclosures: null,
+                bindings: {},
+            };
+        };
+
+        const parse_res = this.parseStage(stage);
+        if (!this.isSuccess()) {
+            this.input.pos = start;
+            return null;
+        }
+
+        const slot_values: ParsedValueType[][] = Array.from(
+            { length: SeqValueSlot.SUB_NODE_START + node.sub_nodes.length },
+            () => [],
+        );
+        for (const element of parse_res.parsed_elements) {
+            if (element.slot >= 0) {
+                slot_values[element.slot]!.push(element.value);
+            }
+        }
+
+        const children: (ASTNode[] | ASTNode | null)[] = [];
+        for (let i = 0; i < node.sub_nodes.length; i++) {
+            const values = slot_values[SeqValueSlot.SUB_NODE_START + i]!;
+            const q = node.sub_quantifiers[i] as Quantifier;
+            const sub_node = node.sub_nodes[i]!;
+            if (q === " " || q === "?") {
+                assert.ok(values.length <= 1);
+                children.push(values.length === 0 ? null : make_ast_value(sub_node, values[0]!)!);
+                continue;
+            }
+            if (isGeneralCharMatchNode(sub_node) && node.sep === null && node.ignore === null) {
+                assert.ok(values.length <= 1);
+                children.push(values.length === 0 ? null : make_ast_value(sub_node, values[0]!)!);
+                continue;
+            }
+            children.push(values.map((value) => make_ast_value(sub_node, value)!));
+        }
+
+        const seps = node.sep !== null
+            ? slot_values[SeqValueSlot.SEP]!.map((value) => make_ast_value(node.sep!, value)!)
+            : [];
+        const left_enclosure = node.enclosure !== null && slot_values[SeqValueSlot.LEFT_ENCLOSURE]!.length > 0
+            ? make_ast_value(node.enclosure[0], slot_values[SeqValueSlot.LEFT_ENCLOSURE]![0]!)!
+            : null;
+        const right_enclosure = node.enclosure !== null && slot_values[SeqValueSlot.RIGHT_ENCLOSURE]!.length > 0
+            ? make_ast_value(node.enclosure[1], slot_values[SeqValueSlot.RIGHT_ENCLOSURE]![0]!)!
+            : null;
+        const body_start = left_enclosure !== null ? left_enclosure.range[1] : start;
+        const body_end = right_enclosure !== null ? right_enclosure.range[0] : this.input.pos;
+
+        if (node.sub_node_bindings !== null) {
+            for (let i = 0; i < node.sub_node_bindings.length; i++) {
+                const binding = node.sub_node_bindings[i];
+                const isolated = node.sub_node_isolated_scope_flags?.[i] ?? true;
+                if (!isolated) {
+                    const child = children[i];
+                    assert.ok(!Array.isArray(child), "non-isolated repeated PatternSeq binding scope is not implemented yet");
+                    if (child !== null) {
+                        Object.assign(bindings, child.bindings);
+                    }
+                }
+                if (binding === null) {
+                    continue;
+                }
+                assert.ok(!Object.prototype.hasOwnProperty.call(bindings, binding), `duplicate PatternSeq binding: ${binding}`);
+                bindings[binding] = children[i];
+            }
+        }
+
+        let value: any = node.raw
+            ? this.input.src.slice(body_start, body_end)
+            : children;
+        if (node.assignment_map !== null) {
+            if (typeof node.assignment_map === "string") {
+                if (Object.prototype.hasOwnProperty.call(bindings, node.assignment_map)) {
+                    value = bindings[node.assignment_map];
+                }
+            } else {
+                value = {};
+                for (const [target, source] of node.assignment_map) {
+                    if (Object.prototype.hasOwnProperty.call(bindings, source)) {
+                        value[target] = bindings[source];
+                    }
+                }
+            }
+        }
+
+        this.setSuccess();
+        return {
+            parser_nodes: [node],
+            range: [start, this.input.pos],
+            value,
+            raw_value: children,
+            seps,
+            enclosure: node.enclosure !== null
+                ? [left_enclosure!, right_enclosure!]
+                : null,
+            associate_enclosures: null,
+            bindings,
+        };
     }
 
     parsePatternSeq(node: PatternSeq): ASTNode | null {
