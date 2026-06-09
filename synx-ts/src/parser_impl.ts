@@ -816,17 +816,15 @@ export class ParserImpl implements Parser {
                 return null;
             }
 
-            const parse_alternative = (start: number): ASTNode | null => {
+            const parse_alternative = (): ASTNode | null => {
                 for (let i = alt_idx; i < node.sub_nodes.length; i++) {
                     this.profileRecordPatternSetAlternativeEnter(node, node_start, i);
                     const child = this.parseSingleNode(node.sub_nodes[i]);
                     if (!this.isSuccess()) {
-                        this.input.pos = start;
                         this.profileRecordPatternSetAlternativeExit(node, node_start, i, false);
                         continue;
                     }
                     if (node.neg_flags[i]) {
-                        this.input.pos = start;
                         this.setError(this.input.pos, "negated alternative matched");
                         this.profileRecordPatternSetAlternativeExit(node, node_start, i, false);
                         return null;
@@ -851,11 +849,11 @@ export class ParserImpl implements Parser {
                 return null;
             };
 
+            const direct = parse_alternative();
             if (node.associateby === null || alt_idx !== 0) {
-                return parse_alternative(node_start);
+                return direct;
             }
 
-            const direct = parse_alternative(node_start);
             if (this.isSuccess()) {
                 return direct;
             }
@@ -901,7 +899,6 @@ export class ParserImpl implements Parser {
             this.pattern_set_node_parse_stack.pop();
         }
     }
-
     /**
      * Match a `charset_flag` PatternSet as `GeneralCharSet`: rejecting branches are probes, normal branches consume one Char.
      * 按 `GeneralCharSet` 匹配 `charset_flag` PatternSet：否定分支只探测拒绝，普通分支消费一个字符。
