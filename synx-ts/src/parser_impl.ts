@@ -1000,7 +1000,7 @@ export class ParserImpl implements Parser {
         // calc ParseStage
         let left_enclosure_stage: ParseStage | null = null;
         let right_enclosure_stage: ParseStage | null = null;
-        let first_match_sub_node_stages: ParseStage[] = [];
+        let first_sub_node_stage: ParseStage | null = null;
         let sub_node_stages: ParseStage[] = [];
         let sep_stages: ParseStage[] = [];
 
@@ -1027,19 +1027,14 @@ export class ParserImpl implements Parser {
         const first_match_sub_node_stage_possible_rollback_before = right_enclosure_stage === null
             && sub_node_stage_infos.at(-1)?.quantifier !== ' ';
 
-        for (let i = 0; i < sub_node_stage_infos.length; i++) {
-            first_match_sub_node_stages.push(completeParseStage({
+        if (sub_node_stage_infos.length > 0) {
+            first_sub_node_stage = completeParseStage({
                 rollback_before: first_match_sub_node_stage_possible_rollback_before
-                    && sub_node_stage_infos[i].try_seq_end === sub_node_stage_infos.length,
-                ignore_node: left_enclosure_stage === null && i === 0
+                    && sub_node_stage_infos[0].try_seq_end === sub_node_stage_infos.length,
+                ignore_node: left_enclosure_stage === null
                     ? entry_ignore_node
                     : node.ignore
-            }));
-
-            const q = node.sub_quantifiers[i];
-            if (q === ' ') {
-                break;
-            }
+            });
         }
 
         const sub_node_stage_possible_rollback_before = right_enclosure_stage === null
@@ -1080,7 +1075,7 @@ export class ParserImpl implements Parser {
                 value_slot: ParseValueSlot.LEFT_ENCLOSURE,
                 not_null_success_action: completeParseStageAction({
                     kind: ParseActionKind.RECORD,
-                    next_stage: first_match_sub_node_stages[0] ?? sub_node_stages[0] ?? null
+                    next_stage: first_sub_node_stage ?? sub_node_stages[0] ?? null
                 }),
             });
 
@@ -1183,8 +1178,8 @@ export class ParserImpl implements Parser {
             const info = sub_node_stage_infos[i];
             let try_cnt = info.try_seq_end - i;
             sub_node_stages[i].alts = sub_node_alt_candidates.slice(0, try_cnt);
-            if (i < first_match_sub_node_stages.length) {
-                first_match_sub_node_stages[i].alts = sub_node_alt_candidates.slice(0, try_cnt);
+            if (i === 0 && first_sub_node_stage !== null) {
+                first_sub_node_stage.alts = sub_node_alt_candidates.slice(0, try_cnt);
             }
             sub_node_alt_candidates.splice(sub_node_alt_candidates.findIndex(alt => alt === sub_node_alts[i]), 1);
         }
@@ -1195,7 +1190,7 @@ export class ParserImpl implements Parser {
         }
 
         if (left_enclosure_stage === null) {
-            return first_match_sub_node_stages[0] ?? sub_node_stages[0];
+            return first_sub_node_stage ?? sub_node_stages[0];
         } else {
             return left_enclosure_stage;
         }
