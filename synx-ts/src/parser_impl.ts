@@ -808,8 +808,7 @@ export class ParserImpl implements Parser {
     parsePatternSet(node: PatternSet): ASTNode | null {
         const node_start = this.input.pos;
         let alt_idx = this.getPatternSetNextAltIdx(node, node_start);
-        this.pattern_set_node_parse_stack.push({ node, pos: node_start, alt_idx });
-
+        const pattern_set_node_parse_stack_start_length = this.pattern_set_node_parse_stack.length;
         try {
             if (alt_idx >= node.sub_nodes.length) {
                 this.setError(this.input.pos, "pattern set has no more alternatives");
@@ -817,6 +816,7 @@ export class ParserImpl implements Parser {
             }
 
             const parse_alternative = (): ASTNode | null => {
+                let start = this.input.pos;
                 for (let i = alt_idx; i < node.sub_nodes.length; i++) {
                     this.profileRecordPatternSetAlternativeEnter(node, node_start, i);
                     const child = this.parseSingleNode(node.sub_nodes[i]);
@@ -825,14 +825,12 @@ export class ParserImpl implements Parser {
                         continue;
                     }
                     if (node.neg_flags[i]) {
+                        this.input.pos = start;
                         this.setError(this.input.pos, "negated alternative matched");
                         this.profileRecordPatternSetAlternativeExit(node, node_start, i, false);
                         return null;
                     }
-                    if (child === null) {
-                        this.profileRecordPatternSetAlternativeExit(node, node_start, i, false);
-                        return null;
-                    }
+                    assert.ok(child !==null);
                     if (!child.parser_nodes.includes(node)) {
                         child.parser_nodes.push(node);
                     }
@@ -849,54 +847,64 @@ export class ParserImpl implements Parser {
                 return null;
             };
 
-            const direct = parse_alternative();
             if (node.associateby === null || alt_idx !== 0) {
-                return direct;
+                this.pattern_set_node_parse_stack.push({ node, pos: this.input.pos, alt_idx });
+                return parse_alternative();
             }
 
-            if (this.isSuccess()) {
-                return direct;
+            let body:ASTNode|null = null;
+            const lefts: ASTNode[] = [];
+            for(;;){
+                this.pattern_set_node_parse_stack.push({ node, pos: this.input.pos, alt_idx });
+                body = parse_alternative();
+                if(this.isSuccess()){
+                    break;
+                }
+                let left = this.parseSingleNode(node.associateby[0]);
+                if(this.isSuccess()){
+                    assert.ok(left !== null);
+                    lefts.push(left);
+                    continue;
+                }
+                if(node.ignore === null || lefts.length === 0){
+                    this.input.pos = node_start;
+                    return null;
+                }
+                this.parseSingleNodeSimple(node.ignore);
+                if(!this.isSuccess()){
+                    this.input.pos = node_start;
+                    return null;
+                }
+            }
+            assert.ok(body!==null);
+
+            if (lefts.length === 0) {
+                return body;
             }
 
-            this.input.pos = node_start;
-            const left = this.parseSingleNode(node.associateby[0], node.ignore);
-            if (!this.isSuccess()) {
-                this.input.pos = node_start;
-                return null;
-            }
-            if (this.input.pos === node_start) {
-                this.setError(this.input.pos, "associateby left boundary matched empty");
-                this.input.pos = node_start;
-                return null;
+            for (let i = lefts.length - 1; i >= 0; i--) {
+                const right = this.parseSingleNode(node.associateby[1], node.ignore);
+                if (!this.isSuccess()) {
+                    this.input.pos = node_start;
+                    return null;
+                }
+                assert.ok(right !== null);
+
+                body.parser_nodes.push(node);
+                body.range = [node_start, this.input.pos];
+                if (body.associate_enclosures === null) {
+                    body.associate_enclosures = [[lefts[i]], [right]];
+                } else {
+                    body.associate_enclosures[0].push(lefts[i]);
+                    body.associate_enclosures[1].push(right);
+                }
             }
 
-            const inner = this.parseSingleNode(node);
-            if (!this.isSuccess()) {
-                this.input.pos = node_start;
-                return null;
-            }
-
-            const right = this.parseSingleNode(node.associateby[1], node.ignore);
-            if (!this.isSuccess()) {
-                this.input.pos = node_start;
-                return null;
-            }
-            assert.ok(left !== null && inner !== null && right !== null);
-
-            inner.parser_nodes.push(node);
-            inner.range = [node_start, this.input.pos];
-            if (inner.associate_enclosures === null) {
-                inner.associate_enclosures = [[left], [right]];
-            } else {
-                inner.associate_enclosures[0].push(left);
-                inner.associate_enclosures[1].push(right);
-            }
-            this.recordParse(inner.range[0], inner);
+            this.recordParse(body.range[0], body);
             this.setSuccess();
-            return inner;
-
+            return body;
         } finally {
-            this.pattern_set_node_parse_stack.pop();
+            this.pattern_set_node_parse_stack.length = pattern_set_node_parse_stack_start_length;
         }
     }
     /**

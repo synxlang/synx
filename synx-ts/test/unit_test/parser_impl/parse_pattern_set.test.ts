@@ -144,14 +144,79 @@ function test_parsePatternSet_associateby_ignore(): void {
         raw_value: value,
         seps: [], enclosure: null, associate_enclosures: null, bindings: {},
     });
+    const cases: Array<{
+        id: number;
+        input: ParserInput;
+        expected: ASTNode | null;
+        expected_pos: number;
+        expected_success: boolean;
+    }> = [
+        {
+            id: 1,
+            input: { src: '(a )', pos: 0 },
+            expected: {
+                ...leaf([A, set, set], 0, 4, 'a'),
+                associate_enclosures: [[leaf([Left], 0, 1, '(')], [leaf([Right], 3, 4, ')')]],
+            },
+            expected_pos: 4,
+            expected_success: true,
+        },
+        {
+            id: 2,
+            input: { src: '( a )', pos: 0 },
+            expected: {
+                ...leaf([A, set, set], 0, 5, 'a'),
+                associate_enclosures: [[leaf([Left], 0, 1, '(')], [leaf([Right], 4, 5, ')')]],
+            },
+            expected_pos: 5,
+            expected_success: true,
+        },
+        {
+            id: 3,
+            input: { src: ' (a )', pos: 0 },
+            expected: null,
+            expected_pos: 0,
+            expected_success: false,
+        },
+        {
+            id: 4,
+            input: { src: '( (a) )', pos: 0 },
+            expected: {
+                ...leaf([A, set, set, set], 0, 7, 'a'),
+                associate_enclosures: [
+                    [leaf([Left], 2, 3, '('), leaf([Left], 0, 1, '(')],
+                    [leaf([Right], 4, 5, ')'), leaf([Right], 6, 7, ')')],
+                ],
+            },
+            expected_pos: 7,
+            expected_success: true,
+        },
+    ];
+    for (const c of cases) {
+        const parser = new ParserImpl({ parser_nodes: [] });
+        parser.initParse(c.input);
+        const result = parser.parseSingleNode(set);
+        assert.deepStrictEqual(result, c.expected, `case ${c.id} AST mismatch`);
+        assert.strictEqual(parser.input.pos, c.expected_pos, `case ${c.id} pos mismatch`);
+        assert.strictEqual(parser.isSuccess(), c.expected_success, `case ${c.id} success mismatch`);
+    }
+}
+function test_parsePatternSet_alternative_precedes_associateby(): void {
+    const A = completeCharSeq({ literal: 'a' });
+    const Left = completeCharSeq({ literal: '(' });
+    const Right = completeCharSeq({ literal: ')' });
+    const set: PatternSet = completePatternSet({ sub_nodes: [Left, A], associateby: [Left, Right] });
     const parser = new ParserImpl({ parser_nodes: [] });
-    parser.initParse({ src: ' (a )', pos: 0 });
+    parser.initParse({ src: '(a)', pos: 0 });
     const result = parser.parseSingleNode(set);
     assert(parser.isSuccess());
-    assert.strictEqual(parser.input.pos, 5);
+    assert.strictEqual(parser.input.pos, 1);
     assert.deepStrictEqual(result, {
-        ...leaf([A, set, set], 0, 5, 'a'),
-        associate_enclosures: [[leaf([Left], 1, 2, '(')], [leaf([Right], 4, 5, ')')]],
+        parser_nodes: [Left, set],
+        range: [0, 1],
+        value: '(',
+        raw_value: '(',
+        seps: [], enclosure: null, associate_enclosures: null, bindings: {},
     });
 }
 function test_parsePatternSet_infinite_recursion_self(): void {
@@ -612,6 +677,7 @@ function runAllTests(): void {
     test_parsePatternSet_direct_char_match_alt();
     test_parsePatternSet_associateby();
     test_parsePatternSet_associateby_ignore();
+    test_parsePatternSet_alternative_precedes_associateby();
     test_parsePatternSet_infinite_recursion_self();
     test_parsePatternSet_infinite_recursion_cycle();
     test_parsePatternSet_nested_seq_and_set();

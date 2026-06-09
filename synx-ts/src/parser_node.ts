@@ -171,7 +171,8 @@ export interface PatternSeq {
  *
  * `ignore` (when non-null, only valid when `associateby` is also non-null): lowest priority.
  * Only applies to the `associateby` delimiters — it is used when matching the left and right boundary
- * nodes of `associateby`, with the same semantics as `PatternSeq.ignore`.
+ * nodes of `associateby`, with the same semantics as `PatternSeq.ignore`, but only takes effect
+ * after any node has matched.
  *
  * ============================== 中文 ==============================
  *
@@ -202,7 +203,7 @@ export interface PatternSeq {
  *
  * `ignore`（非 null 时，仅在 `associateby` 也非 null 时有效）：优先级最低。
  * 仅对 `associateby` 的边界符生效——在匹配 `associateby` 的左右边界节点时使用，
- * 语义与 `PatternSeq.ignore` 相同。
+ * 语义与 `PatternSeq.ignore` 相同，但只有匹配任意node后才生效。
  */
 export interface PatternSet {
     kind: ParserNodeKind.PatternSet;
