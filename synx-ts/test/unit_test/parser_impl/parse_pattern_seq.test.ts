@@ -922,19 +922,26 @@ function test_parsePatternSeq(): void {
         {
             id: 104,
             seq: Seq_DigitStarLetterStar_Comma,
+            input: { src: 'a,', pos: 0 },
+            expected: mkSeqAST(Seq_DigitStarLetterStar_Comma, [0, 1], [[], [{ node: Letter, value: 'a', range: [0, 1] }]], []),
+            expected_error: false,
+        },
+        {
+            id: 105,
+            seq: Seq_DigitStarLetterStar_Comma,
             input: { src: '', pos: 0 },
             expected: mkSeqAST(Seq_DigitStarLetterStar_Comma, [0, 0], [[], []], []),
             expected_error: false,
         },
         {
-            id: 105,
+            id: 106,
             seq: Seq_DigitStarLetterStar_Comma,
             input: { src: 'a', pos: 0 },
             expected: mkSeqAST(Seq_DigitStarLetterStar_Comma, [0, 1], [[], [{ node: Letter, value: 'a', range: [0, 1] }]], []),
             expected_error: false,
         },
         {
-            id: 106,
+            id: 107,
             seq: Seq_DigitOptionalOptionalLetter_Comma,
             input: { src: 'xxa', pos: 2 },
             expected: mkSeqAST(Seq_DigitOptionalOptionalLetter_Comma, [2, 3], [
@@ -948,7 +955,7 @@ function test_parsePatternSeq(): void {
     // `sep` combined with `ignore`: flexible whitespace / ignored chars around commas; still respects `last_sep_end` (no comma between all-empty `?`/`*` slots).
     const cases_sep_with_ignore: TestCase[] = [
         {
-            id: 107,
+            id: 108,
             seq: Seq_DigitCommaLetter_IgnoreSpace,
             input: { src: '5 ,a', pos: 0 },
             expected: mkSeqAST(Seq_DigitCommaLetter_IgnoreSpace, [0, 4], [
@@ -958,7 +965,7 @@ function test_parsePatternSeq(): void {
             expected_error: false,
         },
         {
-            id: 108,
+            id: 109,
             seq: Seq_DigitCommaLetter_IgnoreSpace,
             input: { src: '5, a', pos: 0 },
             expected: mkSeqAST(Seq_DigitCommaLetter_IgnoreSpace, [0, 4], [
@@ -968,14 +975,14 @@ function test_parsePatternSeq(): void {
             expected_error: false,
         },
         {
-            id: 109,
+            id: 110,
             seq: Seq_DigitOptionalOptionalLetter_Comma_IgnoreSpace,
             input: { src: '  a', pos: 0 },
             expected: mkSeqAST(Seq_DigitOptionalOptionalLetter_Comma_IgnoreSpace, [0, 3], [null, null, { node: Letter, value: 'a', range: [2, 3] }], []),
             expected_error: false,
         },
         {
-            id: 110,
+            id: 111,
             seq: Seq_DigitOptionalOptionalLetter_Comma_IgnoreSpace,
             input: { src: '5 ,a', pos: 0 },
             expected: mkSeqAST(Seq_DigitOptionalOptionalLetter_Comma_IgnoreSpace, [0, 4], [
@@ -986,14 +993,14 @@ function test_parsePatternSeq(): void {
             expected_error: false,
         },
         {
-            id: 111,
+            id: 112,
             seq: Seq_DigitStarLetterMandatory_Comma_IgnoreSpace,
             input: { src: '1 ,a', pos: 0 },
             expected: mkSeqAST(Seq_DigitStarLetterMandatory_Comma_IgnoreSpace, [0, 4], [[{ node: Digit, value: '1', range: [0, 1] }], { node: Letter, value: 'a', range: [3, 4] }], [mkCharSeqAST(CommaSep, ',', [2, 3])]),
             expected_error: false,
         },
         {
-            id: 112,
+            id: 113,
             seq: Seq_DigitCommaLetter_Trailing_IgnoreSpace,
             input: { src: '5,a ,', pos: 0 },
             expected: mkSeqAST(Seq_DigitCommaLetter_Trailing_IgnoreSpace, [0, 5], [
@@ -1003,7 +1010,7 @@ function test_parsePatternSeq(): void {
             expected_error: false,
         },
         {
-            id: 113,
+            id: 114,
             seq: Seq_DigitCommaLetter_IgnoreLetter,
             input: { src: '5x,a', pos: 0 },
             expected: mkSeqAST(Seq_DigitCommaLetter_IgnoreLetter, [0, 4], [
@@ -1013,21 +1020,21 @@ function test_parsePatternSeq(): void {
             expected_error: false,
         },
         {
-            id: 114,
+            id: 115,
             seq: Seq_DigitStarLetterStar_Comma_IgnoreSpace,
             input: { src: '', pos: 0 },
             expected: mkSeqAST(Seq_DigitStarLetterStar_Comma_IgnoreSpace, [0, 0], [[], []], []),
             expected_error: false,
         },
         {
-            id: 115,
+            id: 116,
             seq: Seq_DigitStarLetterStar_Comma_IgnoreSpace,
             input: { src: ' a', pos: 0 },
             expected: mkSeqAST(Seq_DigitStarLetterStar_Comma_IgnoreSpace, [0, 2], [[], [{ node: Letter, value: 'a', range: [1, 2] }]], []),
             expected_error: false,
         },
         {
-            id: 116,
+            id: 117,
             seq: Seq_DigitCommaLetter_IgnoreSpace,
             input: { src: '5 ', pos: 0 },
             expected: null,
@@ -1125,6 +1132,48 @@ function test_parsePatternSeq_enclosure(): void {
             {
                 parser_nodes: [Quote],
                 range: [4, 5],
+                value: '"',
+                raw_value: '"',
+                seps: [],
+                enclosure: null, associate_enclosures: null, bindings: {},
+            },
+        ],
+        associate_enclosures: null,
+        bindings: {},
+    });
+}
+function test_parsePatternSeq_enclosure_greedy_star_stops_at_right_enclosure(): void {
+    const Quote = completeCharSeq({ literal: '"' });
+    const QuotedRaw = completePatternSeq({ sub_nodes: [Letter], sub_quantifiers: '*', raw: true, sep: null, accept_trailing_sep: false, ignore: null, enclosure: [Quote, Quote] });
+    const parser = new ParserImpl({ parser_nodes: [] });
+    parser.initParse({ src: '"a"', pos: 0 });
+    const result = parser.parsePatternSeq(QuotedRaw);
+    assert(parser.isSuccess());
+    assert.deepStrictEqual(result, {
+        parser_nodes: [QuotedRaw],
+        range: [0, 3],
+        value: 'a',
+        raw_value: [{
+                parser_nodes: [Letter],
+                range: [1, 2],
+                value: 'a',
+                raw_value: 'a',
+                seps: [],
+                enclosure: null, associate_enclosures: null, bindings: {},
+            }],
+        seps: [],
+        enclosure: [
+            {
+                parser_nodes: [Quote],
+                range: [0, 1],
+                value: '"',
+                raw_value: '"',
+                seps: [],
+                enclosure: null, associate_enclosures: null, bindings: {},
+            },
+            {
+                parser_nodes: [Quote],
+                range: [2, 3],
                 value: '"',
                 raw_value: '"',
                 seps: [],
@@ -1310,6 +1359,7 @@ function runAllTests(): void {
     test_mkPatternSeq_validates_shape();
     test_parsePatternSeq();
     test_parsePatternSeq_enclosure();
+    test_parsePatternSeq_enclosure_greedy_star_stops_at_right_enclosure();
     test_parsePatternSeq_enclosure_ignores_before_left();
     test_parsePatternSeq_enclosure_end_applies_to_last_nongreedy_child();
     test_parsePatternSeq_binding_assignment_isolated_scope();

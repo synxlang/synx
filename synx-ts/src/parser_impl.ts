@@ -32,62 +32,99 @@ class ParseTimeoutError extends Error {
     }
 }
 
-/**
- * ============================== EN ==============================
- *
- * - With `*` / `+` quantifiers, returns `ASTNode[]`; with ` ` / `?`, returns `ASTNode` or `null`.
- * - GeneralCharMatchNode special case: when `ignored` is null, repeated character matches are merged into one `ASTNode`;
- *   when `ignored` is non-null, `*` / `+` returns `ASTNode[]` so separated runs remain observable.
- * - `end_idx` is the matched end-node index, or `-1` if no end node matched.
- *
- * ============================== 中文 ==============================
- *
- * `*`、`+` 量词时返回 `ASTNode[]`；`' '` 或 `?` 量词时返回 `ASTNode` 或 `null`。
- * GeneralCharMatchNode 特殊处理：`ignored` 为空时，重复字符匹配会合并为一个 `ASTNode`；
- * `ignored` 非空时，`*` / `+` 返回 `ASTNode[]`，以保留被 ignored 分隔的多段结果。
- * `end_idx` 为结束节点匹配索引；未匹配到结束节点时为 `-1`。
- */
-interface ParseNodeResult {
-    ast_node_res: ASTNode[] | ASTNode | null;
-    seps: ASTNode[];
-    end_idx: number;
+enum ParseActionKind {
+    IGNORE,
+    RECORD,     // 对于字符，相同ParserNode并且连续匹配总是合并到同一range
+    REJECT,
 }
 
-/**
- * ============================== EN ==============================
- *
- * Result of peeking end nodes.
- * `end_idx` is the matched end-node index, or `-1` if no end node matched.
- *
- * ============================== 中文 ==============================
- *
- * 探测结束节点的结果。
- * `end_idx` 为结束节点匹配索引；未匹配到结束节点时为 `-1`。
- */
-interface PeekEndNodesResult {
-    end_ast_node: ASTNode | null;
-    end_idx: number;
+// [number, number]用于记录连续子字符串
+type ParsedValueType = [number, number] | ASTNode | null;
+
+interface ParsedElement {
+    slot: number;
+    value: ParsedValueType;
 }
 
-/**
- * ============================== EN ==============================
- *
- * `start` is the matched node start position on success, or the whole-match start position on failure.
- * `end_idx` is the matched end-node index, or `-1` if no end node matched.
- *
- * ============================== 中文 ==============================
- *
- * `start` 成功时为匹配 `node` 的起始匹配位置，失败时为总匹配初始位置。
- * `end_idx` 为结束节点匹配索引；未匹配到结束节点时为 `-1`。
- */
-interface ParseCharMatchNodeConsecutiveResult {
-    start: number;
-    end_idx: number;
+
+interface ParseStageResult {
+    parsed_elements: ParsedElement[];
 }
 
-interface ParseCharMatchNodeExResult {
-    ast_node_res: ASTNode[] | ASTNode | null;
-    end_idx: number;
+interface ParseStageAction {
+    kind: ParseActionKind;          // REJECT时，next_stage必须为null，整个stage失败
+    next_stage: ParseStage | null;  // 非RECORD为null时表示为转移到下一个alt，如果为RECORD并且next_stage为null时表示成功
+}
+
+interface ParseStageAlt {
+    node: ParserNode;
+    value_slot: number;           // 记录的values对应索引
+    not_null_success_action: ParseStageAction | null; // null 表示不可能的路径，会直接报错
+    null_success_action: ParseStageAction | null; // null 表示不可能的路径，会直接报错
+    fail_action: ParseStageAction | null; // null 表示不可能的路径，会直接报错
+}
+
+interface ParseStage {
+    /**
+     * 当前 stage 的候选列表，按顺序线性尝试，如果触发REJECT或则stage失败。
+     * 当所有选项尝试后没有触发next_stage或者RECORD时，会尝试ignore_node，进行忽略重试，如果忽略失败也失败。
+     * 当stage失败时，回滚到最新的rollback_before为true的stage解析前，没有则整体失败。
+     */
+    alts: ParseStageAlt[];
+    ignore_node: ParserNode | null;
+    rollback_before: boolean;
+}
+
+enum ParseValueSlot {
+    IGNORE,
+    SEP,
+    LEFT_ENCLOSURE,
+    RIGHT_ENCLOSURE,
+    SUB_NODE_START,
+}
+
+interface PatternSeqParseInfo {
+    entry_stage: ParseStage;
+    single_child_flags: boolean[];
+}
+
+function completeParseStageAction(action: Partial<ParseStageAction>): ParseStageAction {
+    assert.ok(action.kind !== undefined);
+    if (action.next_stage === undefined) {
+        action.next_stage = null;
+    }
+    return action as ParseStageAction;
+}
+
+function completeParseStageAlt(alt: Partial<ParseStageAlt>): ParseStageAlt {
+    assert.ok(alt.node !== undefined);
+    assert.ok(alt.value_slot !== undefined);
+    if (alt.not_null_success_action === undefined) {
+        alt.not_null_success_action = null;
+    }
+    if (alt.null_success_action === undefined) {
+        alt.null_success_action = null;
+    }
+    if (alt.fail_action === undefined) {
+        alt.fail_action = completeParseStageAction({ kind: ParseActionKind.IGNORE });
+    }
+    return alt as ParseStageAlt;
+}
+
+function completeParseStage(stage: Partial<ParseStage> | undefined = undefined): ParseStage {
+    if (stage === undefined) {
+        stage = {};
+    }
+    if (stage.alts === undefined) {
+        stage.alts = [];
+    }
+    if (stage.ignore_node === undefined) {
+        stage.ignore_node = null;
+    }
+    if (stage.rollback_before === undefined) {
+        stage.rollback_before = false;
+    }
+    return stage as ParseStage;
 }
 
 /**
@@ -107,11 +144,6 @@ interface ParseCharMatchNodeExResult {
  *   - Success must be determined only with `isSuccess()`; do not use any other rule.
  *   - On success, `isSuccess()` is true; on failure, `isSuccess()` is false.
  *
- * - `ends` parameter:
- *   - Used for non-greedy matching: prefer matching nodes in the `ends` list; the last item in the list has the highest priority.
- *   - If a node in `ends` matches, stop matching and return the current result.
- *   - `ends` does not consume input (matching is probed without advancing the read position).
- *
  * ============================== 中文 ==============================
  *
  * 解析器实现类，供 mkParser 与测试使用；不作为对外公开 API 导出。
@@ -128,11 +160,6 @@ interface ParseCharMatchNodeExResult {
  *   - 是否成功只能用 `isSuccess()` 判定，不得以其他方式。
  *   - 成功时 `isSuccess()` 为真；失败时 `isSuccess()` 为假。
  *
- * - ends 参数：
- *   - 用于非贪婪匹配，优先匹配 ends 列表中的节点，列表末端的节点优先级最高。
- *   - 如果匹配到 ends 列表中的节点，则停止匹配并返回当前结果。
- *   - ends不消耗输入。
- *
  */
 export class ParserImpl implements Parser {
     /**
@@ -145,6 +172,7 @@ export class ParserImpl implements Parser {
     private error: string | null = null;
     private error_pos: number = 0;
     private parse_records: ASTNode[][] = [];
+    private pattern_seq_parse_info_cache = new Map<PatternSeq, PatternSeqParseInfo>();
     private parse_single_node_stack: Array<{ node: ParserNode; pos: number; profile_record?: ParseSingleNodeProfiling }> = [];
     private profiling: ParseProfiling = this.profileCreate();
     private parse_start_time_ms: number = 0;
@@ -518,7 +546,7 @@ export class ParserImpl implements Parser {
         this.initParse(input);
         let parse_node_res: ASTNode[] | ASTNode | null = null;
         try {
-            parse_node_res = this.parseSingleNode(root);
+            parse_node_res = this.parseSingleNodeSimple(root);
         } catch (err) {
             this.profileRecordElapsed();
             if (err instanceof ParseTimeoutError) {
@@ -561,7 +589,7 @@ export class ParserImpl implements Parser {
 
         while (this.input.pos < this.input.src.length) {
             const start = this.input.pos;
-            const parse_node_res = this.parseSingleNode(node);
+            const parse_node_res = this.parseSingleNodeSimple(node);
 
             if (this.isSuccess()) {
                 results.push(parse_node_res as ASTNode);
@@ -574,148 +602,133 @@ export class ParserImpl implements Parser {
         return results;
     }
 
-    /**
-     * ============================== EN ==============================
-     *
-     * When `sep` is non-null, it is parsed only between successive matches of the same `node` while expanding `*` / `+` (the loop below).
-     *
-     * `ends` is the end-node list. For non-greedy `*`, `+`, and `?`, end nodes are tried before the current node;
-     * if any end node matches, parsing stops and returns the current result. The last item in `ends` has the highest priority.
-     * When an end node matches, `input.pos` is the end position that excludes the end node.
-     *
-     * ============================== 中文 ==============================
-     *
-     * 当 `sep` 非 null 时，仅在本函数展开 `*` / `+` 的循环中、于同一 `node` 的相邻两次匹配之间解析分隔符。
-     *
-     * `ends` 为结束节点列表。非贪婪匹配量词 `*`、`+`、`?` 时，优先匹配结束节点；
-     * 如果匹配到结束节点，则停止匹配并返回当前结果。列表末端的节点优先级最高。
-     * 匹配到结束节点时，`input.pos` 为不包含 `ends` 的结束匹配位置。
-     */
-    parseNode(
-        node: ParserNode,
-        quantifier: Quantifier,
-        ignored: ParserNode | null = null,
-        sep: ParserNode | null = null,
-        ends: ParserNode[] = [],
-    ): ParseNodeResult {
-        if (ends.length > 0) {
-            assert.ok(quantifier !== " ");
-        }
-        if (sep === null && isGeneralCharMatchNode(node)) {
-            const result = this.parseCharMatchNodeEx(node, quantifier, ignored, ends);
-            return {
-                ast_node_res: result.ast_node_res,
-                seps: [],
-                end_idx: result.end_idx,
-            }
-        }
-
-        let ret: ParseNodeResult = {
-            ast_node_res: null,
-            seps: [],
-            end_idx: -1,
-        };
-
-        let peek_ends = () => {
-            let peek_res = this.peekEndNodes(ends, ignored);
-            ret.end_idx = peek_res.end_idx;
-            return ret.end_idx >= 0;
-        }
-
-        if (quantifier === "?" || quantifier === "*") {
-            if (peek_ends()) {
-                return ret;
-            }
-        }
-
-        let first = this.parseSingleNode(node, ignored);
-        if (!this.isSuccess()) {
-            if (quantifier === "?" || quantifier === "*") {
-                this.setSuccess();
-            }
-            first = null;
-        }
-        if (quantifier === " " || quantifier === "?") {
-            ret.ast_node_res = first;
-            return ret;
-        }
-
-        ret.ast_node_res = [] as ASTNode[];
-        if (quantifier === "+" && !this.isSuccess()) {
-            return ret;
-        }
-        let push_node = (ast_node: ASTNode | null) => {
-            if (ast_node !== null) {
-                (ret.ast_node_res as ASTNode[]).push(ast_node);
-            }
-        };
-        let push_sep_node = (sep_node: ASTNode | null) => {
-            if (sep_node !== null) {
-                ret.seps.push(sep_node);
-            }
-        };
-        push_node(first);
-
-        for (; ;) {
-            const sep_retry_pos = this.input.pos;
-            let sep_node: ASTNode | null = null;
-            if (sep !== null) {
-                sep_node = this.parseSingleNode(sep, ignored);
-                if (!this.isSuccess()) {
-                    this.input.pos = sep_retry_pos;
-                    break;
-                }
-            }
-
-            if (peek_ends()) {
-                if (sep !== null) {
-                    this.input.pos = sep_retry_pos;
-                }
-                break;
-            }
-            let n = this.parseSingleNode(node, ignored);
-            if (!this.isSuccess()) {
-                if (sep !== null) {
-                    this.input.pos = sep_retry_pos;
-                }
-                break;
-            }
-            push_sep_node(sep_node);
-            push_node(n);
-        }
-        this.setSuccess();
-        return ret;
-    }
-
-    /**
-     * ============================== EN ==============================
-     *
-     * Peek whether any end node matches at the current input position without consuming input. 
-     * `ends` is tried from right to left because the last item has the highest priority.
-     * This function does not guarantee the error-state convention; use `end_idx` in the return value to determine success.
-     *
-     * ============================== 中文 ==============================
-     *
-     * 探测当前位置是否能匹配任一结束节点，但不消费输入。
-     * `ends` 从右向左尝试，列表末尾节点优先级最高。
-     * 此函数不会确保错误状态约定，应当通过返回值中的 `end_idx` 判定是否成功。
-     */
-    peekEndNodes(ends: ParserNode[], ignored: ParserNode | null = null): PeekEndNodesResult {
+    parseStage(stage: ParseStage): ParseStageResult {
         const start = this.input.pos;
-        let ret: PeekEndNodesResult = {
-            end_ast_node: null,
-            end_idx: -1,
+        const parsed_elements: ParsedElement[] = [];
+        let last_value_node: ParserNode | null = null;
+        let current_stage: ParseStage | null = stage;
+        type RollbackRecord = {
+            pos: number;
+            parsed_elements_length: number;
+            last_value_node: ParserNode | null;
+            last_range_element_right_bound: number | null;
         };
-        for (let i = ends.length - 1; i >= 0; i--) {
-            let res = this.parseSingleNode(ends[i], ignored);
-            if (this.isSuccess()) {
-                ret.end_ast_node = res;
-                ret.end_idx = i;
+        let rollback_record: RollbackRecord | null = null;
+
+        const is_range_value = (value: ParsedValueType): value is [number, number] => {
+            return Array.isArray(value);
+        };
+
+        const rollback = (): void => {
+            assert.ok(rollback_record !== null);
+            this.input.pos = rollback_record.pos;
+            parsed_elements.length = rollback_record.parsed_elements_length;
+            if (rollback_record.last_range_element_right_bound !== null) {
+                const last_element = parsed_elements[parsed_elements.length - 1];
+                assert.ok(is_range_value(last_element.value));
+                last_element.value[1] = rollback_record.last_range_element_right_bound;
+            }
+            last_value_node = rollback_record.last_value_node;
+        };
+
+        while (current_stage !== null) {
+            const stage_start_pos = this.input.pos;
+
+            if (current_stage.rollback_before) {
+                const last_element = parsed_elements[parsed_elements.length - 1];
+                rollback_record = {
+                    pos: stage_start_pos,
+                    parsed_elements_length: parsed_elements.length,
+                    last_value_node,
+                    last_range_element_right_bound: last_element !== undefined && is_range_value(last_element.value)
+                        ? last_element.value[1]
+                        : null,
+                };
+            }
+
+            for (; ;) {
+                let action: ParseStageAction | null = null;
+                const alt_start = this.input.pos;
+                for (let i = 0; i < current_stage.alts.length; i++) {
+                    const alt: ParseStageAlt = current_stage.alts[i]!;
+                    let parsed_value: ParsedValueType = null;
+
+                    if (isGeneralCharMatchNode(alt.node)) {
+                        const char_start = this.input.pos;
+                        this.parseSingleCharMatchNode(alt.node);
+                        if (this.isSuccess()) {
+                            assert.ok(this.input.pos > char_start);
+                            parsed_value = [char_start, this.input.pos];
+                        }
+                    } else {
+                        parsed_value = this.parseSingleNodeSimple(alt.node);
+                    }
+
+                    action = this.isSuccess()
+                        ? parsed_value === null
+                            ? alt.null_success_action
+                            : alt.not_null_success_action
+                        : alt.fail_action;
+                    assert.ok(action !== null);
+
+                    if (action.kind === ParseActionKind.RECORD) {
+                        assert.ok(this.isSuccess(), "use IGNORE instead of RECORD when fail.");
+                        const last_element = parsed_elements[parsed_elements.length - 1];
+                        let merged = false;
+                        if (
+                            isGeneralCharMatchNode(alt.node)
+                            && last_value_node === alt.node
+                            && last_element !== undefined
+                            && last_element.slot === alt.value_slot
+                        ) {
+                            assert.ok(is_range_value(last_element.value) && is_range_value(parsed_value));
+                            if (last_element.value[1] === parsed_value[0]) {
+                                last_element.value[1] = parsed_value[1];
+                                merged = true;
+                            }
+                        }
+                        if (!merged) {
+                            parsed_elements.push({ slot: alt.value_slot, value: parsed_value });
+                        }
+                        last_value_node = alt.node;
+                        break;
+                    } else if (action.kind === ParseActionKind.IGNORE) {
+                        if (action.next_stage !== null) {
+                            break;
+                        }
+                    } else {
+                        assert.ok(action.kind === ParseActionKind.REJECT);
+                        break;
+                    }
+                }
+
+                assert.ok(action !== null);
+                if (action.next_stage === null) {
+                    if (action.kind === ParseActionKind.REJECT) {
+                        this.setError(alt_start);
+                    } else if (action.kind === ParseActionKind.IGNORE) {
+                        if (current_stage.ignore_node !== null) {
+                            this.parseSingleNodeSimple(current_stage.ignore_node);
+                            if (this.isSuccess()) {
+                                continue;
+                            }
+                        }
+                    }
+                }
+
+                current_stage = action.next_stage;
+                if (!this.isSuccess() && rollback_record !== null) {
+                    rollback();
+                    this.setSuccess();
+                }
                 break;
             }
         }
-        this.input.pos = start;
-        return ret;
+
+        if (!this.isSuccess()) {
+            this.input.pos = start;
+        }
+        return { parsed_elements };
     }
 
     /**
@@ -803,17 +816,15 @@ export class ParserImpl implements Parser {
                 return null;
             }
 
-            const parse_alternative = (start: number): ASTNode | null => {
+            const parse_alternative = (): ASTNode | null => {
                 for (let i = alt_idx; i < node.sub_nodes.length; i++) {
                     this.profileRecordPatternSetAlternativeEnter(node, node_start, i);
                     const child = this.parseSingleNode(node.sub_nodes[i]);
                     if (!this.isSuccess()) {
-                        this.input.pos = start;
                         this.profileRecordPatternSetAlternativeExit(node, node_start, i, false);
                         continue;
                     }
                     if (node.neg_flags[i]) {
-                        this.input.pos = start;
                         this.setError(this.input.pos, "negated alternative matched");
                         this.profileRecordPatternSetAlternativeExit(node, node_start, i, false);
                         return null;
@@ -838,11 +849,11 @@ export class ParserImpl implements Parser {
                 return null;
             };
 
+            const direct = parse_alternative();
             if (node.associateby === null || alt_idx !== 0) {
-                return parse_alternative(node_start);
+                return direct;
             }
 
-            const direct = parse_alternative(node_start);
             if (this.isSuccess()) {
                 return direct;
             }
@@ -888,7 +899,6 @@ export class ParserImpl implements Parser {
             this.pattern_set_node_parse_stack.pop();
         }
     }
-
     /**
      * Match a `charset_flag` PatternSet as `GeneralCharSet`: rejecting branches are probes, normal branches consume one Char.
      * 按 `GeneralCharSet` 匹配 `charset_flag` PatternSet：否定分支只探测拒绝，普通分支消费一个字符。
@@ -938,93 +948,376 @@ export class ParserImpl implements Parser {
         }
     }
 
-    parsePatternSeq(node: PatternSeq): ASTNode | null {
-        const start = this.input.pos;
-        const children: (ASTNode[] | ASTNode | null)[] = [];
-        const seps: ASTNode[] = [];
-        let left_enclosure: ASTNode | null = null;
-        let right_enclosure: ASTNode | null = null;
-        const bindings: Record<string, any> = {};
-
-        const push_child = (child: ASTNode[] | ASTNode | null): void => {
-            children.push(child);
+    buildPatternSeqStage(node: PatternSeq): ParseStage {
+        interface SubNodeStageInfo {
+            node: ParserNode;
+            slot: number;
+            quantifier: ' ' | '?' | '*';
+            greedy: boolean;
+            try_seq_end: number;    // not included idx
         };
+        let sub_node_stage_infos: SubNodeStageInfo[] = [];
 
-        if (node.enclosure !== null) {
-            const left = this.parseSingleNode(node.enclosure[0], node.ignore);
-            if (!this.isSuccess() || left === null) {
-                this.input.pos = start;
-                return null;
+        // calc sub_node_stage_infos
+        {
+            let partial_sub_node_stage_infos: Partial<SubNodeStageInfo>[] = [];
+            for (let i = 0; i < node.sub_nodes.length; i++) {
+                const quantifier = node.sub_quantifiers[i] as Quantifier;
+                const sub_node = node.sub_nodes[i];
+                const slot = ParseValueSlot.SUB_NODE_START + i;
+                if (quantifier === '+') {
+                    partial_sub_node_stage_infos.push({ node: sub_node, slot: slot, quantifier: ' ', greedy: true });
+                    partial_sub_node_stage_infos.push({ node: sub_node, slot: slot, quantifier: '*', greedy: node.greedy_flags[i] });
+                } else {
+                    partial_sub_node_stage_infos.push({ node: sub_node, slot: slot, quantifier: quantifier, greedy: node.greedy_flags[i] });
+                }
             }
-            left_enclosure = left;
+
+            let last_try_seq_end = partial_sub_node_stage_infos.length;
+            if (node.enclosure !== null) {
+                last_try_seq_end += 1;
+            }
+            for (let i = partial_sub_node_stage_infos.length - 1; i >= 0; i--) {
+                let info = partial_sub_node_stage_infos[i];
+                if (info.quantifier === ' ') {
+                    info.try_seq_end = last_try_seq_end = i + 1;
+                } else {
+                    info.try_seq_end = last_try_seq_end;
+                }
+            }
+            sub_node_stage_infos = partial_sub_node_stage_infos as SubNodeStageInfo[];
         }
 
-        const body_start = this.input.pos;
-        let last_sep_end: number = body_start;
+
+        // calc ParseStage
+        let left_enclosure_stage: ParseStage | null = null;
+        let right_enclosure_stage: ParseStage | null = null;
+        let first_match_sub_node_stages: ParseStage[] = [];
+        let sub_node_stages: ParseStage[] = [];
+        let sep_stages: ParseStage[] = [];
+
+        if (node.enclosure !== null) {
+            left_enclosure_stage = completeParseStage({ ignore_node: node.ignore });
+            right_enclosure_stage = completeParseStage({ ignore_node: node.ignore });
+        }
+
+        let optional_tail_sub_node_min_idx: number = Number.MAX_SAFE_INTEGER;
+        if (right_enclosure_stage === null) {
+            optional_tail_sub_node_min_idx = node.sub_nodes.length;
+            for (let i = node.sub_nodes.length - 1; i >= 0; i--) {
+                const q = node.sub_quantifiers[i];
+                if ("?*".includes(q)) {
+                    optional_tail_sub_node_min_idx = i;
+                } else {
+                    break;
+                }
+            }
+        }
+
+        const first_match_sub_node_stage_possible_rollback_before = right_enclosure_stage === null
+            && sub_node_stage_infos.at(-1)?.quantifier !== ' ';
+
+        for (let i = 0; i < sub_node_stage_infos.length; i++) {
+            first_match_sub_node_stages.push(completeParseStage({
+                rollback_before: first_match_sub_node_stage_possible_rollback_before
+                    && sub_node_stage_infos[i].try_seq_end === sub_node_stage_infos.length,
+                ignore_node: node.ignore
+            }));
+
+            const q = node.sub_quantifiers[i];
+            if (q === ' ') {
+                break;
+            }
+        }
+
+        const sub_node_stage_possible_rollback_before = right_enclosure_stage === null
+            && (node.sep === null || node.accept_trailing_sep)
+            && sub_node_stage_infos.at(-1)?.quantifier !== ' ';
+
+        for (let i = 0; i < sub_node_stage_infos.length; i++) {
+            sub_node_stages.push(completeParseStage({
+                rollback_before: sub_node_stage_possible_rollback_before
+                    && sub_node_stage_infos[i].try_seq_end === sub_node_stage_infos.length,
+                ignore_node: node.ignore
+            }));
+        }
+
+        const sep_stage_possible_rollback_before = right_enclosure_stage === null
+            && (node.accept_trailing_sep || sub_node_stage_infos.at(-1)?.quantifier !== ' ');
+
+        if (node.sep !== null) {
+            for (let i = 0; i < sub_node_stage_infos.length; i++) {
+                sep_stages.push(completeParseStage({
+                    rollback_before: sep_stage_possible_rollback_before
+                        && (sub_node_stage_infos[i + 1] ?? sub_node_stage_infos[i]).try_seq_end === sub_node_stage_infos.length,
+                    ignore_node: node.ignore,
+                }));
+            }
+        }
+
+
+        // calc ParseStageAlt
+        let left_enclosure_alt: ParseStageAlt | null = null;
+        let right_enclosure_alt: ParseStageAlt | null = null;
+        let sub_node_alts: ParseStageAlt[] = [];
+        let sep_alts: ParseStageAlt[] = [];
+
+        if (node.enclosure !== null) {
+            left_enclosure_alt = completeParseStageAlt({
+                node: node.enclosure[0],
+                value_slot: ParseValueSlot.LEFT_ENCLOSURE,
+                not_null_success_action: completeParseStageAction({
+                    kind: ParseActionKind.RECORD,
+                    next_stage: first_match_sub_node_stages[0] ?? sub_node_stages[0] ?? null
+                }),
+            });
+
+            right_enclosure_alt = completeParseStageAlt({
+                node: node.enclosure[1],
+                value_slot: ParseValueSlot.RIGHT_ENCLOSURE,
+                not_null_success_action: completeParseStageAction({
+                    kind: ParseActionKind.RECORD
+                }),
+            });
+        }
+
+        function mk_sub_node_alt(sub_node: ParserNode, slot: number, next_stage: ParseStage | null): ParseStageAlt {
+            let alt = completeParseStageAlt({
+                node: sub_node,
+                value_slot: slot,
+            });
+            alt.not_null_success_action = alt.null_success_action = completeParseStageAction({
+                kind: ParseActionKind.RECORD,
+                next_stage: next_stage
+            });
+            return alt;
+        }
+
+        function mk_sep_alt(next_stage: ParseStage | null): ParseStageAlt {
+            assert.ok(node.sep !== null);
+            let alt = completeParseStageAlt({
+                node: node.sep,
+                value_slot: ParseValueSlot.SEP,
+                not_null_success_action: completeParseStageAction({
+                    kind: ParseActionKind.RECORD,
+                    next_stage: next_stage
+                })
+            });
+            return alt;
+        }
+
+        for (let i = 0; i < sub_node_stage_infos.length; i++) {
+            const info = sub_node_stage_infos[i];
+            const sub_node = info.node;
+            const q = info.quantifier;
+            let sep_next_stage: ParseStage | null = null;
+            let sub_node_next_stage: ParseStage | null = null;
+            if (q === '*') {
+                sep_next_stage = sub_node_stages[sub_node_alts.length];
+            } else {
+                sep_next_stage = sub_node_stages[sub_node_alts.length + 1] ?? right_enclosure_stage;
+            }
+            if (node.sep === null) {
+                sub_node_next_stage = sep_next_stage;
+            } else {
+                sep_alts.push(mk_sep_alt(sep_next_stage));
+                if (i === sub_node_stage_infos.length - 1
+                    && !node.accept_trailing_sep
+                    && ' ?'.includes(q)) {
+                    sub_node_next_stage = right_enclosure_stage;
+                } else {
+                    sub_node_next_stage = sep_stages[sub_node_alts.length];
+                }
+            }
+            const sub_node_alt = mk_sub_node_alt(sub_node, info.slot, sub_node_next_stage);
+            sub_node_alts.push(sub_node_alt);
+        }
+
+        // assign stage.alts
+        if (left_enclosure_stage !== null) {
+            assert.ok(left_enclosure_alt !== null);
+            left_enclosure_stage.alts.push(left_enclosure_alt);
+        }
+
+        if (right_enclosure_stage !== null) {
+            assert.ok(right_enclosure_alt !== null);
+            right_enclosure_stage.alts.push(right_enclosure_alt);
+        }
+
+        let sub_node_alt_candidates: ParseStageAlt[] = [];
+        for (let i = 0; i < sub_node_alts.length; i++) {
+            const i_start = i;
+            for (; i < sub_node_alts.length; i++) {
+                const info = sub_node_stage_infos[i];
+                if (info.greedy) {
+                    break;
+                }
+            }
+            if (i >= sub_node_alts.length) {
+                if (right_enclosure_alt !== null) {
+                    sub_node_alt_candidates.push(right_enclosure_alt);
+                }
+                i = sub_node_alts.length - 1;
+            }
+            for (let j = i; j >= i_start; j--) {
+                sub_node_alt_candidates.push(sub_node_alts[j]);
+            }
+        }
+        if (right_enclosure_alt !== null && sub_node_alt_candidates.length < sub_node_alts.length + 1) {
+            sub_node_alt_candidates.push(right_enclosure_alt);
+        }
+
+        for (let i = 0; i < sub_node_stages.length; i++) {
+            const info = sub_node_stage_infos[i];
+            let try_cnt = info.try_seq_end - i;
+            sub_node_stages[i].alts = sub_node_alt_candidates.slice(0, try_cnt);
+            if (i < first_match_sub_node_stages.length) {
+                first_match_sub_node_stages[i].alts = sub_node_alt_candidates.slice(0, try_cnt);
+            }
+            sub_node_alt_candidates.splice(sub_node_alt_candidates.findIndex(alt => alt === sub_node_alts[i]), 1);
+        }
+
+        for (let i = 0; i < sep_stages.length; i++) {
+            let stage = sep_stages[i];
+            stage.alts.push(sep_alts[i]);
+        }
+
+        if (left_enclosure_stage === null) {
+            return first_match_sub_node_stages[0] ?? sub_node_stages[0];
+        } else {
+            return left_enclosure_stage;
+        }
+    }
+
+    buildPatternSeqParseInfo(node: PatternSeq): PatternSeqParseInfo {
+        const single_child_flags: boolean[] = [];
         for (let i = 0; i < node.sub_nodes.length; i++) {
             const q = node.sub_quantifiers[i] as Quantifier;
             const sub_node = node.sub_nodes[i];
-            const ends: ParserNode[] = [];
-            if (node.greedy_flags[i] === false) {
-                for (let j = i + 1; j < node.sub_nodes.length; j++) {
-                    ends.push(node.sub_nodes[j]);
-                    const qj = node.sub_quantifiers[j] as Quantifier;
-                    if (node.greedy_flags[j] || qj === " " || qj === "+") {
-                        break;
-                    }
-                }
-                if (i === node.sub_nodes.length - 1 && node.enclosure !== null) {
-                    ends.push(node.enclosure[1]);
-                }
-            }
-            const parse_res = this.parseNode(sub_node, q, node.ignore, node.sep, ends);
-            const ast_res = parse_res.ast_node_res;
-            if (!this.isSuccess()) {
-                this.input.pos = start;
-                return null;
-            }
-
-            seps.push(...parse_res.seps);
-            push_child(ast_res);
-            let next_i = i;
-            if (parse_res.end_idx >= 0) {
-                const end_node_idx = i + 1 + parse_res.end_idx;
-                for (let j = i + 1; j < end_node_idx; j++) {
-                    const qj = node.sub_quantifiers[j] as Quantifier;
-                    push_child(qj === "*" ? [] : null);
-                }
-                next_i = end_node_idx - 1;
-            }
-
-            if (node.sep !== null && this.input.pos > last_sep_end) {   // check last_sep_end for consecutive empty child nodes case
-                if (i < node.sub_nodes.length - 1) {
-                    const sep = this.parseSingleNode(node.sep, node.ignore);
-                    if (!this.isSuccess()) {
-                        this.input.pos = start;
-                        return null;
-                    }
-                    if (sep !== null) {
-                        seps.push(sep);
-                    }
-                } else if (node.accept_trailing_sep) {
-                    const sep = this.parseSingleNode(node.sep, node.ignore);
-                    if (sep !== null) {
-                        seps.push(sep);
-                    }
-                }
-                last_sep_end = this.input.pos;
-            }
-            i = next_i;
+            single_child_flags.push(
+                q === " " || q === "?"
+                || (isGeneralCharMatchNode(sub_node) && node.sep === null && node.ignore === null)
+            );
         }
 
-        const body_end = this.input.pos;
-        if (node.enclosure !== null) {
-            const right = this.parseSingleNode(node.enclosure[1], node.ignore);
-            if (!this.isSuccess() || right === null) {
-                this.input.pos = start;
+        return {
+            entry_stage: this.buildPatternSeqStage(node),
+            single_child_flags,
+        };
+    }
+
+    acquirePatternSeqParseInfo(node: PatternSeq): PatternSeqParseInfo {
+        const cached = this.pattern_seq_parse_info_cache.get(node);
+        if (cached !== undefined) {
+            return cached;
+        }
+
+        const parse_info = this.buildPatternSeqParseInfo(node);
+        this.pattern_seq_parse_info_cache.set(node, parse_info);
+        return parse_info;
+    }
+
+    parsePatternSeq(node: PatternSeq): ASTNode | null {
+        const start = this.input.pos;
+        const bindings: Record<string, any> = {};
+        const parse_info = this.acquirePatternSeqParseInfo(node);
+
+        const is_range_value = (value: ParsedValueType): value is [number, number] => {
+            return Array.isArray(value);
+        };
+
+        const make_ast_node = (parser_node: ParserNode, value: ParsedValueType): ASTNode | null => {
+            if (value === null) {
                 return null;
             }
-            right_enclosure = right;
+            if (!is_range_value(value)) {
+                return value;
+            }
+            return {
+                parser_nodes: [parser_node],
+                range: [value[0], value[1]],
+                value: this.input.src.slice(value[0], value[1]),
+                raw_value: this.input.src.slice(value[0], value[1]),
+                seps: [],
+                enclosure: null,
+                associate_enclosures: null,
+                bindings: {},
+            };
+        };
+
+        const parse_res = this.parseStage(parse_info.entry_stage);
+        if (!this.isSuccess()) {
+            this.input.pos = start;
+            return null;
+        }
+
+        const children: (ASTNode[] | ASTNode | null)[] = [];
+        for (let i = 0; i < node.sub_nodes.length; i++) {
+            if (parse_info.single_child_flags[i]) {
+                children.push(null);
+            } else {
+                children.push([]);
+            }
+        }
+
+        const seps: ASTNode[] = [];
+        let left_enclosure: ASTNode | null = null;
+        let right_enclosure: ASTNode | null = null;
+        for (const element of parse_res.parsed_elements) {
+            if (element.slot === ParseValueSlot.SEP) {
+                assert.ok(node.sep !== null);
+                seps.push(make_ast_node(node.sep, element.value)!);
+            } else if (element.slot === ParseValueSlot.LEFT_ENCLOSURE) {
+                assert.ok(node.enclosure !== null && left_enclosure === null);
+                left_enclosure = make_ast_node(node.enclosure[0], element.value)!;
+            } else if (element.slot === ParseValueSlot.RIGHT_ENCLOSURE) {
+                assert.ok(node.enclosure !== null && right_enclosure === null);
+                right_enclosure = make_ast_node(node.enclosure[1], element.value)!;
+            } else if (element.slot >= ParseValueSlot.SUB_NODE_START) {
+                const i = element.slot - ParseValueSlot.SUB_NODE_START;
+                assert.ok(i >= 0 && i < node.sub_nodes.length);
+                const sub_node = node.sub_nodes[i];
+                const child = make_ast_node(sub_node, element.value);
+                if (parse_info.single_child_flags[i]) {
+                    children[i] = child;
+                } else {
+                    assert.ok(Array.isArray(children[i]));
+                    children[i].push(child!);
+                }
+            }
+        }
+
+        let body_start: number = start;
+        let body_end: number = start;
+        for (const child of children) {
+            if (child === null) {
+                continue;
+            }
+            if (Array.isArray(child)) {
+                if (child.length === 0) {
+                    continue;
+                }
+                body_start = child[0].range[0];
+            } else {
+                body_start = child.range[0];
+            }
+            break;
+        }
+
+        for (let i = children.length - 1; i >= 0; i--) {
+            const child = children[i];
+            if (child === null) {
+                continue;
+            }
+            if (Array.isArray(child)) {
+                if (child.length === 0) {
+                    continue;
+                }
+                body_end = child.at(-1)!.range[1];
+            } else {
+                body_end = child.range[1];
+            }
+            break;
         }
 
         if (node.sub_node_bindings !== null) {
@@ -1075,7 +1368,7 @@ export class ParserImpl implements Parser {
                 ? [left_enclosure!, right_enclosure!]
                 : null,
             associate_enclosures: null,
-            bindings: bindings,
+            bindings,
         };
     }
 
@@ -1126,169 +1419,6 @@ export class ParserImpl implements Parser {
         return make_returned();
     }
 
-    /**
-     * ============================== EN ==============================
-     *
-     * Extended CharMatch parsing used by parseNode.
-     *
-     * Return shape convention:
-     * - When ignored is null, return a single merged ASTNode for matched runs with `*` / `+` quantifiers.
-     * - If non-greedy ends stops a `*` quantifier before any character is consumed, return null.
-     * - When ignored is non-null, return ASTNode[] for `*` / `+` quantifiers so runs split by ignored text stay separate;
-     *   zero matched runs are represented as [].
-     *
-     * ============================== 中文 ==============================
-     *
-     * parseNode 使用的扩展字符匹配。
-     *
-     * 返回形状约定：
-     * - ignored 为空时，量词为 `*` 或 `+` 的匹配返回合并后的单个 ASTNode。
-     * - 非贪婪 ends 让 `*` 量词在消费任何字符前停止时，返回 null。
-     * - ignored 非空时，量词为 `*` 或 `+` 的匹配返回 ASTNode[]，以保留被 ignored 文本分隔的多段结果；
-     *   零段匹配表示为 []。
-     */
-    parseCharMatchNodeEx(
-        node: GeneralCharMatchNode,
-        quantifier: Quantifier,
-        ignored: ParserNode | null,
-        ends: ParserNode[] = [],
-    ): ParseCharMatchNodeExResult {
-        const ret: ParseCharMatchNodeExResult = {
-            ast_node_res: null,
-            end_idx: -1,
-        };
-        if (ignored === null && ends.length === 0) {
-            ret.ast_node_res = this.parseCharMatchNode(node, quantifier);
-            return ret;
-        }
-
-        const make_ast_node = (start: number): ASTNode => {
-            const end = this.input.pos;
-            return {
-                parser_nodes: [node],
-                range: [start, end],
-                value: this.input.src.slice(start, end),
-                raw_value: this.input.src.slice(start, end),
-                seps: [],
-                enclosure: null,
-                associate_enclosures: null,
-                bindings: {},
-            };
-        }
-
-        const single = quantifier === " " || quantifier === "?";
-        const match_res = this.parseCharMatchNodeConsecutive(node, ignored, single, ends, quantifier !== "+");
-        ret.end_idx = match_res.end_idx;
-        if (!this.isSuccess()) {
-            if (quantifier === "?" || quantifier === "*") {
-                this.setSuccess();
-            }
-            if (single) {
-                return ret;
-            }
-            if (ignored !== null) {
-                ret.ast_node_res = [];
-            }
-            return ret;
-        }
-
-        const first = make_ast_node(match_res.start);
-        if (single) {
-            ret.ast_node_res = first;
-            return ret;
-        }
-
-        if (ignored === null) {
-            ret.ast_node_res = first;
-            return ret;
-        }
-
-        ret.ast_node_res = [first];
-        for (; ;) {
-            const match_res = this.parseCharMatchNodeConsecutive(node, ignored, false, ends);
-            if (!this.isSuccess()) {
-                ret.end_idx = match_res.end_idx;
-                break;
-            }
-            ret.ast_node_res.push(make_ast_node(match_res.start))
-            ret.end_idx = match_res.end_idx;
-            if (ret.end_idx >= 0) {
-                break;
-            }
-        }
-        this.setSuccess();
-        return ret;
-    }
-
-    /**
-     * ============================== EN ==============================
-     *
-     * Match `node` many times. On each failed match, try consuming `ignored` once until matching succeeds or cannot succeed even after ignoring.
-     * If matching succeeds, keep matching until failure. On success, at least one `node` is matched.
-     * See `ParseCharMatchNodeConsecutiveResult` for the return value.
-     *
-     * ============================== 中文 ==============================
-     *
-     * 多次匹配 `node`。每次匹配失败时，尝试忽略一次 `ignored` 节点，直到匹配成功，或即使忽略也不可能匹配成功。
-     * 如果匹配成功，则重复匹配直到失败。成功时至少匹配到一次 `node`。
-     * 返回值参考 `ParseCharMatchNodeConsecutiveResult` 定义。
-     */
-    parseCharMatchNodeConsecutive(
-        node: GeneralCharMatchNode,
-        ignored: ParserNode | null,
-        single: boolean,
-        ends: ParserNode[] = [],
-        first_peek_ends: boolean = true,
-    ): ParseCharMatchNodeConsecutiveResult {
-        const start = this.input.pos;
-        const ret: ParseCharMatchNodeConsecutiveResult = {
-            start,
-            end_idx: -1,
-        };
-
-        let peek_ends = (): boolean => {
-            const peek_res = this.peekEndNodes(ends);
-            ret.end_idx = peek_res.end_idx;
-            return peek_res.end_idx >= 0;
-        };
-
-        for (; ;) {
-            if (first_peek_ends && peek_ends()) {
-                this.setError(this.input.pos);
-                return ret;
-            }
-
-            const retry_pos = this.input.pos;
-            this.parseSingleCharMatchNode(node);
-            if (this.isSuccess()) {
-                ret.start = retry_pos;
-                if (single) {
-                    return ret;
-                }
-
-                do {
-                    if (peek_ends()) {
-                        break;
-                    }
-                    this.parseSingleCharMatchNode(node);
-                } while (this.isSuccess());
-                this.setSuccess();
-                return ret;
-            }
-
-            if (ignored === null) {
-                this.input.pos = start;
-                return ret;
-            }
-            this.parseSingleNodeSimple(ignored);
-            if (!this.isSuccess()) {
-                this.input.pos = start;
-                return ret;
-            }
-            assert.ok(this.input.pos > retry_pos);
-        }
-    }
-
     parseSingleCharMatchNode(node: GeneralCharMatchNode): ParserNode[] {
         if (node.kind === ParserNodeKind.CharMatchSet) {
             return this.parseCharMatchSet(node as CharMatchSet);
@@ -1313,10 +1443,8 @@ export class ParserImpl implements Parser {
 
     /**
      * Match a fixed `CharSeq.literal` once (`startsWith` at current byte offset in the binary-string model).
-     * Quantifiers are handled in `parseNode`, like `PatternSeq`.
      *
      * 匹配 `CharSeq.literal` 一次（在二进制串模型下于当前字节偏移处 `startsWith`）。
-     * 量词在 `parseNode` 中处理，与 `PatternSeq` 相同。
      */
     parseCharSeq(node: CharSeq): ASTNode | null {
         const { src, pos } = this.input;

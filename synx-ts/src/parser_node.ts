@@ -8,7 +8,7 @@
     ParserNodeKindEnd,
 }
 
-export type Quantifier = '?' | '*' | '+' | ' ';
+export type Quantifier = ' '| '?' | '*' | '+';
 type ParserNodePairInput = [ParserNode, ParserNode] | string | null;
 
 /**
