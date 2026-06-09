@@ -56,10 +56,8 @@ export interface CharSeq {
  * - Separator nodes appear in this sequence node's `seps` array; they do not appear in `value` or `raw_value`.
  *
  * `ignore` (when non-null): lowest priority. Ignore rules:
- * - Ignore is attempted only when a child match fails, or when the match succeeds but the quantified result is empty because of `?`, `*`, or `+`.
- * - Before the first sub-node;
- * - Between adjacent sub-nodes;
- * - Between two successive matches of a sub-node whose quantifier is `*` or `+` (i.e. the gap between repetitions of that child);
+ * - Ignore has the lowest priority and is attempted only after all matchable candidates fail.
+ *   When `ignore_beginning` is false, ignore takes effect only after any node has matched.
  * Text matched solely through `ignore` does not appear in this sequence node's `raw_value`.
  * When `raw` is true, `value` is the original matched source text for the sequence body; `raw_value` remains the structured child payload.
  * 
@@ -96,10 +94,7 @@ export interface CharSeq {
  * - sep 节点会出现在本序列节点的 `seps` 数组中，不会出现在 `value` 或 `raw_value` 中。
  *
  * `ignore`（非 null 时）：优先级最低，忽略规则如下：
- * - 只有当子节点匹配失败或者匹配成功但结果因量词（`?`、`*`、`+`）为空时，才会尝试忽略。
- * - 第一个子节点之前；
- * - 相邻子节点之间；
- * - 当某子节点量词为 `*` 或 `+` 时，该子节点连续两次匹配之间（即该子重复的间隔）;
+ * - ignore的优先级最低，只有所有可匹配项尝试失败后才会忽略。当ignore_beginning为false时，任意node匹配后ignore才生效。
  * 仅通过 `ignore` 匹配到的文本不会出现在本序列节点的 `raw_value` 中。
  * `raw` 为 true 时，`value` 是序列主体匹配到的原始源文本；`raw_value` 仍是结构化的子节点结果。
  *
@@ -134,6 +129,7 @@ export interface PatternSeq {
     sep: ParserNode | null;
     accept_trailing_sep: boolean;
     ignore: ParserNode | null;
+    ignore_beginning: boolean;
     greedy_flags: boolean[];
     enclosure: [ParserNode, ParserNode] | null;
     sub_node_bindings: (string | null)[] | null;
@@ -437,6 +433,7 @@ export function completePatternSeq(
     sep: partial.sep ?? null,
     accept_trailing_sep: partial.accept_trailing_sep ?? false,
     ignore: partial.ignore ?? null,
+    ignore_beginning: partial.ignore_beginning ?? true,
     greedy_flags,
     enclosure,
     sub_node_bindings,
