@@ -1004,8 +1004,10 @@ export class ParserImpl implements Parser {
         let sub_node_stages: ParseStage[] = [];
         let sep_stages: ParseStage[] = [];
 
+        const entry_ignore_node = node.ignore_beginning ? node.ignore : null;
+
         if (node.enclosure !== null) {
-            left_enclosure_stage = completeParseStage({ ignore_node: node.ignore });
+            left_enclosure_stage = completeParseStage({ ignore_node: entry_ignore_node });
             right_enclosure_stage = completeParseStage({ ignore_node: node.ignore });
         }
 
@@ -1029,7 +1031,9 @@ export class ParserImpl implements Parser {
             first_match_sub_node_stages.push(completeParseStage({
                 rollback_before: first_match_sub_node_stage_possible_rollback_before
                     && sub_node_stage_infos[i].try_seq_end === sub_node_stage_infos.length,
-                ignore_node: node.ignore
+                ignore_node: left_enclosure_stage === null && i === 0
+                    ? entry_ignore_node
+                    : node.ignore
             }));
 
             const q = node.sub_quantifiers[i];
