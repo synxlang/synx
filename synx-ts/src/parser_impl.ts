@@ -808,8 +808,7 @@ export class ParserImpl implements Parser {
     parsePatternSet(node: PatternSet): ASTNode | null {
         const node_start = this.input.pos;
         let alt_idx = this.getPatternSetNextAltIdx(node, node_start);
-        this.pattern_set_node_parse_stack.push({ node, pos: node_start, alt_idx });
-
+        const pattern_set_node_parse_stack_start_length = this.pattern_set_node_parse_stack.length;
         try {
             if (alt_idx >= node.sub_nodes.length) {
                 this.setError(this.input.pos, "pattern set has no more alternatives");
@@ -817,6 +816,7 @@ export class ParserImpl implements Parser {
             }
 
             const parse_alternative = (): ASTNode | null => {
+                let start = this.input.pos;
                 for (let i = alt_idx; i < node.sub_nodes.length; i++) {
                     this.profileRecordPatternSetAlternativeEnter(node, node_start, i);
                     const child = this.parseSingleNode(node.sub_nodes[i]);
@@ -825,14 +825,12 @@ export class ParserImpl implements Parser {
                         continue;
                     }
                     if (node.neg_flags[i]) {
+                        this.input.pos = start;
                         this.setError(this.input.pos, "negated alternative matched");
                         this.profileRecordPatternSetAlternativeExit(node, node_start, i, false);
                         return null;
                     }
-                    if (child === null) {
-                        this.profileRecordPatternSetAlternativeExit(node, node_start, i, false);
-                        return null;
-                    }
+                    assert.ok(child !==null);
                     if (!child.parser_nodes.includes(node)) {
                         child.parser_nodes.push(node);
                     }
@@ -849,54 +847,64 @@ export class ParserImpl implements Parser {
                 return null;
             };
 
-            const direct = parse_alternative();
             if (node.associateby === null || alt_idx !== 0) {
-                return direct;
+                this.pattern_set_node_parse_stack.push({ node, pos: this.input.pos, alt_idx });
+                return parse_alternative();
             }
 
-            if (this.isSuccess()) {
-                return direct;
+            let body:ASTNode|null = null;
+            const lefts: ASTNode[] = [];
+            for(;;){
+                this.pattern_set_node_parse_stack.push({ node, pos: this.input.pos, alt_idx });
+                body = parse_alternative();
+                if(this.isSuccess()){
+                    break;
+                }
+                let left = this.parseSingleNode(node.associateby[0]);
+                if(this.isSuccess()){
+                    assert.ok(left !== null);
+                    lefts.push(left);
+                    continue;
+                }
+                if(node.ignore === null || lefts.length === 0){
+                    this.input.pos = node_start;
+                    return null;
+                }
+                this.parseSingleNodeSimple(node.ignore);
+                if(!this.isSuccess()){
+                    this.input.pos = node_start;
+                    return null;
+                }
+            }
+            assert.ok(body!==null);
+
+            if (lefts.length === 0) {
+                return body;
             }
 
-            this.input.pos = node_start;
-            const left = this.parseSingleNode(node.associateby[0], node.ignore);
-            if (!this.isSuccess()) {
-                this.input.pos = node_start;
-                return null;
-            }
-            if (this.input.pos === node_start) {
-                this.setError(this.input.pos, "associateby left boundary matched empty");
-                this.input.pos = node_start;
-                return null;
+            for (let i = lefts.length - 1; i >= 0; i--) {
+                const right = this.parseSingleNode(node.associateby[1], node.ignore);
+                if (!this.isSuccess()) {
+                    this.input.pos = node_start;
+                    return null;
+                }
+                assert.ok(right !== null);
+
+                body.parser_nodes.push(node);
+                body.range = [node_start, this.input.pos];
+                if (body.associate_enclosures === null) {
+                    body.associate_enclosures = [[lefts[i]], [right]];
+                } else {
+                    body.associate_enclosures[0].push(lefts[i]);
+                    body.associate_enclosures[1].push(right);
+                }
             }
 
-            const inner = this.parseSingleNode(node);
-            if (!this.isSuccess()) {
-                this.input.pos = node_start;
-                return null;
-            }
-
-            const right = this.parseSingleNode(node.associateby[1], node.ignore);
-            if (!this.isSuccess()) {
-                this.input.pos = node_start;
-                return null;
-            }
-            assert.ok(left !== null && inner !== null && right !== null);
-
-            inner.parser_nodes.push(node);
-            inner.range = [node_start, this.input.pos];
-            if (inner.associate_enclosures === null) {
-                inner.associate_enclosures = [[left], [right]];
-            } else {
-                inner.associate_enclosures[0].push(left);
-                inner.associate_enclosures[1].push(right);
-            }
-            this.recordParse(inner.range[0], inner);
+            this.recordParse(body.range[0], body);
             this.setSuccess();
-            return inner;
-
+            return body;
         } finally {
-            this.pattern_set_node_parse_stack.pop();
+            this.pattern_set_node_parse_stack.length = pattern_set_node_parse_stack_start_length;
         }
     }
     /**
@@ -992,12 +1000,14 @@ export class ParserImpl implements Parser {
         // calc ParseStage
         let left_enclosure_stage: ParseStage | null = null;
         let right_enclosure_stage: ParseStage | null = null;
-        let first_match_sub_node_stages: ParseStage[] = [];
+        let first_sub_node_stage: ParseStage | null = null;
         let sub_node_stages: ParseStage[] = [];
         let sep_stages: ParseStage[] = [];
 
+        const entry_ignore_node = node.ignore_beginning ? node.ignore : null;
+
         if (node.enclosure !== null) {
-            left_enclosure_stage = completeParseStage({ ignore_node: node.ignore });
+            left_enclosure_stage = completeParseStage({ ignore_node: entry_ignore_node });
             right_enclosure_stage = completeParseStage({ ignore_node: node.ignore });
         }
 
@@ -1017,17 +1027,14 @@ export class ParserImpl implements Parser {
         const first_match_sub_node_stage_possible_rollback_before = right_enclosure_stage === null
             && sub_node_stage_infos.at(-1)?.quantifier !== ' ';
 
-        for (let i = 0; i < sub_node_stage_infos.length; i++) {
-            first_match_sub_node_stages.push(completeParseStage({
+        if (sub_node_stage_infos.length > 0) {
+            first_sub_node_stage = completeParseStage({
                 rollback_before: first_match_sub_node_stage_possible_rollback_before
-                    && sub_node_stage_infos[i].try_seq_end === sub_node_stage_infos.length,
-                ignore_node: node.ignore
-            }));
-
-            const q = node.sub_quantifiers[i];
-            if (q === ' ') {
-                break;
-            }
+                    && sub_node_stage_infos[0].try_seq_end === sub_node_stage_infos.length,
+                ignore_node: left_enclosure_stage === null
+                    ? entry_ignore_node
+                    : node.ignore
+            });
         }
 
         const sub_node_stage_possible_rollback_before = right_enclosure_stage === null
@@ -1068,7 +1075,7 @@ export class ParserImpl implements Parser {
                 value_slot: ParseValueSlot.LEFT_ENCLOSURE,
                 not_null_success_action: completeParseStageAction({
                     kind: ParseActionKind.RECORD,
-                    next_stage: first_match_sub_node_stages[0] ?? sub_node_stages[0] ?? null
+                    next_stage: first_sub_node_stage ?? sub_node_stages[0] ?? null
                 }),
             });
 
@@ -1171,8 +1178,8 @@ export class ParserImpl implements Parser {
             const info = sub_node_stage_infos[i];
             let try_cnt = info.try_seq_end - i;
             sub_node_stages[i].alts = sub_node_alt_candidates.slice(0, try_cnt);
-            if (i < first_match_sub_node_stages.length) {
-                first_match_sub_node_stages[i].alts = sub_node_alt_candidates.slice(0, try_cnt);
+            if (i === 0 && first_sub_node_stage !== null) {
+                first_sub_node_stage.alts = sub_node_alt_candidates.slice(0, try_cnt);
             }
             sub_node_alt_candidates.splice(sub_node_alt_candidates.findIndex(alt => alt === sub_node_alts[i]), 1);
         }
@@ -1183,7 +1190,7 @@ export class ParserImpl implements Parser {
         }
 
         if (left_enclosure_stage === null) {
-            return first_match_sub_node_stages[0] ?? sub_node_stages[0];
+            return first_sub_node_stage ?? sub_node_stages[0];
         } else {
             return left_enclosure_stage;
         }
