@@ -840,6 +840,7 @@ export class ParserImpl implements Parser {
                             return;
                         }
                         if (parse_record.result !== null) {
+                            this.input.pos = parse_record.result.range[1];
                             return;
                         }
                         parse_record.alt_idx += 1;
@@ -901,7 +902,7 @@ export class ParserImpl implements Parser {
                     lefts.push(left);
                     continue;
                 }
-                if (node.ignore === null) {
+                if (node.ignore === null || lefts.length === 0) {
                     break;
                 }
                 this.parseSingleNodeSimple(node.ignore);
