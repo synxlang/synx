@@ -834,8 +834,11 @@ export class ParserImpl implements Parser {
             const update_parse_record = () => {
                 let start = this.input.pos;
                 while (parse_record.alt_idx < node.sub_nodes.length) {
-                    let res = this.parseSingleNode(node.sub_nodes[parse_record.alt_idx]);
+                    const alt_idx = parse_record.alt_idx;
+                    this.profileRecordPatternSetAlternativeEnter(node, node_start, alt_idx);
+                    let res = this.parseSingleNode(node.sub_nodes[alt_idx]);
                     if (!this.isSuccess()) {
+                        this.profileRecordPatternSetAlternativeExit(node, node_start, alt_idx, false);
                         if (parse_record.reject) {
                             return;
                         }
@@ -846,10 +849,11 @@ export class ParserImpl implements Parser {
                         parse_record.alt_idx += 1;
                         continue;
                     }
-                    if (node.neg_flags[parse_record.alt_idx]) {
+                    if (node.neg_flags[alt_idx]) {
                         this.input.pos = start;
                         this.setError(this.input.pos, "negated alternative matched");
                         parse_record.reject = true;
+                        this.profileRecordPatternSetAlternativeExit(node, node_start, alt_idx, false);
                         return;
                     }
                     assert.ok(res !== null);
@@ -857,7 +861,7 @@ export class ParserImpl implements Parser {
                     if (!res.parser_nodes.includes(node)) {
                         res.parser_nodes.push(node);
                     }
-                    this.profileRecordPatternSetAlternativeExit(node, node_start, parse_record.alt_idx, true);
+                    this.profileRecordPatternSetAlternativeExit(node, node_start, alt_idx, true);
                     return;
                 }
                 assert.ok(!this.isSuccess());
