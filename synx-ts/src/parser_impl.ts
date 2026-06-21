@@ -875,6 +875,7 @@ export class ParserImpl implements Parser {
                     assert.ok(!this.isSuccess());
                 } else {
                     this.setSuccess();
+                    parse_record.pos = node_start;
                     ret.range = [node_start, this.input.pos];
                     ret.associate_enclosures = associate_enclosures;
                     if (alt_idx_start === 0) {
@@ -923,8 +924,8 @@ export class ParserImpl implements Parser {
             for (let i = lefts.length - 1; i >= 0; i--) {
                 const right = this.parseSingleNode(node.associateby[1], node.ignore);
                 if (!this.isSuccess()) {
-                    this.input.pos = node_start;
-                    return null;
+                    parse_record.result = null;
+                    return make_returned();
                 }
                 assert.ok(right !== null);
                 rights.push(right);
@@ -1194,6 +1195,12 @@ export class ParserImpl implements Parser {
             const info = sub_node_stage_infos[i];
             let try_cnt = info.try_seq_end - i;
             sub_node_stages[i].alts = sub_node_alt_candidates.slice(0, try_cnt);
+            if (node.sep !== null && !node.accept_trailing_sep && right_enclosure_alt !== null) {
+                const right_enclosure_alt_idx = sub_node_stages[i].alts.findIndex(alt => alt === right_enclosure_alt);
+                if (right_enclosure_alt_idx >= 0) {
+                    sub_node_stages[i].alts.splice(right_enclosure_alt_idx, 1);
+                }
+            }
             if (i === 0 && first_sub_node_stage !== null) {
                 first_sub_node_stage.alts = sub_node_alt_candidates.slice(0, try_cnt);
             }
@@ -1203,6 +1210,13 @@ export class ParserImpl implements Parser {
         for (let i = 0; i < sep_stages.length; i++) {
             let stage = sep_stages[i];
             stage.alts.push(sep_alts[i]);
+            if (right_enclosure_alt !== null) {
+                const seq_end = sub_node_stage_infos.length + 1;
+                const can_end = (sub_node_stage_infos[i + 1] ?? sub_node_stage_infos[i]).try_seq_end === seq_end;
+                if (can_end) {
+                    stage.alts.push(right_enclosure_alt);
+                }
+            }
         }
 
         if (left_enclosure_stage === null) {

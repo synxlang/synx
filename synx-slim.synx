@@ -39,7 +39,7 @@ RawPattern=("\\raw", pattern:Pattern \ignore Ignorable)=>pattern;
 AssociateByPart=("\\associateby", pattern:Pattern \ignore Ignorable)=>pattern;
 NegPattern=("-", pattern:Pattern \ignore Ignorable)=>[.pattern=pattern]; \\ reject if match, only can be used in PatternSet
 NonGreedyPattern=(pattern:Pattern, "^")=>pattern;
-PatternSet=((patterns:Pattern* \sep ";" \ignore Ignorable), 
+PatternSet=((patterns:{PatternBinding;Pattern}* \sep ";" \ignore Ignorable), 
     associateby_part:AssociateByPart?, 
     ignore_part:IgnorePart? 
     \ignore Ignorable \enclosedby "{}")=>[.patterns=patterns, .associateby=associateby_part, .ignore=ignore_part];
@@ -48,15 +48,16 @@ sepPart=("\\sep", pattern:Pattern \ignore Ignorable)=>pattern;
 IgnorePart=({"\\ignore";"ignore_include_beginning"}, pattern:Pattern \ignore Ignorable)=>pattern;
 EnclosedbyPart=("\\enclosedby", pattern:Pattern \ignore Ignorable)=>pattern;        \\ valid pattern is StringLiteral of length 2 or PatternSeq of length 2
 PatternSeq=(
-    (patterns:Pattern+ \sep "," \ignore Ignorable), 
+    (patterns:{PatternBinding;Pattern}+ \sep "," \ignore Ignorable), 
     sep_part:sepPart?, ignore_part:IgnorePart?, enclosedby_part:EnclosedbyPart? 
     \ignore Ignorable
+    \enclosedby "()"
 )=>[.patterns=patterns, .sep=sep_part, .ignore=ignore_part, .enclosedby=enclosedby_part];
 
 PatternBinding=(symbol:Symbol,":",pattern:Pattern)=>[.symbol=symbol, .pattern=pattern];
 Rule=(pattern:PatternSeq,"=>",returned:Expr)=>[.pattern=pattern, .returned=returned];
 
-Pattern={NegPattern;Option;OneOrMany;Many;RawPattern;Rule;PatternBinding;
+Pattern={NegPattern;Option;OneOrMany;Many;RawPattern;Rule;
     PatternSeq;PatternSet;CharSet;StringLiteral;GeneralSymbol \associateby "()" \ignore Ignorable};
 
 List=(exprs:Expr* \sep "," \ignore Ignorable \enclosedby "[]")=>exprs;

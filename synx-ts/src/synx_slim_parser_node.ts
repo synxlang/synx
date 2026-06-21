@@ -311,9 +311,26 @@ export const EnclosedbyPart: PatternSeq = completePatternSeq({
   assignment_map: "pattern",
 });
 
+// PatternBinding=(symbol:Symbol,":",pattern:Pattern)=>[.symbol=symbol, .pattern=pattern];
+export const PatternBinding: PatternSeq = completePatternSeq({
+  name: "PatternBinding",
+  sub_nodes: [Symbol, completeCharSeq({ literal: ":" }), Pattern],
+  sub_quantifiers: "   ",
+  sub_node_bindings: ["symbol", null, "pattern"],
+  assignment_map: new Map([
+    ["symbol", "symbol"],
+    ["pattern", "pattern"],
+  ]),
+});
+
+export const PatternItem: PatternSet = completePatternSet({
+  name: "{PatternBinding;Pattern}",
+  sub_nodes: [PatternBinding, Pattern],
+});
+
 export const PatternSeqPatterns: PatternSeq = completePatternSeq({
-  name: "(patterns:Pattern+ \\sep \",\" \\ignore Ignorable)",
-  sub_nodes: [Pattern],
+  name: "(patterns:{PatternBinding;Pattern}+ \\sep \",\" \\ignore Ignorable)",
+  sub_nodes: [PatternItem],
   sub_quantifiers: "+",
   sep: completeCharSeq({ literal: "," }),
   ignore: Ignorable,
@@ -321,12 +338,13 @@ export const PatternSeqPatterns: PatternSeq = completePatternSeq({
   assignment_map: "patterns",
 });
 
-// PatternSeq=((patterns:Pattern+ \sep "," \ignore Ignorable), sep_part:sepPart?, ignore_part:IgnorePart?, enclosedby_part:EnclosedbyPart? \ignore Ignorable)=>...
+// PatternSeq=((patterns:{PatternBinding;Pattern}+ \sep "," \ignore Ignorable), sep_part:sepPart?, ignore_part:IgnorePart?, enclosedby_part:EnclosedbyPart? \ignore Ignorable \enclosedby "()")=>...
 export const PatternSeqNode: PatternSeq = completePatternSeq({
   name: "PatternSeq",
   sub_nodes: [PatternSeqPatterns, SepPart, IgnorePart, EnclosedbyPart],
   sub_quantifiers: " ???",
   ignore: Ignorable,
+  enclosure: "()",
   sub_node_bindings: ["patterns", "sep_part", "ignore_part", "enclosedby_part"],
   assignment_map: new Map([
     ["patterns", "patterns"],
@@ -337,8 +355,8 @@ export const PatternSeqNode: PatternSeq = completePatternSeq({
 });
 
 export const PatternSetPatterns: PatternSeq = completePatternSeq({
-  name: "(patterns:Pattern* \\sep \";\" \\ignore Ignorable)",
-  sub_nodes: [Pattern],
+  name: "(patterns:{PatternBinding;Pattern}* \\sep \";\" \\ignore Ignorable)",
+  sub_nodes: [PatternItem],
   sub_quantifiers: "*",
   sep: completeCharSeq({ literal: ";" }),
   ignore: Ignorable,
@@ -346,7 +364,7 @@ export const PatternSetPatterns: PatternSeq = completePatternSeq({
   assignment_map: "patterns",
 });
 
-// PatternSet=((patterns:Pattern* \sep ";" \ignore Ignorable), associateby_part:AssociateByPart?, ignore_part:IgnorePart? \ignore Ignorable \enclosedby "{}")=>...
+// PatternSet=((patterns:{PatternBinding;Pattern}* \sep ";" \ignore Ignorable), associateby_part:AssociateByPart?, ignore_part:IgnorePart? \ignore Ignorable \enclosedby "{}")=>...
 export const PatternSetNode: PatternSeq = completePatternSeq({
   name: "PatternSet",
   sub_nodes: [PatternSetPatterns, AssociateByPart, IgnorePart],
@@ -358,18 +376,6 @@ export const PatternSetNode: PatternSeq = completePatternSeq({
     ["patterns", "patterns"],
     ["associateby", "associateby_part"],
     ["ignore", "ignore_part"],
-  ]),
-});
-
-// PatternBinding=(symbol:Symbol,":",pattern:Pattern)=>[.symbol=symbol, .pattern=pattern];
-export const PatternBinding: PatternSeq = completePatternSeq({
-  name: "PatternBinding",
-  sub_nodes: [Symbol, completeCharSeq({ literal: ":" }), Pattern],
-  sub_quantifiers: "   ",
-  sub_node_bindings: ["symbol", null, "pattern"],
-  assignment_map: new Map([
-    ["symbol", "symbol"],
-    ["pattern", "pattern"],
   ]),
 });
 
@@ -433,7 +439,7 @@ CharSet.sub_nodes.push(CharRange, OneOfCharSet);
 CharSet.neg_flags.push(false, false);
 completePatternSet(CharSet);
 
-// Pattern={NegPattern;Option;OneOrMany;Many;RawPattern;Rule;PatternBinding; PatternSeq;PatternSet;CharSet;StringLiteral;GeneralSymbol \associateby "()" \ignore Ignorable};
+// Pattern={NegPattern;Option;OneOrMany;Many;RawPattern;Rule; PatternSeq;PatternSet;CharSet;StringLiteral;GeneralSymbol \associateby "()" \ignore Ignorable};
 Pattern.sub_nodes.push(
   NegPattern,
   Option,
@@ -441,14 +447,13 @@ Pattern.sub_nodes.push(
   Many,
   RawPattern,
   Rule,
-  PatternBinding,
   PatternSeqNode,
   PatternSetNode,
   CharSet,
   StringLiteral,
   GeneralSymbol,
 );
-Pattern.neg_flags.push(false, false, false, false, false, false, false, false, false, false, false, false);
+Pattern.neg_flags.push(false, false, false, false, false, false, false, false, false, false, false);
 completePatternSet(Pattern);
 
 // Expr={ Assignment; List; Struct; Pattern; GeneralSymbol; };

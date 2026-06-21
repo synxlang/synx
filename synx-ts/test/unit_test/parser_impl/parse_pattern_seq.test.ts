@@ -47,6 +47,10 @@ const Seq_DigitCommaLetter = completePatternSeq({ sub_nodes: [Digit, Letter], su
 const Seq_LetterPlusComma = completePatternSeq({ sub_nodes: [Letter], sub_quantifiers: '+', raw: false, sep: CommaSep });
 const Seq_LetterPlusComma_Digit = completePatternSeq({ sub_nodes: [Letter, Digit], sub_quantifiers: '+ ', raw: false, sep: CommaSep });
 const Seq_DigitCommaLetter_Trailing = completePatternSeq({ sub_nodes: [Digit, Letter], sub_quantifiers: '  ', raw: false, sep: CommaSep, accept_trailing_sep: true });
+const LeftBracket = completeCharSeq({ literal: '[' });
+const RightBracket = completeCharSeq({ literal: ']' });
+const Seq_LetterStarCommaBracket = completePatternSeq({ sub_nodes: [Letter], sub_quantifiers: '*', sep: CommaSep, enclosure: [LeftBracket, RightBracket] });
+const Seq_LetterStarCommaBracket_NoTrailing = completePatternSeq({ sub_nodes: [Letter], sub_quantifiers: '*', sep: CommaSep, enclosure: [LeftBracket, RightBracket], accept_trailing_sep: false });
 /** `last_sep_end`: comma only when `pos` advanced — skip sep between consecutive empty `?`/`*` children. */
 const Seq_DigitOptionalOptionalLetter_Comma = completePatternSeq({ sub_nodes: [Digit, Digit, Letter], sub_quantifiers: '?? ', raw: false, sep: CommaSep });
 const Seq_DigitStarLetterMandatory_Comma = completePatternSeq({ sub_nodes: [Digit, Letter], sub_quantifiers: '* ', raw: false, sep: CommaSep });
@@ -116,7 +120,7 @@ function normalizeSeqPart(p: SeqPart): ASTNode | ASTNode[] | null {
 function mkSeqAST(seq: PatternSeq, range: [
     number,
     number
-], parts: SeqPart[], seps: ASTNode[] = []): ASTNode {
+], parts: SeqPart[], seps: ASTNode[] = [], enclosure: [ASTNode, ASTNode] | null = null): ASTNode {
     const normalized = parts.map(normalizeSeqPart);
     return {
         parser_nodes: [seq],
@@ -124,7 +128,7 @@ function mkSeqAST(seq: PatternSeq, range: [
         value: normalized,
         raw_value: normalized,
         seps,
-        enclosure: null, associate_enclosures: null, bindings: {},
+        enclosure, associate_enclosures: null, bindings: {},
     };
 }
 type TestCase = {
@@ -875,6 +879,85 @@ function test_parsePatternSeq(): void {
                 { node: Letter, value: 'a', range: [2, 3] },
             ], [mkCharSeqAST(CommaSep, ',', [1, 2])]),
             expected_error: false,
+        },
+        {
+            id: 200,
+            seq: Seq_LetterStarCommaBracket,
+            input: { src: '[]', pos: 0 },
+            expected: mkSeqAST(Seq_LetterStarCommaBracket, [0, 2], [[]], [], [
+                mkCharSeqAST(LeftBracket, '[', [0, 1]),
+                mkCharSeqAST(RightBracket, ']', [1, 2]),
+            ]),
+            expected_error: false,
+        },
+        {
+            id: 201,
+            seq: Seq_LetterStarCommaBracket,
+            input: { src: '[a]', pos: 0 },
+            expected: mkSeqAST(Seq_LetterStarCommaBracket, [0, 3], [[
+                { node: Letter, value: 'a', range: [1, 2] },
+            ]], [], [
+                mkCharSeqAST(LeftBracket, '[', [0, 1]),
+                mkCharSeqAST(RightBracket, ']', [2, 3]),
+            ]),
+            expected_error: false,
+        },
+        {
+            id: 202,
+            seq: Seq_LetterStarCommaBracket,
+            input: { src: '[a,]', pos: 0 },
+            expected: mkSeqAST(Seq_LetterStarCommaBracket, [0, 4], [[
+                { node: Letter, value: 'a', range: [1, 2] },
+            ]], [mkCharSeqAST(CommaSep, ',', [2, 3])], [
+                mkCharSeqAST(LeftBracket, '[', [0, 1]),
+                mkCharSeqAST(RightBracket, ']', [3, 4]),
+            ]),
+            expected_error: false,
+        },
+        {
+            id: 203,
+            seq: Seq_LetterStarCommaBracket,
+            input: { src: '[a,b]', pos: 0 },
+            expected: mkSeqAST(Seq_LetterStarCommaBracket, [0, 5], [[
+                { node: Letter, value: 'a', range: [1, 2] },
+                { node: Letter, value: 'b', range: [3, 4] },
+            ]], [mkCharSeqAST(CommaSep, ',', [2, 3])], [
+                mkCharSeqAST(LeftBracket, '[', [0, 1]),
+                mkCharSeqAST(RightBracket, ']', [4, 5]),
+            ]),
+            expected_error: false,
+        },
+        {
+            id: 204,
+            seq: Seq_LetterStarCommaBracket,
+            input: { src: '[a,b,]', pos: 0 },
+            expected: mkSeqAST(Seq_LetterStarCommaBracket, [0, 6], [[
+                { node: Letter, value: 'a', range: [1, 2] },
+                { node: Letter, value: 'b', range: [3, 4] },
+            ]], [mkCharSeqAST(CommaSep, ',', [2, 3]), mkCharSeqAST(CommaSep, ',', [4, 5])], [
+                mkCharSeqAST(LeftBracket, '[', [0, 1]),
+                mkCharSeqAST(RightBracket, ']', [5, 6]),
+            ]),
+            expected_error: false,
+        },
+        {
+            id: 205,
+            seq: Seq_LetterStarCommaBracket_NoTrailing,
+            input: { src: '[a]', pos: 0 },
+            expected: mkSeqAST(Seq_LetterStarCommaBracket_NoTrailing, [0, 3], [[
+                { node: Letter, value: 'a', range: [1, 2] },
+            ]], [], [
+                mkCharSeqAST(LeftBracket, '[', [0, 1]),
+                mkCharSeqAST(RightBracket, ']', [2, 3]),
+            ]),
+            expected_error: false,
+        },
+        {
+            id: 206,
+            seq: Seq_LetterStarCommaBracket_NoTrailing,
+            input: { src: '[a,]', pos: 0 },
+            expected: null,
+            expected_error: true,
         },
     ];
     // `last_sep_end` in parsePatternSeq: require `sep` only after `pos` moved past its previous end (no false comma between all-empty `?`/`*` slots).
