@@ -155,7 +155,7 @@ export const StringLiteral: PatternSeq = completePatternSeq({
   assignment_map: "text",
 });
 
-// GeneralChar={SymbolChar;StringLiteral;};
+// GeneralChar={SymbolChar;StringLiteral};
 export const GeneralChar: PatternSet = completePatternSet({
   name: "GeneralChar",
   sub_nodes: [SymbolChar, StringLiteral],
@@ -284,10 +284,17 @@ export const SepPart: PatternSeq = completePatternSeq({
   assignment_map: "pattern",
 });
 
-// IgnorePart=("\\ignore", pattern:Pattern \ignore Ignorable)=>pattern;
+// IgnorePart=({"\\ignore";"ignore_include_beginning"}, pattern:Pattern \ignore Ignorable)=>pattern;
+export const IgnorePartKeyword: PatternSet = completePatternSet({
+  name: "{\"\\\\ignore\";\"ignore_include_beginning\"}",
+  sub_nodes: [
+    completeCharSeq({ literal: "\\ignore" }),
+    completeCharSeq({ literal: "ignore_include_beginning" }),
+  ],
+});
 export const IgnorePart: PatternSeq = completePatternSeq({
   name: "IgnorePart",
-  sub_nodes: [completeCharSeq({ literal: "\\ignore" }), Pattern],
+  sub_nodes: [IgnorePartKeyword, Pattern],
   sub_quantifiers: "  ",
   ignore: Ignorable,
   sub_node_bindings: [null, "pattern"],
@@ -407,31 +414,6 @@ export const Assignment: PatternSet = completePatternSet({
   sub_nodes: [AssignmentPattern],
 });
 
-// FuncCallArgsList=(args:Expr* \sep "," \ignore Ignorable \enclosedby "()")=>args;
-export const FuncCallArgsList: PatternSeq = completePatternSeq({
-  name: "FuncCallArgsList",
-  sub_nodes: [Expr],
-  sub_quantifiers: "*",
-  sep: completeCharSeq({ literal: "," }),
-  ignore: Ignorable,
-  enclosure: "()",
-  sub_node_bindings: ["args"],
-  assignment_map: "args",
-});
-
-// FuncCallExpr=(func:GeneralSymbol, args_list:FuncCallArgsList \ignore Ignorable)=>[.func=func, .args_list=args_list];
-export const FuncCallExpr: PatternSeq = completePatternSeq({
-  name: "FuncCallExpr",
-  sub_nodes: [GeneralSymbol, FuncCallArgsList],
-  sub_quantifiers: "  ",
-  ignore: Ignorable,
-  sub_node_bindings: ["func", "args_list"],
-  assignment_map: new Map([
-    ["func", "func"],
-    ["args_list", "args_list"],
-  ]),
-});
-
 // Keyword={...};
 export const Keyword: PatternSet = completePatternSet({
   name: "Keyword",
@@ -440,17 +422,18 @@ export const Keyword: PatternSet = completePatternSet({
     completeCharSeq({ literal: "\\sep" }),
     completeCharSeq({ literal: "\\ignore" }),
     completeCharSeq({ literal: "\\enclosedby" }),
+    completeCharSeq({ literal: "ignore_include_beginning" }),
     completeCharSeq({ literal: "\\associateby" }),
     completeCharSeq({ literal: "\\raw" }),
   ],
 });
 
-// CharSet = { CharRange; ("\\oneof", string:StringLiteral \sep Space)=>string; GeneralSymbol; \associateby "()"; \ignore Ignorable; };
-CharSet.sub_nodes.push(CharRange, OneOfCharSet, GeneralSymbol);
-CharSet.neg_flags.push(false, false, false);
+// CharSet = { CharRange; ("\\oneof", string:StringLiteral \sep Space)=>string; \associateby "()"; \ignore Ignorable; };
+CharSet.sub_nodes.push(CharRange, OneOfCharSet);
+CharSet.neg_flags.push(false, false);
 completePatternSet(CharSet);
 
-// Pattern={NegPattern;Option;OneOrMany;Many;RawPattern;Rule;PatternBinding; PatternSeq;PatternSet;CharSet;StringLiteral \associateby "()" \ignore Ignorable};
+// Pattern={NegPattern;Option;OneOrMany;Many;RawPattern;Rule;PatternBinding; PatternSeq;PatternSet;CharSet;StringLiteral;GeneralSymbol \associateby "()" \ignore Ignorable};
 Pattern.sub_nodes.push(
   NegPattern,
   Option,
@@ -463,29 +446,29 @@ Pattern.sub_nodes.push(
   PatternSetNode,
   CharSet,
   StringLiteral,
+  GeneralSymbol,
 );
-Pattern.neg_flags.push(false, false, false, false, false, false, false, false, false, false, false);
+Pattern.neg_flags.push(false, false, false, false, false, false, false, false, false, false, false, false);
 completePatternSet(Pattern);
 
-// Expr={ Assignment; FuncCallExpr; List; Struct; Pattern; FuncCallArgsList; GeneralSymbol; };
+// Expr={ Assignment; List; Struct; Pattern; GeneralSymbol; };
 Expr.sub_nodes.push(
   Assignment,
-  FuncCallExpr,
   List,
   Struct,
   Pattern,
-  FuncCallArgsList,
   GeneralSymbol,
 );
-Expr.neg_flags.push(false, false, false, false, false, false, false);
+Expr.neg_flags.push(false, false, false, false, false);
 completePatternSet(Expr);
 
-// Synx=(expr:Expr* \sep ";" \ignore Ignorable);
+// Synx=(expr:Expr* \sep ";" \ignore_include_beginning Ignorable);
 export const Synx: PatternSeq = completePatternSeq({
   name: "Synx",
   sub_nodes: [Expr],
   sub_quantifiers: "*",
   sep: Delimiter,
   ignore: Ignorable,
+  ignore_beginning: true,
   sub_node_bindings: ["expr"],
 });
