@@ -18,7 +18,7 @@ Ignorable={Space;Comment};
 
 EscapeChar=("\\", c:AnyChar)=>c;
 StringLiteral=(text:{EscapeChar; {-EscapeChar; -"\""; AnyChar}+}* \enclosedby "\"\"")=>text;
-GeneralChar={SymbolChar;StringLiteral;};
+GeneralChar={SymbolChar;StringLiteral};
 CharRange=(first:GeneralChar, "~", last:GeneralChar)=>[.first=first, .last=last];
 
 FieldAssignment=(".", symbol:Symbol, "=", expr:Expr \ignore Ignorable)=>[.target=symbol, .source=expr];
@@ -27,7 +27,6 @@ Struct=(field_assignments:FieldAssignment* \sep "," \ignore Ignorable \enclosedb
 CharSet = {
     CharRange;
     ("\\oneof", string:StringLiteral \sep Space)=>string;
-    GeneralSymbol;
     \associateby "()";
     \ignore Ignorable;
 };
@@ -46,7 +45,7 @@ PatternSet=((patterns:Pattern* \sep ";" \ignore Ignorable),
     \ignore Ignorable \enclosedby "{}")=>[.patterns=patterns, .associateby=associateby_part, .ignore=ignore_part];
 
 sepPart=("\\sep", pattern:Pattern \ignore Ignorable)=>pattern;
-IgnorePart=("\\ignore", pattern:Pattern \ignore Ignorable)=>pattern;
+IgnorePart=({"\\ignore";"ignore_include_beginning"}, pattern:Pattern \ignore Ignorable)=>pattern;
 EnclosedbyPart=("\\enclosedby", pattern:Pattern \ignore Ignorable)=>pattern;        \\ valid pattern is StringLiteral of length 2 or PatternSeq of length 2
 PatternSeq=(
     (patterns:Pattern+ \sep "," \ignore Ignorable), 
@@ -58,7 +57,7 @@ PatternBinding=(symbol:Symbol,":",pattern:Pattern)=>[.symbol=symbol, .pattern=pa
 Rule=(pattern:PatternSeq,"=>",returned:Expr)=>[.pattern=pattern, .returned=returned];
 
 Pattern={NegPattern;Option;OneOrMany;Many;RawPattern;Rule;PatternBinding;
-    PatternSeq;PatternSet;CharSet;StringLiteral \associateby "()" \ignore Ignorable};
+    PatternSeq;PatternSet;CharSet;StringLiteral;GeneralSymbol \associateby "()" \ignore Ignorable};
 
 List=(exprs:Expr* \sep "," \ignore Ignorable \enclosedby "[]")=>exprs;
 
@@ -66,24 +65,19 @@ Assignment = {
     (symbol:Symbol, "=", expr:Expr \ignore Ignorable)=>[.target=symbol, .source=expr];
 };
 
-FuncCallArgsList=(args:Expr* \sep "," \ignore Ignorable \enclosedby "()")=>args;
-FuncCallExpr=(func:GeneralSymbol, args_list:FuncCallArgsList \ignore Ignorable)=>[.func=func, .args_list=args_list];
-
 Expr={
     Assignment;
-    FuncCallExpr;
     List;
     Struct;
     Pattern;
-    FuncCallArgsList;
     GeneralSymbol;
 };
 
 Keyword={
     "\\oneof"; 
-    "\\sep"; "\\ignore"; "\\enclosedby";
+    "\\sep"; "\\ignore"; "\\enclosedby"; "\ignore_include_beginning";
     "\\associateby";
     "\\raw";  \\ raw represents raw text within matched text
 };
 
-Synx=(expr:Expr* \sep ";" \ignore Ignorable);
+Synx=(expr:Expr* \sep ";" \ignore_include_beginning Ignorable);
