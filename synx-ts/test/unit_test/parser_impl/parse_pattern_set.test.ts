@@ -95,7 +95,7 @@ function test_parsePatternSet_associateby(): void {
             id: 2,
             input: { src: '(a)', pos: 0 },
             expected: {
-                ...leaf([A, set, set], 0, 3, 'a'),
+                ...leaf([A, set], 0, 3, 'a'),
                 associate_enclosures: [[leaf([Left], 0, 1, '(')], [leaf([Right], 2, 3, ')')]],
             },
             expected_pos: 3,
@@ -105,9 +105,9 @@ function test_parsePatternSet_associateby(): void {
             id: 3,
             input: { src: '((a))', pos: 0 },
             expected: {
-                ...leaf([A, set, set, set], 0, 5, 'a'),
+                ...leaf([A, set], 0, 5, 'a'),
                 associate_enclosures: [
-                    [leaf([Left], 1, 2, '('), leaf([Left], 0, 1, '(')],
+                    [leaf([Left], 0, 1, '('), leaf([Left], 1, 2, '(')],
                     [leaf([Right], 3, 4, ')'), leaf([Right], 4, 5, ')')],
                 ],
             },
@@ -155,7 +155,7 @@ function test_parsePatternSet_associateby_ignore(): void {
             id: 1,
             input: { src: '(a )', pos: 0 },
             expected: {
-                ...leaf([A, set, set], 0, 4, 'a'),
+                ...leaf([A, set], 0, 4, 'a'),
                 associate_enclosures: [[leaf([Left], 0, 1, '(')], [leaf([Right], 3, 4, ')')]],
             },
             expected_pos: 4,
@@ -165,7 +165,7 @@ function test_parsePatternSet_associateby_ignore(): void {
             id: 2,
             input: { src: '( a )', pos: 0 },
             expected: {
-                ...leaf([A, set, set], 0, 5, 'a'),
+                ...leaf([A, set], 0, 5, 'a'),
                 associate_enclosures: [[leaf([Left], 0, 1, '(')], [leaf([Right], 4, 5, ')')]],
             },
             expected_pos: 5,
@@ -182,9 +182,9 @@ function test_parsePatternSet_associateby_ignore(): void {
             id: 4,
             input: { src: '( (a) )', pos: 0 },
             expected: {
-                ...leaf([A, set, set, set], 0, 7, 'a'),
+                ...leaf([A, set], 0, 7, 'a'),
                 associate_enclosures: [
-                    [leaf([Left], 2, 3, '('), leaf([Left], 0, 1, '(')],
+                    [leaf([Left], 0, 1, '('), leaf([Left], 2, 3, '(')],
                     [leaf([Right], 4, 5, ')'), leaf([Right], 6, 7, ')')],
                 ],
             },

@@ -88,6 +88,14 @@ interface PatternSeqParseInfo {
     single_child_flags: boolean[];
 }
 
+interface PatternSetParseRecord {
+    node: ParserNode;
+    pos: number;
+    alt_idx: number;
+    result: ASTNode | null;
+    reject: boolean;
+}
+
 function completeParseStageAction(action: Partial<ParseStageAction>): ParseStageAction {
     assert.ok(action.kind !== undefined);
     if (action.next_stage === undefined) {
@@ -225,7 +233,7 @@ export class ParserImpl implements Parser {
      *
      * - **弱形状** — 右侧不是完整 `Expr` 时，例如 `Expr={ (Expr,"+","1"); "1"; };`
      */
-    private pattern_set_node_parse_stack: Array<{ node: ParserNode; pos: number; alt_idx: number }> = [];
+    private pattern_set_node_parse_stack: Array<PatternSetParseRecord> = [];
 
     constructor(public config: ParserConfig) { }
 
@@ -807,81 +815,111 @@ export class ParserImpl implements Parser {
 
     parsePatternSet(node: PatternSet): ASTNode | null {
         const node_start = this.input.pos;
-        let alt_idx = this.getPatternSetNextAltIdx(node, node_start);
         const pattern_set_node_parse_stack_start_length = this.pattern_set_node_parse_stack.length;
+        let parse_record = this.getPatternSetParseRecord(node, this.input.pos);
+        if (parse_record === null) {
+            parse_record = { node: node, pos: this.input.pos, alt_idx: 0, result: null, reject: false };
+            this.pattern_set_node_parse_stack.push(parse_record);
+        } else {
+            parse_record.alt_idx += 1;
+        }
+        const alt_idx_start = parse_record.alt_idx;
+
         try {
-            if (alt_idx >= node.sub_nodes.length) {
+            if (alt_idx_start >= node.sub_nodes.length) {
                 this.setError(this.input.pos, "pattern set has no more alternatives");
                 return null;
             }
 
-            const parse_alternative = (): ASTNode | null => {
+            const update_parse_record = () => {
                 let start = this.input.pos;
-                for (let i = alt_idx; i < node.sub_nodes.length; i++) {
-                    this.profileRecordPatternSetAlternativeEnter(node, node_start, i);
-                    const child = this.parseSingleNode(node.sub_nodes[i]);
+                while (parse_record.alt_idx < node.sub_nodes.length) {
+                    const alt_idx = parse_record.alt_idx;
+                    this.profileRecordPatternSetAlternativeEnter(node, node_start, alt_idx);
+                    let res = this.parseSingleNode(node.sub_nodes[alt_idx]);
                     if (!this.isSuccess()) {
-                        this.profileRecordPatternSetAlternativeExit(node, node_start, i, false);
+                        this.profileRecordPatternSetAlternativeExit(node, node_start, alt_idx, false);
+                        if (parse_record.reject) {
+                            return;
+                        }
+                        if (parse_record.result !== null) {
+                            this.input.pos = parse_record.result.range[1];
+                            return;
+                        }
+                        parse_record.alt_idx += 1;
                         continue;
                     }
-                    if (node.neg_flags[i]) {
+                    if (node.neg_flags[alt_idx]) {
                         this.input.pos = start;
                         this.setError(this.input.pos, "negated alternative matched");
-                        this.profileRecordPatternSetAlternativeExit(node, node_start, i, false);
-                        return null;
+                        parse_record.reject = true;
+                        this.profileRecordPatternSetAlternativeExit(node, node_start, alt_idx, false);
+                        return;
                     }
-                    assert.ok(child !==null);
-                    if (!child.parser_nodes.includes(node)) {
-                        child.parser_nodes.push(node);
+                    assert.ok(res !== null);
+                    parse_record.result = res;
+                    if (!res.parser_nodes.includes(node)) {
+                        res.parser_nodes.push(node);
                     }
-                    if (alt_idx === 0) {
+                    this.profileRecordPatternSetAlternativeExit(node, node_start, alt_idx, true);
+                    return;
+                }
+                assert.ok(!this.isSuccess());
+                return;
+            };
+
+            let make_returned = (associate_enclosures: [ASTNode[], ASTNode[]] | null = null): ASTNode | null => {
+                let ret = parse_record.result;
+                if (ret === null) {
+                    this.input.pos = node_start;
+                    assert.ok(!this.isSuccess());
+                } else {
+                    this.setSuccess();
+                    ret.range = [node_start, this.input.pos];
+                    ret.associate_enclosures = associate_enclosures;
+                    if (alt_idx_start === 0) {
                         // Only alt_idx=0 covers the full alternative list. Later alternatives
                         // are left-recursion fallback results and must not populate the
                         // ordinary (node, pos) success memo.
-                        this.recordParse(child.range[0], child);
+                        this.recordParse(node_start, ret);
                     }
-                    this.profileRecordPatternSetAlternativeExit(node, node_start, i, true);
-                    return child;
                 }
-                assert.ok(!this.isSuccess());
-                return null;
+                return ret;
             };
 
-            if (node.associateby === null || alt_idx !== 0) {
-                this.pattern_set_node_parse_stack.push({ node, pos: this.input.pos, alt_idx });
-                return parse_alternative();
+            if (node.associateby === null || alt_idx_start !== 0) {
+                update_parse_record();
+                return make_returned();
             }
 
-            let body:ASTNode|null = null;
             const lefts: ASTNode[] = [];
-            for(;;){
-                this.pattern_set_node_parse_stack.push({ node, pos: this.input.pos, alt_idx });
-                body = parse_alternative();
-                if(this.isSuccess()){
+            for (; ;) {
+                parse_record.pos = this.input.pos;
+                parse_record.alt_idx = 0;
+                update_parse_record();
+                if (parse_record.result !== null) {
                     break;
                 }
                 let left = this.parseSingleNode(node.associateby[0]);
-                if(this.isSuccess()){
+                if (this.isSuccess()) {
                     assert.ok(left !== null);
                     lefts.push(left);
                     continue;
                 }
-                if(node.ignore === null || lefts.length === 0){
-                    this.input.pos = node_start;
-                    return null;
+                if (node.ignore === null || lefts.length === 0) {
+                    break;
                 }
                 this.parseSingleNodeSimple(node.ignore);
-                if(!this.isSuccess()){
-                    this.input.pos = node_start;
-                    return null;
+                if (!this.isSuccess()) {
+                    break;
                 }
             }
-            assert.ok(body!==null);
 
-            if (lefts.length === 0) {
-                return body;
+            if (lefts.length === 0 || parse_record.result === null) {
+                return make_returned();
             }
 
+            const rights: ASTNode[] = [];
             for (let i = lefts.length - 1; i >= 0; i--) {
                 const right = this.parseSingleNode(node.associateby[1], node.ignore);
                 if (!this.isSuccess()) {
@@ -889,20 +927,10 @@ export class ParserImpl implements Parser {
                     return null;
                 }
                 assert.ok(right !== null);
-
-                body.parser_nodes.push(node);
-                body.range = [node_start, this.input.pos];
-                if (body.associate_enclosures === null) {
-                    body.associate_enclosures = [[lefts[i]], [right]];
-                } else {
-                    body.associate_enclosures[0].push(lefts[i]);
-                    body.associate_enclosures[1].push(right);
-                }
+                rights.push(right);
             }
 
-            this.recordParse(body.range[0], body);
-            this.setSuccess();
-            return body;
+            return make_returned([lefts, rights]);
         } finally {
             this.pattern_set_node_parse_stack.length = pattern_set_node_parse_stack_start_length;
         }
@@ -913,47 +941,35 @@ export class ParserImpl implements Parser {
      */
     parseCharMatchPatternSet(node: PatternSet): ParserNode[] {
         const start = this.input.pos;
-        let alt_idx = this.getPatternSetNextAltIdx(node, start);
-        this.pattern_set_node_parse_stack.push({ node, pos: start, alt_idx });
+        for (let i = 0; i < node.sub_nodes.length; i++) {
+            this.profileRecordPatternSetAlternativeEnter(node, start, i);
+            const sub_node = node.sub_nodes[i];
+            let matched_nodes: ParserNode[] = [];
+            if (node.neg_flags[i]) {
+                this.parseSingleNode(sub_node);
+            } else {
+                assert.ok(isGeneralCharMatchNode(sub_node));
+                matched_nodes = this.parseSingleCharMatchNode(sub_node);
+            }
 
-        try {
-            if (alt_idx >= node.sub_nodes.length) {
-                this.setError(this.input.pos, "pattern set has no more alternatives");
+            if (!this.isSuccess()) {
+                this.input.pos = start;
+                this.profileRecordPatternSetAlternativeExit(node, start, i, false);
+                continue;
+            }
+            if (node.neg_flags[i]) {
+                this.input.pos = start;
+                this.setError(start, "charset reject pattern matched");
+                this.profileRecordPatternSetAlternativeExit(node, start, i, false);
                 return [];
             }
-
-            for (let i = alt_idx; i < node.sub_nodes.length; i++) {
-                this.profileRecordPatternSetAlternativeEnter(node, start, i);
-                const sub_node = node.sub_nodes[i];
-                let matched_nodes: ParserNode[] = [];
-                if (node.neg_flags[i]) {
-                    this.parseSingleNode(sub_node);
-                } else {
-                    assert.ok(isGeneralCharMatchNode(sub_node));
-                    matched_nodes = this.parseSingleCharMatchNode(sub_node);
-                }
-
-                if (!this.isSuccess()) {
-                    this.input.pos = start;
-                    this.profileRecordPatternSetAlternativeExit(node, start, i, false);
-                    continue;
-                }
-                if (node.neg_flags[i]) {
-                    this.input.pos = start;
-                    this.setError(start, "charset reject pattern matched");
-                    this.profileRecordPatternSetAlternativeExit(node, start, i, false);
-                    return [];
-                }
-                matched_nodes.push(node);
-                this.profileRecordPatternSetAlternativeExit(node, start, i, true);
-                return matched_nodes;
-            }
-
-            assert.ok(!this.isSuccess());
-            return [];
-        } finally {
-            this.pattern_set_node_parse_stack.pop();
+            matched_nodes.push(node);
+            this.profileRecordPatternSetAlternativeExit(node, start, i, true);
+            return matched_nodes;
         }
+
+        assert.ok(!this.isSuccess());
+        return [];
     }
 
     buildPatternSeqStage(node: PatternSeq): ParseStage {
@@ -1509,16 +1525,29 @@ export class ParserImpl implements Parser {
         }
     }
 
-    private getPatternSetNextAltIdx(node: PatternSet, pos: number): number {
+    // private getPatternSetNextAltIdx(node: PatternSet, pos: number): number {
+    //     for (let i = this.pattern_set_node_parse_stack.length - 1; i >= 0; i--) {
+    //         const frame = this.pattern_set_node_parse_stack[i]!;
+    //         if (frame.pos !== pos) {
+    //             return 0;
+    //         }
+    //         if (frame.node === node) {
+    //             return frame.alt_idx + 1;
+    //         }
+    //     }
+    //     return 0;
+    // }
+
+    getPatternSetParseRecord(node: PatternSet, pos: number): PatternSetParseRecord | null {
         for (let i = this.pattern_set_node_parse_stack.length - 1; i >= 0; i--) {
-            const frame = this.pattern_set_node_parse_stack[i]!;
-            if (frame.pos !== pos) {
-                return 0;
+            const record = this.pattern_set_node_parse_stack[i];
+            if (record.pos !== pos) {
+                return null;
             }
-            if (frame.node === node) {
-                return frame.alt_idx + 1;
+            if (record.node === node) {
+                return record;
             }
         }
-        return 0;
+        return null;
     }
 }
