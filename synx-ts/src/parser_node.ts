@@ -1,14 +1,14 @@
 ﻿export enum ParserNodeKind {
-    AnyChar,
-    CharMatchRange,
-    CharMatchSet,
-    PatternSeq,
-    CharSeq,
-    PatternSet,
-    ParserNodeKindEnd,
+  AnyChar,
+  CharMatchRange,
+  CharMatchSet,
+  PatternSeq,
+  CharSeq,
+  PatternSet,
+  ParserNodeKindEnd,
 }
 
-export type Quantifier = ' '| '?' | '*' | '+';
+export type Quantifier = ' ' | '?' | '*' | '+';
 type ParserNodePairInput = [ParserNode, ParserNode] | string | null;
 
 /**
@@ -17,10 +17,10 @@ type ParserNodePairInput = [ParserNode, ParserNode] | string | null;
  * 范围下界与上界：各为一个逻辑字符，可能由多个 UTF-16 码元组成（如 emoji）。不可为空。
  */
 export interface CharMatchRange {
-    kind: ParserNodeKind.CharMatchRange;
-    name: string;
-    start: string;
-    end: string;
+  kind: ParserNodeKind.CharMatchRange;
+  name: string;
+  start: string;
+  end: string;
 }
 
 /**
@@ -29,9 +29,9 @@ export interface CharMatchRange {
  * 子节点数组，或字符串（表示匹配串中任意逻辑字符，每个字符可由多个码元组成）。不可为空。
  */
 export interface CharMatchSet {
-    kind: ParserNodeKind.CharMatchSet;
-    name: string;
-    sub_nodes: CharMatchNode[] | string;
+  kind: ParserNodeKind.CharMatchSet;
+  name: string;
+  sub_nodes: CharMatchNode[] | string;
 }
 
 /**
@@ -121,20 +121,20 @@ export interface CharSeq {
  * `raw_value` 不受 binding 相关规则影响。
  */
 export interface PatternSeq {
-    kind: ParserNodeKind.PatternSeq;
-    name: string;
-    sub_nodes: ParserNode[];
-    sub_quantifiers: string;
-    raw: boolean;
-    sep: ParserNode | null;
-    accept_trailing_sep: boolean;
-    ignore: ParserNode | null;
-    ignore_beginning: boolean;
-    greedy_flags: boolean[];
-    enclosure: [ParserNode, ParserNode] | null;
-    sub_node_bindings: (string | null)[] | null;
-    sub_node_isolated_scope_flags: boolean[] | null;
-    assignment_map: Map<string, string> | string | null;
+  kind: ParserNodeKind.PatternSeq;
+  name: string;
+  sub_nodes: ParserNode[];
+  sub_quantifiers: string;
+  raw: boolean;
+  sep: ParserNode | null;
+  accept_trailing_sep: boolean;
+  ignore: ParserNode | null;
+  ignore_beginning: boolean;
+  greedy_flags: boolean[];
+  enclosure: [ParserNode, ParserNode] | null;
+  sub_node_bindings: (string | null)[] | null;
+  sub_node_isolated_scope_flags: boolean[] | null;
+  assignment_map: Map<string, string> | string | null;
 }
 
 /**
@@ -202,13 +202,13 @@ export interface PatternSeq {
  * 语义与 `PatternSeq.ignore` 相同，但只有匹配任意node后才生效。
  */
 export interface PatternSet {
-    kind: ParserNodeKind.PatternSet;
-    name: string;
-    sub_nodes: ParserNode[];
-    neg_flags: boolean[];
-    charset_flag: boolean;
-    associateby: [ParserNode, ParserNode] | null;
-    ignore: ParserNode | null;
+  kind: ParserNodeKind.PatternSet;
+  name: string;
+  sub_nodes: ParserNode[];
+  neg_flags: boolean[];
+  charset_flag: boolean;
+  associateby: [ParserNode, ParserNode] | null;
+  ignore: ParserNode | null;
 }
 
 /**
@@ -233,9 +233,9 @@ export type ParserNode = CharMatchNode | PatternSeq | CharSeq | PatternSet;
  * 属于 CharMatchNode 的 kind 集合，用于分支判断，避免硬编码多种 kind。
  */
 export const CHAR_MATCH_NODE_KINDS: ParserNodeKind[] = [
-    ParserNodeKind.AnyChar,
-    ParserNodeKind.CharMatchRange,
-    ParserNodeKind.CharMatchSet,
+  ParserNodeKind.AnyChar,
+  ParserNodeKind.CharMatchRange,
+  ParserNodeKind.CharMatchSet,
 ];
 
 export function isGeneralCharMatchNode(node: ParserNode): node is GeneralCharMatchNode {
