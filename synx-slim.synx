@@ -26,9 +26,9 @@ Struct=(field_assignments:FieldAssignment* \sep "," \ignore Ignorable \enclosedb
 
 CharSet = {
     CharRange;
-    ("\\oneof", string:StringLiteral \sep Space)=>string;
-    \associateby "()";
-    \ignore Ignorable;
+    ("\\oneof", string:StringLiteral \sep Space)=>string
+    \associateby "()"
+    \ignore Ignorable
 };
 
 Option=(pattern:Pattern, "?")=>pattern;
