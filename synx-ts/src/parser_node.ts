@@ -431,7 +431,7 @@ export function completePatternSeq(
     sub_quantifiers: partial.sub_quantifiers,
     raw: partial.raw ?? false,
     sep: partial.sep ?? null,
-    accept_trailing_sep: partial.accept_trailing_sep ?? false,
+    accept_trailing_sep: partial.accept_trailing_sep ?? (enclosure !== null),
     ignore: partial.ignore ?? null,
     ignore_beginning: partial.ignore_beginning ?? true,
     greedy_flags,
