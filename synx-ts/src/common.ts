@@ -50,6 +50,7 @@ export interface AstParseResult {
     ast_nodes: ASTNode[];
     end_pos: number;    // not inclusive
     error?: string;
+    profiling: AstParseProfiling;
 }
 
 export interface AstParseSingleNodeProfiling {

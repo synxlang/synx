@@ -263,10 +263,6 @@ export class AstParserImpl implements AstParser {
         };
     }
 
-    getParseProfiling(): AstParseProfiling {
-        return this.profiling;
-    }
-
     private profileGetNodeId(node: ParserNode): number {
         let id = this.profile_node_ids.get(node);
         if (id === undefined) {
@@ -563,6 +559,7 @@ export class AstParserImpl implements AstParser {
                     ast_nodes: [],
                     end_pos: this.input.pos,
                     error: this.getError() ?? err.message,
+                    profiling: this.profiling,
                 };
             }
             throw err;
@@ -575,6 +572,7 @@ export class AstParserImpl implements AstParser {
                 ast_nodes: [],
                 end_pos: this.input.pos,
                 error: this.getError() ?? undefined,
+                profiling: this.profiling,
             };
         }
 
@@ -588,6 +586,7 @@ export class AstParserImpl implements AstParser {
             kind: ParseResultKind.Success,
             ast_nodes,
             end_pos: this.input.pos,
+            profiling: this.profiling,
         };
     }
 

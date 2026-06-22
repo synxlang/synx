@@ -10,7 +10,7 @@ export type {
     PatternSetAlternativeProfiling,
 } from "./common";
 export { ParseResultKind } from "./common";
-import type { ASTNode, AstParserConfig, AstParserInput, AstParseProfiling, AstParseResult } from "./common";
+import type { ASTNode, AstParserConfig, AstParserInput, AstParseResult } from "./common";
 
 export interface AstParser {
     /**
@@ -19,7 +19,6 @@ export interface AstParser {
      */
     parse(input: AstParserInput, root: ParserNode): AstParseResult;
     parseAll(input: AstParserInput, node: ParserNode): ASTNode[];
-    getParseProfiling(): AstParseProfiling;
 }
 
 export function mkAstParser(config: AstParserConfig): AstParser {

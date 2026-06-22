@@ -43,7 +43,7 @@ const result = parser.parse({ src, pos: 0 }, Synx);
 const success = result.kind === ParseResultKind.Success;
 
 function printProfiling(): void {
-  const profiling = parser.getParseProfiling();
+  const profiling = result.profiling;
   console.log("\n=== profiling ===");
   console.log(JSON.stringify({
     parse_elapsed_s: profiling.parse_elapsed_s,
