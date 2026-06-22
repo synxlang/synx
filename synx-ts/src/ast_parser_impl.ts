@@ -23,7 +23,7 @@ import type {
     ASTNode,
 } from "./common";
 import { ParseResultKind } from "./common";
-import type { AstParser } from "./parser";
+import type { AstParser } from "./ast_parser";
 
 class ParseTimeoutError extends Error {
     constructor(message: string) {

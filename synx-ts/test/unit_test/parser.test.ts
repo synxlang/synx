@@ -1,4 +1,4 @@
-﻿import { mkAstParser, ParserConfig, ParserInput, ParseResult, ASTNode } from '../../src/parser';
+﻿import { mkAstParser, ParserConfig, ParserInput, ParseResult, ASTNode } from '../../src/ast_parser';
 import type { ParserNode } from '../../src/parser_node';
 import { Symbol, Letter, SymbolChar } from '../../src/synx_parser_node';
 import assert from 'assert';

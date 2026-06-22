@@ -1,7 +1,7 @@
-import { AstParserImpl } from '../../../src/parser_impl';
+import { AstParserImpl } from '../../../src/ast_parser_impl';
 import { completeCharSeq, completeCharRange, completeCharSet, completePatternSeq } from '../../../src/parser_node';
 import type { Quantifier } from '../../../src/parser_node';
-import type { ASTNode, ParserInput } from '../../../src/parser';
+import type { ASTNode, ParserInput } from '../../../src/ast_parser';
 import { ParserNodeKind } from '../../../src/parser_node';
 import { strict as assert } from 'assert';
 function parse_node_result_count(parse_res: ASTNode[] | ASTNode | null): number {

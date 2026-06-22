@@ -9,7 +9,7 @@
  */
 import { existsSync, readFileSync } from "fs";
 import { dirname, join } from "path";
-import { mkAstParser, ParseResultKind } from "../../../src/parser";
+import { mkAstParser, ParseResultKind } from "../../../src/ast_parser";
 import { SynxFmt } from "../../../src/synx_fmt";
 import { Synx } from "../../../src/synx_slim_parser_node";
 

@@ -1,7 +1,7 @@
-import { AstParserImpl } from '../../../src/parser_impl';
+import { AstParserImpl } from '../../../src/ast_parser_impl';
 import { AnyChar, completeCharRange, completeCharSet, completeCharSeq, completePatternSeq } from '../../../src/parser_node';
 import type { CharSeq, CharMatchNode, ParserNode, PatternSeq } from '../../../src/parser_node';
-import type { ASTNode, ParserInput } from '../../../src/parser';
+import type { ASTNode, ParserInput } from '../../../src/ast_parser';
 import { strict as assert } from 'assert';
 import { inspect } from 'node:util';
 // Basic node constants

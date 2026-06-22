@@ -1,9 +1,9 @@
 import assert from 'assert';
-import { AstParserImpl } from '../../../src/parser_impl';
+import { AstParserImpl } from '../../../src/ast_parser_impl';
 import { completeCharSeq, completeCharRange, completeCharSet, completePatternSeq } from '../../../src/parser_node';
 import type { CharMatchNode, ParserNode, Quantifier } from '../../../src/parser_node';
-import type { ParserInput } from '../../../src/parser';
-import type { ASTNode } from '../../../src/parser';
+import type { ParserInput } from '../../../src/ast_parser';
+import type { ASTNode } from '../../../src/ast_parser';
 function parse_node_result_count(parse_res: ASTNode[] | ASTNode | null): number {
     if (parse_res === null)
         return 0;

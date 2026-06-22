@@ -1,8 +1,8 @@
 import { strict as assert } from 'assert';
-import { AstParserImpl } from '../../../src/parser_impl';
+import { AstParserImpl } from '../../../src/ast_parser_impl';
 import { AnyChar, completeCharSeq, completeCharRange, completePatternSeq, completePatternSet } from '../../../src/parser_node';
 import type { PatternSet, ParserNode } from '../../../src/parser_node';
-import type { ASTNode, ParserInput } from '../../../src/parser';
+import type { ASTNode, ParserInput } from '../../../src/ast_parser';
 function test_parsePatternSet_basic(): void {
     const set: PatternSet = completePatternSet({ sub_nodes: [completeCharSeq({ literal: 'ab' }), completeCharSeq({ literal: 'a' })] });
     const cases: Array<{

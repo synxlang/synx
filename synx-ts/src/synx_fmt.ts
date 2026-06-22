@@ -1,4 +1,4 @@
-﻿import type { ASTNode } from "./parser";
+﻿import type { ASTNode } from "./ast_parser";
 import {
   ParserNodeKind,
   type CharSeq,

@@ -5,11 +5,11 @@
 *   npx tsx test/manual_test/draft/parser_manual_sample.ts
 */
 import { inspect } from "node:util";
-import { type ASTNode, mkAstParser, ParseResultKind } from "../../../src/parser";
+import { type ASTNode, mkAstParser, ParseResultKind } from "../../../src/ast_parser";
 import { completeCharSeq, completeCharRange, completeCharSet, completePatternSeq } from "../../../src/parser_node";
 import { AnyChar } from "../../../src/parser_node";
 import { exit } from "node:process";
-import { AstParserImpl } from "../../../src/parser_impl";
+import { AstParserImpl } from "../../../src/ast_parser_impl";
 function isAstNode(x: unknown): x is ASTNode {
     return (typeof x === "object" &&
         x !== null &&

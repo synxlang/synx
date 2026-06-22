@@ -10,8 +10,8 @@
 *   npx tsx test/manual_test/draft/parser_test_nongreedy.ts
 */
 import { inspect } from "node:util";
-import type { ASTNode } from "../../../src/parser";
-import { AstParserImpl } from "../../../src/parser_impl";
+import type { ASTNode } from "../../../src/ast_parser";
+import { AstParserImpl } from "../../../src/ast_parser_impl";
 import { AnyChar, completeCharSeq, completeCharRange, completeCharSet, completePatternSeq, type ParserNode, type PatternSeq } from "../../../src/parser_node";
 const A = completeCharSeq({ literal: "a" });
 const B = completeCharSeq({ literal: "b" });

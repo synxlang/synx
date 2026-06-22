@@ -7,8 +7,8 @@
  * If a TypeScript runner is installed:
  *   npx tsx test/manual_test/draft/parser_test_arithmetic.ts
  */
-import type { ASTNode } from "../../../src/parser";
-import { AstParserImpl } from "../../../src/parser_impl";
+import type { ASTNode } from "../../../src/ast_parser";
+import { AstParserImpl } from "../../../src/ast_parser_impl";
 import { SynxFmt } from "../../../src/synx_fmt";
 import { completeCharRange, completeCharSeq, completePatternSeq, completePatternSet, type ParserNode, type PatternSeq, type PatternSet } from "../../../src/parser_node";
 const Digit = completeCharRange({ start: "0", end: "9" });

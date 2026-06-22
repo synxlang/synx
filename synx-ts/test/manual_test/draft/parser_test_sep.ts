@@ -7,7 +7,7 @@
 *   npx tsx test/manual_test/draft/parser_test_sep.ts
 */
 import { inspect } from "node:util";
-import { AstParserImpl } from "../../../src/parser_impl";
+import { AstParserImpl } from "../../../src/ast_parser_impl";
 import { completeCharSeq, completeCharRange, completeCharSet, completePatternSeq } from "../../../src/parser_node";
 import type { CharMatchNode } from "../../../src/parser_node";
 const Digit: CharMatchNode = completeCharRange({ start: "0", end: "9" });

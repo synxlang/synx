@@ -1,5 +1,5 @@
 import type { ParserNode } from "./parser_node";
-import { AstParserImpl } from "./parser_impl";
+import { AstParserImpl } from "./ast_parser_impl";
 export type {
     ASTNode,
     AstParserConfig as ParserConfig,
