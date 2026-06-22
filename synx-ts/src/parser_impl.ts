@@ -1539,19 +1539,6 @@ export class ParserImpl implements Parser {
         }
     }
 
-    // private getPatternSetNextAltIdx(node: PatternSet, pos: number): number {
-    //     for (let i = this.pattern_set_node_parse_stack.length - 1; i >= 0; i--) {
-    //         const frame = this.pattern_set_node_parse_stack[i]!;
-    //         if (frame.pos !== pos) {
-    //             return 0;
-    //         }
-    //         if (frame.node === node) {
-    //             return frame.alt_idx + 1;
-    //         }
-    //     }
-    //     return 0;
-    // }
-
     getPatternSetParseRecord(node: PatternSet, pos: number): PatternSetParseRecord | null {
         for (let i = this.pattern_set_node_parse_stack.length - 1; i >= 0; i--) {
             const record = this.pattern_set_node_parse_stack[i];
