@@ -274,9 +274,9 @@ export const NonGreedyPattern: PatternSeq = completePatternSeq({
   assignment_map: "pattern",
 });
 
-// sepPart=("\\sep", pattern:Pattern \ignore Ignorable)=>pattern;
+// SepPart=("\\sep", pattern:Pattern \ignore Ignorable)=>pattern;
 export const SepPart: PatternSeq = completePatternSeq({
-  name: "sepPart",
+  name: "SepPart",
   sub_nodes: [completeCharSeq({ literal: "\\sep" }), Pattern],
   sub_quantifiers: "  ",
   ignore: Ignorable,
@@ -284,12 +284,12 @@ export const SepPart: PatternSeq = completePatternSeq({
   assignment_map: "pattern",
 });
 
-// IgnorePart=({"\\ignore";"ignore_include_beginning"}, pattern:Pattern \ignore Ignorable)=>pattern;
+// IgnorePart=({"\\ignore";"\\ignore_include_beginning"}, pattern:Pattern \ignore Ignorable)=>pattern;
 export const IgnorePartKeyword: PatternSet = completePatternSet({
-  name: "{\"\\\\ignore\";\"ignore_include_beginning\"}",
+  name: "{\"\\\\ignore\";\"\\\\ignore_include_beginning\"}",
   sub_nodes: [
+    completeCharSeq({ literal: "\\ignore_include_beginning" }),
     completeCharSeq({ literal: "\\ignore" }),
-    completeCharSeq({ literal: "ignore_include_beginning" }),
   ],
 });
 export const IgnorePart: PatternSeq = completePatternSeq({
@@ -338,7 +338,7 @@ export const PatternSeqPatterns: PatternSeq = completePatternSeq({
   assignment_map: "patterns",
 });
 
-// PatternSeq=((patterns:{PatternBinding;Pattern}+ \sep "," \ignore Ignorable), sep_part:sepPart?, ignore_part:IgnorePart?, enclosedby_part:EnclosedbyPart? \ignore Ignorable \enclosedby "()")=>...
+// PatternSeq=((patterns:{PatternBinding;Pattern}+ \sep "," \ignore Ignorable), sep_part:SepPart?, ignore_part:IgnorePart?, enclosedby_part:EnclosedbyPart? \ignore Ignorable \enclosedby "()")=>...
 export const PatternSeqNode: PatternSeq = completePatternSeq({
   name: "PatternSeq",
   sub_nodes: [PatternSeqPatterns, SepPart, IgnorePart, EnclosedbyPart],
@@ -364,14 +364,14 @@ export const PatternSetPatterns: PatternSeq = completePatternSeq({
   assignment_map: "patterns",
 });
 
-// PatternSet=((patterns:{PatternBinding;Pattern}* \sep ";" \ignore Ignorable), associateby_part:AssociateByPart?, ignore_part:IgnorePart? \ignore Ignorable \enclosedby "{}")=>...
+// PatternSet=((patterns:{PatternBinding;Pattern}* \sep ";" \ignore Ignorable), ";"?, associateby_part:AssociateByPart?, ignore_part:IgnorePart? \ignore Ignorable \enclosedby "{}")=>...
 export const PatternSetNode: PatternSeq = completePatternSeq({
   name: "PatternSet",
-  sub_nodes: [PatternSetPatterns, AssociateByPart, IgnorePart],
-  sub_quantifiers: " ??",
+  sub_nodes: [PatternSetPatterns, completeCharSeq({ literal: ";" }), AssociateByPart, IgnorePart],
+  sub_quantifiers: " ???",
   ignore: Ignorable,
   enclosure: "{}",
-  sub_node_bindings: ["patterns", "associateby_part", "ignore_part"],
+  sub_node_bindings: ["patterns", null, "associateby_part", "ignore_part"],
   assignment_map: new Map([
     ["patterns", "patterns"],
     ["associateby", "associateby_part"],
@@ -426,9 +426,9 @@ export const Keyword: PatternSet = completePatternSet({
   sub_nodes: [
     completeCharSeq({ literal: "\\oneof" }),
     completeCharSeq({ literal: "\\sep" }),
-    completeCharSeq({ literal: "\\ignore" }),
     completeCharSeq({ literal: "\\enclosedby" }),
-    completeCharSeq({ literal: "ignore_include_beginning" }),
+    completeCharSeq({ literal: "\\ignore_include_beginning" }),
+    completeCharSeq({ literal: "\\ignore" }),
     completeCharSeq({ literal: "\\associateby" }),
     completeCharSeq({ literal: "\\raw" }),
   ],
@@ -473,6 +473,7 @@ export const Synx: PatternSeq = completePatternSeq({
   sub_nodes: [Expr],
   sub_quantifiers: "*",
   sep: Delimiter,
+  accept_trailing_sep: true,
   ignore: Ignorable,
   ignore_beginning: true,
   sub_node_bindings: ["expr"],
