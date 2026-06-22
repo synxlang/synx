@@ -15,7 +15,7 @@ import type { ASTNode, AstParserConfig, AstParserInput, AstParseProfiling, AstPa
 export interface AstParser {
     /**
      * Parse input starting from root.
-     * @param root Must be one of the ParserConfig.parser_nodes used when creating this Parser (entry node)
+     * @param root Must be one of the AstParserConfig.parser_nodes used when creating this AstParser (entry node)
      */
     parse(input: AstParserInput, root: ParserNode): AstParseResult;
     parseAll(input: AstParserInput, node: ParserNode): ASTNode[];

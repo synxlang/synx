@@ -158,7 +158,7 @@ export interface PatternSeq {
  *
  * Long infix chains: in synx, prefer collecting lists with `\sep`, then handle associativity in a later phase.
  * For left-recursion limits and other authoring shapes, see the JSDoc for
- * `pattern_set_node_parse_stack` in `ParserImpl`.
+ * `pattern_set_node_parse_stack` in `AstParserImpl`.
  *
  * `associateby` (when non-null): boundary pair corresponding to `\associateby`.
  * It is similar to `PatternSeq.enclosure`, but may match zero or more pairs around the selected alternative
@@ -190,7 +190,7 @@ export interface PatternSeq {
  *
  * 长中缀链：在 synx 中优先用 `\sep` 收列表，再结合性在后续阶段处理。
  * 左递归能力边界及其它写法见
- * `ParserImpl` 中 `pattern_set_node_parse_stack` 的 JSDoc。
+ * `AstParserImpl` 中 `pattern_set_node_parse_stack` 的 JSDoc。
  *
  * `associateby`（非 null 时）：对应 `\associateby` 的边界对。
  * 它类似于 `PatternSeq.enclosure`，但允许在选中的分支外匹配 0 个或多个边界对，

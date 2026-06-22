@@ -138,7 +138,7 @@ function completeParseStage(stage: Partial<ParseStage> | undefined = undefined):
 /**
  * ============================== EN ==============================
  *
- * Parser implementation class, used by mkParser and tests; not exported as public API.
+ * Parser implementation class, used by mkAstParser and tests; not exported as public API.
  *
  * Parse-call conventions (for functions whose names start with `parse`):
  * - Index:
@@ -154,7 +154,7 @@ function completeParseStage(stage: Partial<ParseStage> | undefined = undefined):
  *
  * ============================== 中文 ==============================
  *
- * 解析器实现类，供 mkParser 与测试使用；不作为对外公开 API 导出。
+ * 解析器实现类，供 mkAstParser 与测试使用；不作为对外公开 API 导出。
  *
  * 解析调用约定（针对parse开头的函数）：
  * - 索引：
