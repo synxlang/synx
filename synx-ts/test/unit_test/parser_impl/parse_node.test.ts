@@ -1,5 +1,5 @@
 import assert from 'assert';
-import { ParserImpl } from '../../../src/parser_impl';
+import { AstParserImpl } from '../../../src/parser_impl';
 import { completeCharSeq, completeCharRange, completeCharSet, completePatternSeq } from '../../../src/parser_node';
 import type { CharMatchNode, ParserNode, Quantifier } from '../../../src/parser_node';
 import type { ParserInput } from '../../../src/parser';
@@ -37,7 +37,7 @@ function test_parsePatternSeq_singleSlot_quantifiers(): void {
         { id: 6, node: completeCharSeq({ literal: '=>' }), quantifier: ' ', input: { src: '=y', pos: 0 }, expected_count: 0, expected_error: true },
     ];
     for (const c of cases) {
-        const parser = new ParserImpl({ parser_nodes: [] });
+        const parser = new AstParserImpl({ parser_nodes: [] });
         parser.initParse(c.input);
         const seq = completePatternSeq({ sub_nodes: [c.node], sub_quantifiers: c.quantifier, raw: false, sep: null, accept_trailing_sep: false, ignore: null });
         const top = parser.parsePatternSeq(seq);
@@ -56,7 +56,7 @@ function test_parsePatternSeq_singleSlot_quantifiers(): void {
 }
 
 function test_parsePatternSeq_plus_non_char_node_first_match_failure(): void {
-    const parser = new ParserImpl({ parser_nodes: [] });
+    const parser = new AstParserImpl({ parser_nodes: [] });
     const item = completePatternSeq({
         sub_nodes: [completeCharSeq({ literal: 'a' })],
         sub_quantifiers: ' ',

@@ -1,4 +1,4 @@
-import { ParserImpl } from '../../../src/parser_impl';
+import { AstParserImpl } from '../../../src/parser_impl';
 import { completeCharRange, completeCharSet, AnyChar } from '../../../src/parser_node';
 import type { CharMatchNode, Quantifier } from '../../../src/parser_node';
 import type { ASTNode, ParserInput } from '../../../src/parser';
@@ -36,7 +36,7 @@ function test_parseCharMatchNode(): void {
         { id: 20, node: AnyChar, quantifier: '+', input: { src: '', pos: 0 }, expected_value: null, expected_error: true },
     ];
     for (const c of cases) {
-        const parser = new ParserImpl({ parser_nodes: [] });
+        const parser = new AstParserImpl({ parser_nodes: [] });
         parser.initParse(c.input);
         const result = parser.parseCharMatchNode(c.node, c.quantifier);
         if (!parser.isSuccess()) {

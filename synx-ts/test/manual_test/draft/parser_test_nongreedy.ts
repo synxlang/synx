@@ -11,7 +11,7 @@
 */
 import { inspect } from "node:util";
 import type { ASTNode } from "../../../src/parser";
-import { ParserImpl } from "../../../src/parser_impl";
+import { AstParserImpl } from "../../../src/parser_impl";
 import { AnyChar, completeCharSeq, completeCharRange, completeCharSet, completePatternSeq, type ParserNode, type PatternSeq } from "../../../src/parser_node";
 const A = completeCharSeq({ literal: "a" });
 const B = completeCharSeq({ literal: "b" });
@@ -76,7 +76,7 @@ interface CaseDef {
     note: string;
 }
 function runCase(c: CaseDef, index: number): void {
-    const parser = new ParserImpl({ parser_nodes: [] });
+    const parser = new AstParserImpl({ parser_nodes: [] });
     parser.initParse({ src: c.src, pos: 0 });
     const result = parser.parsePatternSeq(c.seq);
     console.log("\n" + "=".repeat(90));

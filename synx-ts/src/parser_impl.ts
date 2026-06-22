@@ -14,16 +14,16 @@ import {
     Quantifier,
 } from "./parser_node";
 import type {
-    ParserConfig,
-    ParseProfiling,
-    ParseResult,
-    ParserInput,
-    ParseSingleNodeProfiling,
+    AstParserConfig,
+    AstParseProfiling,
+    AstParseResult,
+    AstParserInput,
+    AstParseSingleNodeProfiling,
     PatternSetAlternativeProfiling,
     ASTNode,
 } from "./common";
 import { ParseResultKind } from "./common";
-import type { Parser } from "./parser";
+import type { AstParser } from "./parser";
 
 class ParseTimeoutError extends Error {
     constructor(message: string) {
@@ -169,20 +169,20 @@ function completeParseStage(stage: Partial<ParseStage> | undefined = undefined):
  *   - 成功时 `isSuccess()` 为真；失败时 `isSuccess()` 为假。
  *
  */
-export class ParserImpl implements Parser {
+export class AstParserImpl implements AstParser {
     /**
      * Current parse input and read position (parse state stored on this, child functions read/write through this)
      *
      * 当前解析输入与读位置（解析状态保存在本对象上，子函数经本对象读写）。
      */
-    input!: ParserInput;
+    input!: AstParserInput;
 
     private error: string | null = null;
     private error_pos: number = 0;
     private parse_records: ASTNode[][] = [];
     private pattern_seq_parse_info_cache = new Map<PatternSeq, PatternSeqParseInfo>();
-    private parse_single_node_stack: Array<{ node: ParserNode; pos: number; profile_record?: ParseSingleNodeProfiling }> = [];
-    private profiling: ParseProfiling = this.profileCreate();
+    private parse_single_node_stack: Array<{ node: ParserNode; pos: number; profile_record?: AstParseSingleNodeProfiling }> = [];
+    private profiling: AstParseProfiling = this.profileCreate();
     private parse_start_time_ms: number = 0;
     private debug_next_report_time_ms: number = 0;
     private debug_last_report_time_ms: number = 0;
@@ -235,7 +235,7 @@ export class ParserImpl implements Parser {
      */
     private pattern_set_node_parse_stack: Array<PatternSetParseRecord> = [];
 
-    constructor(public config: ParserConfig) { }
+    constructor(public config: AstParserConfig) { }
 
     private parserNodeDebugName(node: ParserNode): string {
         const kind_name = ParserNodeKind[node.kind] ?? `ParserNodeKind(${node.kind})`;
@@ -253,7 +253,7 @@ export class ParserImpl implements Parser {
         return `\nparseSingleNode stack:\n${lines.join("\n")}`;
     }
 
-    private profileCreate(): ParseProfiling {
+    private profileCreate(): AstParseProfiling {
         return {
             parse_elapsed_s: 0,
             parse_single_node_enter_count: 0,
@@ -263,7 +263,7 @@ export class ParserImpl implements Parser {
         };
     }
 
-    getParseProfiling(): ParseProfiling {
+    getParseProfiling(): AstParseProfiling {
         return this.profiling;
     }
 
@@ -285,7 +285,7 @@ export class ParserImpl implements Parser {
         return `${this.profileGetNodeId(node)}:${pos}:${alt_idx}`;
     }
 
-    private profileGetOrCreateParseSingleNode(node: ParserNode, pos: number): ParseSingleNodeProfiling {
+    private profileGetOrCreateParseSingleNode(node: ParserNode, pos: number): AstParseSingleNodeProfiling {
         const key = this.profileParseSingleNodeKey(node, pos);
         let record = this.profiling.parse_single_node_by_node_pos.get(key);
         if (record === undefined) {
@@ -537,7 +537,7 @@ export class ParserImpl implements Parser {
         return null;
     }
 
-    initParse(input: ParserInput): void {
+    initParse(input: AstParserInput): void {
         this.input = input;
         this.clearError();
         this.pattern_set_node_parse_stack.length = 0;
@@ -550,7 +550,7 @@ export class ParserImpl implements Parser {
         this.parse_records = Array.from({ length: input.src.length + 1 }, () => []);
     }
 
-    parse(input: ParserInput, root: ParserNode): ParseResult {
+    parse(input: AstParserInput, root: ParserNode): AstParseResult {
         this.initParse(input);
         let parse_node_res: ASTNode[] | ASTNode | null = null;
         try {
@@ -591,7 +591,7 @@ export class ParserImpl implements Parser {
         };
     }
 
-    parseAll(input: ParserInput, node: ParserNode): ASTNode[] {
+    parseAll(input: AstParserInput, node: ParserNode): ASTNode[] {
         this.initParse(input);
         const results: ASTNode[] = [];
 
