@@ -7,7 +7,7 @@
 *   npx tsx test/manual_test/draft/parser_test_sep.ts
 */
 import { inspect } from "node:util";
-import { ParserImpl } from "../../../src/parser_impl";
+import { AstParserImpl } from "../../../src/parser_impl";
 import { completeCharSeq, completeCharRange, completeCharSet, completePatternSeq } from "../../../src/parser_node";
 import type { CharMatchNode } from "../../../src/parser_node";
 const Digit: CharMatchNode = completeCharRange({ start: "0", end: "9" });
@@ -21,7 +21,7 @@ function main(): void {
     console.log("=== 输入串下标 ===");
     console.log([...SRC].map((ch, i) => `${i}:${JSON.stringify(ch)}`).join("  "), "| len=", SRC.length);
     console.log("期望：`aa` 由 Letter+ 吃掉，逗号在重复间隔与子节点之间复用；Digit 在 index 4 的 `5`。\n");
-    const parser = new ParserImpl({ parser_nodes: [] });
+    const parser = new AstParserImpl({ parser_nodes: [] });
     // --- 1) 单 child 的 PatternSeq（Letter+ \sep CommaSep），等价于原先用 parseNode(Letter, '+', null, CommaSep) ---
     parser.initParse({ src: SRC, pos: 0 });
     const seqTop = parser.parsePatternSeq(Seq_LetterOnlyPlusComma);

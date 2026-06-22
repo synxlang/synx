@@ -1,5 +1,5 @@
 import { strict as assert } from 'assert';
-import { ParserImpl } from '../../../src/parser_impl';
+import { AstParserImpl } from '../../../src/parser_impl';
 import { AnyChar, completeCharSeq, completeCharRange, completePatternSeq, completePatternSet } from '../../../src/parser_node';
 import type { PatternSet, ParserNode } from '../../../src/parser_node';
 import type { ASTNode, ParserInput } from '../../../src/parser';
@@ -38,7 +38,7 @@ function test_parsePatternSet_basic(): void {
         { id: 3, input: { src: 'x', pos: 0 }, expected: null, expected_error: true },
     ];
     for (const c of cases) {
-        const parser = new ParserImpl({ parser_nodes: [] });
+        const parser = new AstParserImpl({ parser_nodes: [] });
         parser.initParse(c.input);
         const result = parser.parseSingleNode(set);
         assert.deepStrictEqual(result, c.expected, `case ${c.id} AST mismatch`);
@@ -53,7 +53,7 @@ function test_parsePatternSet_direct_char_match_alt(): void {
     const fallback = completeCharSeq({ literal: 'ab' });
     const set: PatternSet = completePatternSet({ sub_nodes: [lower, fallback] });
     assert.strictEqual(set.charset_flag, false);
-    const parser = new ParserImpl({ parser_nodes: [] });
+    const parser = new AstParserImpl({ parser_nodes: [] });
     parser.initParse({ src: 'a', pos: 0 });
     const result = parser.parsePatternSet(set);
     assert(parser.isSuccess());
@@ -123,7 +123,7 @@ function test_parsePatternSet_associateby(): void {
         },
     ];
     for (const c of cases) {
-        const parser = new ParserImpl({ parser_nodes: [] });
+        const parser = new AstParserImpl({ parser_nodes: [] });
         parser.initParse(c.input);
         const result = parser.parseSingleNode(set);
         assert.deepStrictEqual(result, c.expected, `case ${c.id} AST mismatch`);
@@ -193,7 +193,7 @@ function test_parsePatternSet_associateby_ignore(): void {
         },
     ];
     for (const c of cases) {
-        const parser = new ParserImpl({ parser_nodes: [] });
+        const parser = new AstParserImpl({ parser_nodes: [] });
         parser.initParse(c.input);
         const result = parser.parseSingleNode(set);
         assert.deepStrictEqual(result, c.expected, `case ${c.id} AST mismatch`);
@@ -206,7 +206,7 @@ function test_parsePatternSet_alternative_precedes_associateby(): void {
     const Left = completeCharSeq({ literal: '(' });
     const Right = completeCharSeq({ literal: ')' });
     const set: PatternSet = completePatternSet({ sub_nodes: [Left, A], associateby: [Left, Right] });
-    const parser = new ParserImpl({ parser_nodes: [] });
+    const parser = new AstParserImpl({ parser_nodes: [] });
     parser.initParse({ src: '(a)', pos: 0 });
     const result = parser.parseSingleNode(set);
     assert(parser.isSuccess());
@@ -225,7 +225,7 @@ function test_parsePatternSet_infinite_recursion_self(): void {
     set.sub_nodes.push(set as unknown as ParserNode);
     set.neg_flags.push(false);
     completePatternSet(set);
-    const parser = new ParserImpl({ parser_nodes: [] });
+    const parser = new AstParserImpl({ parser_nodes: [] });
     parser.initParse({ src: 'x', pos: 0 });
     const result = parser.parseSingleNode(set);
     assert.strictEqual(result, null);
@@ -240,7 +240,7 @@ function test_parsePatternSet_infinite_recursion_cycle(): void {
     b.neg_flags.push(false);
     completePatternSet(a);
     completePatternSet(b);
-    const parser = new ParserImpl({ parser_nodes: [] });
+    const parser = new AstParserImpl({ parser_nodes: [] });
     parser.initParse({ src: 'x', pos: 0 });
     const result = parser.parseSingleNode(a);
     assert.strictEqual(result, null);
@@ -258,7 +258,7 @@ function test_parsePatternSet_nested_seq_and_set(): void {
     // ( { { "ab" ; "a" } ; "x" } , "!" )
     const bang = completeCharSeq({ literal: '!' });
     const seq = completePatternSeq({ sub_nodes: [outerSet, bang], sub_quantifiers: '  ' });
-    const parser = new ParserImpl({ parser_nodes: [] });
+    const parser = new AstParserImpl({ parser_nodes: [] });
     parser.initParse({ src: 'ab!', pos: 0 });
     const result = parser.parseSingleNode(seq);
     // Expect: PatternSeq with two children.
@@ -333,7 +333,7 @@ function test_parsePatternSet_infinite_recursion_nested_cycle(): void {
     completePatternSet(a);
     completePatternSet(b);
     completePatternSet(c);
-    const parser = new ParserImpl({ parser_nodes: [] });
+    const parser = new AstParserImpl({ parser_nodes: [] });
     // Make the first literal fail at pos=0 so the cycle starts immediately at the same position.
     parser.initParse({ src: 'x', pos: 0 });
     const result = parser.parseSingleNode(a);
@@ -354,7 +354,7 @@ function test_parsePatternSet_left_recursive_plus_chain(): void {
     expr.sub_nodes.push(seq as unknown as ParserNode, one as unknown as ParserNode);
     expr.neg_flags.push(false, false);
     completePatternSet(expr);
-    const parser1 = new ParserImpl({ parser_nodes: [] });
+    const parser1 = new AstParserImpl({ parser_nodes: [] });
     parser1.initParse({ src: '1', pos: 0 });
     const r1 = parser1.parseSingleNode(expr);
     assert(parser1.isSuccess());
@@ -365,7 +365,7 @@ function test_parsePatternSet_left_recursive_plus_chain(): void {
         raw_value: '1',
         seps: [], enclosure: null, associate_enclosures: null, bindings: {},
     });
-    const parser2 = new ParserImpl({ parser_nodes: [] });
+    const parser2 = new AstParserImpl({ parser_nodes: [] });
     parser2.initParse({ src: '1+1', pos: 0 });
     const r2 = parser2.parseSingleNode(expr);
     assert(parser2.isSuccess());
@@ -385,12 +385,12 @@ function test_parsePatternSet_left_recursive_plus_chain(): void {
         seps: [], enclosure: null, associate_enclosures: null, bindings: {},
     });
     // One binary op per `PatternSet` expansion: longer input matches a prefix (same span as "1+1").
-    const parser3 = new ParserImpl({ parser_nodes: [] });
+    const parser3 = new AstParserImpl({ parser_nodes: [] });
     parser3.initParse({ src: '1+1+1', pos: 0 });
     const r3 = parser3.parseSingleNode(expr);
     assert(parser3.isSuccess());
     assert.deepStrictEqual(r3, r2);
-    const parser4 = new ParserImpl({ parser_nodes: [] });
+    const parser4 = new AstParserImpl({ parser_nodes: [] });
     parser4.initParse({ src: '+', pos: 0 });
     assert.strictEqual(parser4.parseSingleNode(expr), null);
     assert.ok(!parser4.isSuccess());
@@ -415,7 +415,7 @@ function test_parsePatternSet_left_recursive_expr_plus_expr(): void {
         raw_value: '1',
         seps: [], enclosure: null, associate_enclosures: null, bindings: {},
     });
-    const p1 = new ParserImpl({ parser_nodes: [] });
+    const p1 = new AstParserImpl({ parser_nodes: [] });
     p1.initParse({ src: '1', pos: 0 });
     const r1 = p1.parseSingleNode(expr);
     assert(p1.isSuccess());
@@ -426,7 +426,7 @@ function test_parsePatternSet_left_recursive_expr_plus_expr(): void {
         raw_value: '1',
         seps: [], enclosure: null, associate_enclosures: null, bindings: {},
     });
-    const p2 = new ParserImpl({ parser_nodes: [] });
+    const p2 = new AstParserImpl({ parser_nodes: [] });
     p2.initParse({ src: '1+1', pos: 0 });
     const r2 = p2.parseSingleNode(expr);
     assert(p2.isSuccess());
@@ -437,7 +437,7 @@ function test_parsePatternSet_left_recursive_expr_plus_expr(): void {
         raw_value: [leafAt(0, 1), { parser_nodes: [plus], range: [1, 2], value: '+', raw_value: '+', seps: [], enclosure: null, associate_enclosures: null, bindings: {} }, leafAt(2, 3)],
         seps: [], enclosure: null, associate_enclosures: null, bindings: {},
     });
-    const p3 = new ParserImpl({ parser_nodes: [] });
+    const p3 = new AstParserImpl({ parser_nodes: [] });
     p3.initParse({ src: '1+1+1', pos: 0 });
     const r3 = p3.parseSingleNode(expr);
     assert(p3.isSuccess());
@@ -450,7 +450,7 @@ function test_parsePatternSet_left_recursive_expr_plus_expr(): void {
     assert.deepStrictEqual(inner[0], leafAt(2, 3));
     assert.deepStrictEqual(inner[1], { parser_nodes: [plus], range: [3, 4], value: '+', raw_value: '+', seps: [], enclosure: null, associate_enclosures: null, bindings: {} });
     assert.deepStrictEqual(inner[2], leafAt(4, 5));
-    const pBad = new ParserImpl({ parser_nodes: [] });
+    const pBad = new AstParserImpl({ parser_nodes: [] });
     pBad.initParse({ src: '+', pos: 0 });
     assert.strictEqual(pBad.parseSingleNode(expr), null);
     assert.ok(!pBad.isSuccess());
@@ -466,7 +466,7 @@ function test_parsePatternSet_left_recursive_list_ab(): void {
     list.sub_nodes.push(pair as unknown as ParserNode, a as unknown as ParserNode);
     list.neg_flags.push(false, false);
     completePatternSet(list);
-    const pA = new ParserImpl({ parser_nodes: [] });
+    const pA = new AstParserImpl({ parser_nodes: [] });
     pA.initParse({ src: 'a', pos: 0 });
     const ra = pA.parseSingleNode(list);
     assert(pA.isSuccess());
@@ -477,7 +477,7 @@ function test_parsePatternSet_left_recursive_list_ab(): void {
         raw_value: 'a',
         seps: [], enclosure: null, associate_enclosures: null, bindings: {},
     });
-    const pAB = new ParserImpl({ parser_nodes: [] });
+    const pAB = new AstParserImpl({ parser_nodes: [] });
     pAB.initParse({ src: 'ab', pos: 0 });
     const rab = pAB.parseSingleNode(list);
     assert(pAB.isSuccess());
@@ -494,7 +494,7 @@ function test_parsePatternSet_left_recursive_list_ab(): void {
         ],
         seps: [], enclosure: null, associate_enclosures: null, bindings: {},
     });
-    const pABB = new ParserImpl({ parser_nodes: [] });
+    const pABB = new AstParserImpl({ parser_nodes: [] });
     pABB.initParse({ src: 'abb', pos: 0 });
     const rabb = pABB.parseSingleNode(list);
     assert(pABB.isSuccess());
@@ -519,7 +519,7 @@ function test_parsePatternSet_synx_shape_ABC(): void {
     C.neg_flags.push(false);
     completePatternSet(A);
     completePatternSet(C);
-    const parser = new ParserImpl({ parser_nodes: [] });
+    const parser = new AstParserImpl({ parser_nodes: [] });
     parser.initParse({ src: 'ab12', pos: 0 });
     const result = parser.parseSingleNode(A);
     assert.deepStrictEqual(result, {
@@ -542,7 +542,7 @@ function test_parsePatternSet_neg_flags(): void {
     const aLit = completeCharSeq({ literal: 'a' });
     const bLit = completeCharSeq({ literal: 'b' });
     const negThenB = completePatternSet({ sub_nodes: [aLit, bLit], neg_flags: [true, false] });
-    const p1 = new ParserImpl({ parser_nodes: [] });
+    const p1 = new AstParserImpl({ parser_nodes: [] });
     p1.initParse({ src: 'b', pos: 0 });
     const r1 = p1.parseSingleNode(negThenB);
     assert(p1.isSuccess());
@@ -553,21 +553,21 @@ function test_parsePatternSet_neg_flags(): void {
         raw_value: 'b',
         seps: [], enclosure: null, associate_enclosures: null, bindings: {},
     });
-    const p2 = new ParserImpl({ parser_nodes: [] });
+    const p2 = new AstParserImpl({ parser_nodes: [] });
     p2.initParse({ src: 'a', pos: 0 });
     assert.strictEqual(p2.parseSingleNode(negThenB), null);
     assert.ok(!p2.isSuccess());
     const onlyNegA = completePatternSet({ sub_nodes: [aLit], neg_flags: [true] });
-    const p3 = new ParserImpl({ parser_nodes: [] });
+    const p3 = new AstParserImpl({ parser_nodes: [] });
     p3.initParse({ src: 'x', pos: 0 });
     assert.strictEqual(p3.parseSingleNode(onlyNegA), null);
     assert.ok(!p3.isSuccess());
-    const p4 = new ParserImpl({ parser_nodes: [] });
+    const p4 = new AstParserImpl({ parser_nodes: [] });
     p4.initParse({ src: 'a', pos: 0 });
     assert.strictEqual(p4.parseSingleNode(onlyNegA), null);
     assert.ok(!p4.isSuccess());
     const nonNegLikeNegFallthrough = completePatternSet({ sub_nodes: [aLit, bLit], neg_flags: [false, false] });
-    const p5 = new ParserImpl({ parser_nodes: [] });
+    const p5 = new AstParserImpl({ parser_nodes: [] });
     p5.initParse({ src: 'b', pos: 0 });
     const r5 = p5.parseSingleNode(nonNegLikeNegFallthrough);
     assert(p5.isSuccess());
@@ -583,7 +583,7 @@ function test_parsePatternSet_charset_flag_char_match_contract(): void {
     const lower = completeCharRange({ start: 'a', end: 'z' });
     const lowerSet = completePatternSet({ sub_nodes: [lower] });
     assert.strictEqual(lowerSet.charset_flag, true);
-    const p1 = new ParserImpl({ parser_nodes: [] });
+    const p1 = new AstParserImpl({ parser_nodes: [] });
     p1.initParse({ src: 'm', pos: 0 });
     const r1 = p1.parseSingleNode(lowerSet);
     assert(p1.isSuccess());
@@ -594,7 +594,7 @@ function test_parsePatternSet_charset_flag_char_match_contract(): void {
         raw_value: 'm',
         seps: [], enclosure: null, associate_enclosures: null, bindings: {},
     });
-    const p2 = new ParserImpl({ parser_nodes: [] });
+    const p2 = new AstParserImpl({ parser_nodes: [] });
     p2.initParse({ src: '5', pos: 0 });
     assert.strictEqual(p2.parseSingleNode(lowerSet), null);
     assert.ok(!p2.isSuccess());
@@ -603,7 +603,7 @@ function test_parsePatternSet_charset_flag_reject_patterns(): void {
     const quote = completeCharSeq({ literal: '"' });
     const notQuote = completePatternSet({ sub_nodes: [quote, AnyChar], neg_flags: [true, false] });
     assert.strictEqual(notQuote.charset_flag, true);
-    const p1 = new ParserImpl({ parser_nodes: [] });
+    const p1 = new AstParserImpl({ parser_nodes: [] });
     p1.initParse({ src: 'x', pos: 0 });
     const r1 = p1.parseSingleNode(notQuote);
     assert(p1.isSuccess());
@@ -614,7 +614,7 @@ function test_parsePatternSet_charset_flag_reject_patterns(): void {
         raw_value: 'x',
         seps: [], enclosure: null, associate_enclosures: null, bindings: {},
     });
-    const p2 = new ParserImpl({ parser_nodes: [] });
+    const p2 = new AstParserImpl({ parser_nodes: [] });
     p2.initParse({ src: '"', pos: 0 });
     assert.strictEqual(p2.parseSingleNode(notQuote), null);
     assert.ok(!p2.isSuccess());
@@ -626,12 +626,12 @@ function test_parsePatternSet_charset_flag_multichar_reject_pattern(): void {
     const quote = completeCharSeq({ literal: '"' });
     const stringChar = completePatternSet({ sub_nodes: [escape, quote, AnyChar], neg_flags: [true, true, false] });
     assert.strictEqual(stringChar.charset_flag, true);
-    const p1 = new ParserImpl({ parser_nodes: [] });
+    const p1 = new AstParserImpl({ parser_nodes: [] });
     p1.initParse({ src: '\\n', pos: 0 });
     assert.strictEqual(p1.parseSingleNode(stringChar), null);
     assert.ok(!p1.isSuccess());
     assert.strictEqual(p1.input.pos, 0);
-    const p2 = new ParserImpl({ parser_nodes: [] });
+    const p2 = new AstParserImpl({ parser_nodes: [] });
     p2.initParse({ src: '😀', pos: 0 });
     const r2 = p2.parseSingleNode(stringChar);
     assert(p2.isSuccess());
@@ -647,7 +647,7 @@ function test_parsePatternSet_charset_flag_repetition_merges_like_char_match_set
     const quote = completeCharSeq({ literal: '"' });
     const notQuote = completePatternSet({ sub_nodes: [quote, AnyChar], neg_flags: [true, false] });
     const text = completePatternSeq({ sub_nodes: [notQuote], sub_quantifiers: '+' });
-    const parser = new ParserImpl({ parser_nodes: [] });
+    const parser = new AstParserImpl({ parser_nodes: [] });
     parser.initParse({ src: 'abc"tail', pos: 0 });
     const result = parser.parseSingleNode(text);
     assert(parser.isSuccess());

@@ -9,7 +9,7 @@
  */
 import { existsSync, readFileSync } from "fs";
 import { dirname, join } from "path";
-import { mkParser, ParseResultKind } from "../../../src/parser";
+import { mkAstParser, ParseResultKind } from "../../../src/parser";
 import { SynxFmt } from "../../../src/synx_fmt";
 import { Synx } from "../../../src/synx_slim_parser_node";
 
@@ -38,7 +38,7 @@ const project_root = findProjectRoot(__dirname);
 const synx_slim_path = join(project_root, "synx-slim.synx");
 const src = readFileSync(synx_slim_path, "utf8");
 
-const parser = mkParser({ parser_nodes: [Synx], debug: true, timeout_s: 300 });
+const parser = mkAstParser({ parser_nodes: [Synx], debug: true, timeout_s: 300 });
 const result = parser.parse({ src, pos: 0 }, Synx);
 const success = result.kind === ParseResultKind.Success;
 

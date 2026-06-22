@@ -1,4 +1,4 @@
-import { ParserImpl } from '../../../src/parser_impl';
+import { AstParserImpl } from '../../../src/parser_impl';
 import { AnyChar, completeCharRange, completeCharSet, completeCharSeq, completePatternSeq } from '../../../src/parser_node';
 import type { CharSeq, CharMatchNode, ParserNode, PatternSeq } from '../../../src/parser_node';
 import type { ASTNode, ParserInput } from '../../../src/parser';
@@ -1181,7 +1181,7 @@ function test_parsePatternSeq(): void {
         ...cases_sep_with_ignore,
     ];
     for (const c of cases) {
-        const parser = new ParserImpl({ parser_nodes: [] });
+        const parser = new AstParserImpl({ parser_nodes: [] });
         parser.initParse(c.input);
         const result = parser.parsePatternSeq(c.seq);
         if (!parser.isSuccess()) {
@@ -1214,7 +1214,7 @@ function test_parsePatternSeq(): void {
 function test_parsePatternSeq_enclosure(): void {
     const Quote = completeCharSeq({ literal: '"' });
     const QuotedRaw = completePatternSeq({ sub_nodes: [AnyChar], sub_quantifiers: '*', raw: true, sep: null, accept_trailing_sep: false, ignore: null, enclosure: [Quote, Quote] });
-    const parser = new ParserImpl({ parser_nodes: [] });
+    const parser = new AstParserImpl({ parser_nodes: [] });
     parser.initParse({ src: '"abc"', pos: 0 });
     const result = parser.parsePatternSeq(QuotedRaw);
     assert(parser.isSuccess());
@@ -1256,7 +1256,7 @@ function test_parsePatternSeq_enclosure(): void {
 function test_parsePatternSeq_enclosure_greedy_star_stops_at_right_enclosure(): void {
     const Quote = completeCharSeq({ literal: '"' });
     const QuotedRaw = completePatternSeq({ sub_nodes: [Letter], sub_quantifiers: '*', raw: true, sep: null, accept_trailing_sep: false, ignore: null, enclosure: [Quote, Quote] });
-    const parser = new ParserImpl({ parser_nodes: [] });
+    const parser = new AstParserImpl({ parser_nodes: [] });
     parser.initParse({ src: '"a"', pos: 0 });
     const result = parser.parsePatternSeq(QuotedRaw);
     assert(parser.isSuccess());
@@ -1299,7 +1299,7 @@ function test_parsePatternSeq_enclosure_ignores_before_left(): void {
     const Quote = completeCharSeq({ literal: '"' });
     const Space = completeCharSeq({ literal: ' ' });
     const QuotedRaw = completePatternSeq({ sub_nodes: [AnyChar], sub_quantifiers: '*', raw: true, sep: null, accept_trailing_sep: false, ignore: Space, enclosure: [Quote, Quote] });
-    const parser = new ParserImpl({ parser_nodes: [] });
+    const parser = new AstParserImpl({ parser_nodes: [] });
     parser.initParse({ src: '  "abc"', pos: 0 });
     const result = parser.parsePatternSeq(QuotedRaw);
     assert(parser.isSuccess());
@@ -1343,13 +1343,13 @@ function test_parsePatternSeq_enclosure_respects_ignore_beginning_false(): void 
     const Space = completeCharSeq({ literal: ' ' });
     const QuotedRaw = completePatternSeq({ sub_nodes: [Letter], sub_quantifiers: '*', raw: true, sep: null, accept_trailing_sep: false, ignore: Space, ignore_beginning: false, enclosure: [Quote, Quote] });
 
-    const parser1 = new ParserImpl({ parser_nodes: [] });
+    const parser1 = new AstParserImpl({ parser_nodes: [] });
     parser1.initParse({ src: ' "abc"', pos: 0 });
     assert.strictEqual(parser1.parsePatternSeq(QuotedRaw), null);
     assert(!parser1.isSuccess());
     assert.strictEqual(parser1.input.pos, 0);
 
-    const parser2 = new ParserImpl({ parser_nodes: [] });
+    const parser2 = new AstParserImpl({ parser_nodes: [] });
     parser2.initParse({ src: '" abc"', pos: 0 });
     const result = parser2.parsePatternSeq(QuotedRaw);
     assert(parser2.isSuccess());
@@ -1392,7 +1392,7 @@ function test_parsePatternSeq_enclosure_end_applies_to_last_nongreedy_child(): v
     const Quote = completeCharSeq({ literal: '"' });
     const X = completeCharSeq({ literal: 'x' });
     const QuotedRaw = completePatternSeq({ sub_nodes: [X, AnyChar], sub_quantifiers: ' *', raw: true, sep: null, accept_trailing_sep: false, ignore: null, greedy_flags: [true, false], enclosure: [Quote, Quote] });
-    const parser = new ParserImpl({ parser_nodes: [] });
+    const parser = new AstParserImpl({ parser_nodes: [] });
     parser.initParse({ src: '"xabc"', pos: 0 });
     const result = parser.parsePatternSeq(QuotedRaw);
     assert(parser.isSuccess());
@@ -1447,7 +1447,7 @@ function test_parsePatternSeq_binding_assignment_isolated_scope(): void {
             ['right', 'letter'],
             ['missing', 'unknown'],
         ]) });
-    const parser = new ParserImpl({ parser_nodes: [] });
+    const parser = new AstParserImpl({ parser_nodes: [] });
     parser.initParse({ src: '5a', pos: 0 });
     const result = parser.parsePatternSeq(seq);
     assert(parser.isSuccess());
@@ -1478,7 +1478,7 @@ function test_parsePatternSeq_binding_assignment_isolated_scope(): void {
 }
 function test_parsePatternSeq_binding_assignment_direct_value(): void {
     const seq = completePatternSeq({ sub_nodes: [Digit, Letter], sub_quantifiers: '  ', raw: false, sep: null, accept_trailing_sep: false, ignore: null, enclosure: null, sub_node_bindings: ['digit', 'comment'], sub_node_isolated_scope_flags: [true, true], assignment_map: 'comment' });
-    const parser = new ParserImpl({ parser_nodes: [] });
+    const parser = new AstParserImpl({ parser_nodes: [] });
     parser.initParse({ src: '5a', pos: 0 });
     const result = parser.parsePatternSeq(seq);
     assert(parser.isSuccess());
@@ -1501,7 +1501,7 @@ function test_parsePatternSeq_binding_non_isolated_scope(): void {
             ['inner_value', 'inner'],
             ['letter_value', 'letter'],
         ]) });
-    const parser = new ParserImpl({ parser_nodes: [] });
+    const parser = new AstParserImpl({ parser_nodes: [] });
     parser.initParse({ src: '5a', pos: 0 });
     const result = parser.parsePatternSeq(outer);
     assert(parser.isSuccess());

@@ -34,7 +34,7 @@ export interface ASTNode {
     bindings: Record<string, any>;
 }
 
-export interface ParserInput {
+export interface AstParserInput {
     src: string;
     pos: number;
 }
@@ -45,14 +45,14 @@ export enum ParseResultKind {
     Partial,
 }
 
-export interface ParseResult {
+export interface AstParseResult {
     kind: ParseResultKind;
     ast_nodes: ASTNode[];
     end_pos: number;    // not inclusive
     error?: string;
 }
 
-export interface ParseSingleNodeProfiling {
+export interface AstParseSingleNodeProfiling {
     node: ParserNode;
     pos: number;
     enter_count: number;
@@ -70,16 +70,16 @@ export interface PatternSetAlternativeProfiling {
     failure_count: number;
 }
 
-export interface ParseProfiling {
+export interface AstParseProfiling {
     parse_elapsed_s: number;
     parse_single_node_enter_count: number;
     parse_single_node_max_depth: number;
-    parse_single_node_by_node_pos: Map<string, ParseSingleNodeProfiling>;
+    parse_single_node_by_node_pos: Map<string, AstParseSingleNodeProfiling>;
     pattern_set_alternative_by_node_pos_alt: Map<string, PatternSetAlternativeProfiling>;
 }
 
 /** Parser configuration: parser_nodes is the set of optional entry nodes. The root passed to parse() must be one of them. */
-export interface ParserConfig {
+export interface AstParserConfig {
     parser_nodes: ParserNode[];
     debug?: boolean;
     timeout_s?: number;

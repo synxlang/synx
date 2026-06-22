@@ -1,27 +1,27 @@
 import type { ParserNode } from "./parser_node";
-import { ParserImpl } from "./parser_impl";
+import { AstParserImpl } from "./parser_impl";
 export type {
     ASTNode,
-    ParserConfig,
-    ParserInput,
-    ParseProfiling,
-    ParseResult,
-    ParseSingleNodeProfiling,
+    AstParserConfig as ParserConfig,
+    AstParserInput as ParserInput,
+    AstParseProfiling as ParseProfiling,
+    AstParseResult as ParseResult,
+    AstParseSingleNodeProfiling as ParseSingleNodeProfiling,
     PatternSetAlternativeProfiling,
 } from "./common";
 export { ParseResultKind } from "./common";
-import type { ASTNode, ParserConfig, ParserInput, ParseProfiling, ParseResult } from "./common";
+import type { ASTNode, AstParserConfig, AstParserInput, AstParseProfiling, AstParseResult } from "./common";
 
-export interface Parser {
+export interface AstParser {
     /**
      * Parse input starting from root.
-     * @param root Must be one of the ParserConfig.parser_nodes used when creating this Parser (entry node)
+     * @param root Must be one of the AstParserConfig.parser_nodes used when creating this AstParser (entry node)
      */
-    parse(input: ParserInput, root: ParserNode): ParseResult;
-    parseAll(input: ParserInput, node: ParserNode): ASTNode[];
-    getParseProfiling(): ParseProfiling;
+    parse(input: AstParserInput, root: ParserNode): AstParseResult;
+    parseAll(input: AstParserInput, node: ParserNode): ASTNode[];
+    getParseProfiling(): AstParseProfiling;
 }
 
-export function mkParser(config: ParserConfig): Parser {
-    return new ParserImpl(config);
+export function mkAstParser(config: AstParserConfig): AstParser {
+    return new AstParserImpl(config);
 }

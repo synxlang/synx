@@ -8,7 +8,7 @@
  *   npx tsx test/manual_test/draft/parser_test_arithmetic.ts
  */
 import type { ASTNode } from "../../../src/parser";
-import { ParserImpl } from "../../../src/parser_impl";
+import { AstParserImpl } from "../../../src/parser_impl";
 import { SynxFmt } from "../../../src/synx_fmt";
 import { completeCharRange, completeCharSeq, completePatternSeq, completePatternSet, type ParserNode, type PatternSeq, type PatternSet } from "../../../src/parser_node";
 const Digit = completeCharRange({ start: "0", end: "9" });
@@ -85,10 +85,10 @@ function printInputIndex(src: string): void {
     console.log([...src].map((ch, i) => `${i}:${JSON.stringify(ch)}`).join("  "), "| utf16_len=", src.length);
 }
 function parseCaseRoot(src: string): {
-    parser: ParserImpl;
+    parser: AstParserImpl;
     result: ASTNode | null;
 } {
-    const parser = new ParserImpl({ parser_nodes: [] });
+    const parser = new AstParserImpl({ parser_nodes: [] });
     parser.initParse({ src, pos: 0 });
     return {
         parser,

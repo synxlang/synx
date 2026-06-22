@@ -1,4 +1,4 @@
-import { ParserImpl } from '../../../src/parser_impl';
+import { AstParserImpl } from '../../../src/parser_impl';
 import { completeCharSeq, completeCharRange, completeCharSet, completePatternSeq } from '../../../src/parser_node';
 import type { Quantifier } from '../../../src/parser_node';
 import type { ASTNode, ParserInput } from '../../../src/parser';
@@ -25,7 +25,7 @@ function test_parseCharSeq(): void {
     ];
     for (const c of cases) {
         const node = completeCharSeq({ literal: c.literal });
-        const parser = new ParserImpl({ parser_nodes: [] });
+        const parser = new AstParserImpl({ parser_nodes: [] });
         parser.initParse(c.input);
         const result = parser.parseCharSeq(node);
         if (c.expected_value === null) {
@@ -74,7 +74,7 @@ function test_parsePatternSeq_byteSeq_quantifiers(): void {
         { id: 17, quantifier: '+', input: { src: 'abab', pos: 0 }, expected_values: ['ab', 'ab'], expected_error: false },
     ];
     for (const c of cases) {
-        const parser = new ParserImpl({ parser_nodes: [] });
+        const parser = new AstParserImpl({ parser_nodes: [] });
         parser.initParse(c.input);
         const seq = completePatternSeq({ sub_nodes: [ab], sub_quantifiers: c.quantifier, raw: false, sep: null, accept_trailing_sep: false, ignore: null });
         const top = parser.parsePatternSeq(seq);
@@ -113,7 +113,7 @@ function test_parsePatternSeq_embedsCharSeq(): void {
     const lit = completeCharSeq({ literal: '=>' });
     const letter = completeCharSet({ sub_nodes: [completeCharRange({ start: 'a', end: 'z' })] });
     const seq = completePatternSeq({ sub_nodes: [lit, letter], sub_quantifiers: '  ' });
-    const parser = new ParserImpl({ parser_nodes: [] });
+    const parser = new AstParserImpl({ parser_nodes: [] });
     parser.initParse({ src: '=>b', pos: 0 });
     const result = parser.parsePatternSeq(seq);
     assert(result !== null);

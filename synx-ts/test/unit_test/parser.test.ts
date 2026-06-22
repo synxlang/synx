@@ -1,4 +1,4 @@
-﻿import { mkParser, ParserConfig, ParserInput, ParseResult, ASTNode } from '../../src/parser';
+﻿import { mkAstParser, ParserConfig, ParserInput, ParseResult, ASTNode } from '../../src/parser';
 import type { ParserNode } from '../../src/parser_node';
 import { Symbol, Letter, SymbolChar } from '../../src/synx_parser_node';
 import assert from 'assert';
@@ -15,7 +15,7 @@ function test_parser(): void {
   ];
 
   for (const c of cases) {
-    const parser = mkParser(config);
+    const parser = mkAstParser(config);
     const result = parser.parse(c.input, c.root);
     assert.strictEqual(result.kind, c.expected.kind);
     assert.strictEqual(result.end_pos, c.expected.end_pos);
@@ -57,7 +57,7 @@ function test_parseAll(): void {
   ];
 
   for (const c of cases) {
-    const parser = mkParser(config);
+    const parser = mkAstParser(config);
     const results = parser.parseAll(c.input, c.node);
     assert.deepStrictEqual(results, c.expected, `case ${c.id} failed`);
   }

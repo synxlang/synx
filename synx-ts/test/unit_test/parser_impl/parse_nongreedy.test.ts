@@ -1,6 +1,6 @@
 import { strict as assert } from "assert";
 import { inspect } from "node:util";
-import { ParserImpl } from "../../../src/parser_impl";
+import { AstParserImpl } from "../../../src/parser_impl";
 import type { ASTNode, ParserInput } from "../../../src/parser";
 import { AnyChar, completeCharSeq, completeCharRange, completeCharSet, completePatternSeq, type CharSeq, type CharMatchNode, type ParserNode, type PatternSeq } from "../../../src/parser_node";
 const A = completeCharSeq({ literal: "a" });
@@ -176,7 +176,7 @@ function test_parsePatternSeq_nongreedy(): void {
         },
     ];
     for (const c of cases) {
-        const parser = new ParserImpl({ parser_nodes: [] });
+        const parser = new AstParserImpl({ parser_nodes: [] });
         parser.initParse(c.input);
         const result = parser.parsePatternSeq(c.seq);
         if (!parser.isSuccess()) {
