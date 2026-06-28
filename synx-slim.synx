@@ -79,4 +79,4 @@ Keyword={
     "\\raw";  \\ raw represents raw text within matched text
 };
 
-Synx=(expr:Expr* \sep ";" \ignore_include_beginning Ignorable);
+Synx=(exprs:Expr* \sep ";" \ignore_include_beginning Ignorable)=>[.exprs=exprs];

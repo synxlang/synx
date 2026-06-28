@@ -436,7 +436,7 @@ Expr.sub_nodes.push(
 Expr.neg_flags.push(false, false, false, false, false);
 completePatternSet(Expr);
 
-// Synx=(expr:Expr* \sep ";" \ignore_include_beginning Ignorable);
+// Synx=(exprs:Expr* \sep ";" \ignore_include_beginning Ignorable)=>[.exprs=exprs];
 export const Synx: PatternSeq = completePatternSeq({
   name: "Synx",
   sub_nodes: [Expr],
@@ -445,5 +445,6 @@ export const Synx: PatternSeq = completePatternSeq({
   accept_trailing_sep: true,
   ignore: Ignorable,
   ignore_beginning: true,
-  sub_node_bindings: ["expr"],
+  sub_node_bindings: ["exprs"],
+  assignment_map: new Map([["exprs", "exprs"]]),
 });

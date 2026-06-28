@@ -857,7 +857,7 @@ export class AstParserImpl implements AstParser {
           }
           assert.ok(res !== null);
           parse_record.result = res;
-          if (!res.parser_nodes.includes(node)) {
+          if (res.parser_nodes.at(-1) !== node) {
             res.parser_nodes.push(node);
           }
           this.profileRecordPatternSetAlternativeExit(node, node_start, alt_idx, true);
