@@ -2,12 +2,12 @@ import { strict as assert } from 'assert';
 import { AstParserImpl } from '../../../src/ast_parser_impl';
 import { AnyChar, completeCharSeq, completeCharRange, completePatternSeq, completePatternSet } from '../../../src/parser_node';
 import type { PatternSet, ParserNode } from '../../../src/parser_node';
-import type { ASTNode, ParserInput } from '../../../src/ast_parser';
+import type { ASTNode, AstParserInput } from '../../../src/ast_parser';
 function test_parsePatternSet_basic(): void {
   const set: PatternSet = completePatternSet({ sub_nodes: [completeCharSeq({ literal: 'ab' }), completeCharSeq({ literal: 'a' })] });
   const cases: Array<{
         id: number;
-        input: ParserInput;
+        input: AstParserInput;
         expected: ASTNode | null;
         expected_error: boolean;
     }> = [
@@ -79,7 +79,7 @@ function test_parsePatternSet_associateby(): void {
   });
   const cases: Array<{
         id: number;
-        input: ParserInput;
+        input: AstParserInput;
         expected: ASTNode | null;
         expected_pos: number;
         expected_success: boolean;
@@ -146,7 +146,7 @@ function test_parsePatternSet_associateby_ignore(): void {
   });
   const cases: Array<{
         id: number;
-        input: ParserInput;
+        input: AstParserInput;
         expected: ASTNode | null;
         expected_pos: number;
         expected_success: boolean;

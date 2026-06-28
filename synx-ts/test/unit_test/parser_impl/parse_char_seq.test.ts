@@ -1,7 +1,7 @@
 import { AstParserImpl } from '../../../src/ast_parser_impl';
 import { completeCharSeq, completeCharRange, completeCharSet, completePatternSeq } from '../../../src/parser_node';
 import type { Quantifier } from '../../../src/parser_node';
-import type { ASTNode, ParserInput } from '../../../src/ast_parser';
+import type { ASTNode, AstParserInput } from '../../../src/ast_parser';
 import { ParserNodeKind } from '../../../src/parser_node';
 import { strict as assert } from 'assert';
 function parse_node_result_count(parse_res: ASTNode[] | ASTNode | null): number {
@@ -16,7 +16,7 @@ function test_parseCharSeq(): void {
   const cases: Array<{
         id: number;
         literal: string;
-        input: ParserInput;
+        input: AstParserInput;
         expected_value: string | null;
     }> = [
       { id: 1, literal: 'hi', input: { src: 'hi', pos: 0 }, expected_value: 'hi' },
@@ -60,7 +60,7 @@ function test_parsePatternSeq_byteSeq_quantifiers(): void {
   const cases: Array<{
         id: number;
         quantifier: Quantifier;
-        input: ParserInput;
+        input: AstParserInput;
         expected_values: string[] | null;
         expected_error: boolean;
     }> = [

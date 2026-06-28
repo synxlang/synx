@@ -1,7 +1,7 @@
 import { strict as assert } from "assert";
 import { inspect } from "node:util";
 import { AstParserImpl } from "../../../src/ast_parser_impl";
-import type { ASTNode, ParserInput } from "../../../src/ast_parser";
+import type { ASTNode, AstParserInput } from "../../../src/ast_parser";
 import { AnyChar, completeCharSeq, completeCharRange, completeCharSet, completePatternSeq, type CharSeq, type CharMatchNode, type ParserNode, type PatternSeq } from "../../../src/parser_node";
 const A = completeCharSeq({ literal: "a" });
 const B = completeCharSeq({ literal: "b" });
@@ -73,7 +73,7 @@ type NongreedyCase = {
     id: number;
     name: string;
     seq: PatternSeq;
-    input: ParserInput;
+    input: AstParserInput;
     expected: ASTNode | null;
     expected_error: boolean;
 };

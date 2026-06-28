@@ -1,16 +1,15 @@
-export { AstParser as Parser, mkAstParser as mkParser } from './ast_parser';
+export { AstParser, mkAstParser } from './ast_parser';
 export {
-  AstParserConfig as ParserConfig,
-  AstParseResult as ParseResult,
+  AstParserConfig,
+  AstParseResult,
   ParseResultKind,
-  AstParserInput as ParserInput,
+  AstParserInput,
   ASTNode,
-  AstParseProfiling as ParseProfiling,
-  AstParseSingleNodeProfiling as ParseSingleNodeProfiling,
+  AstParseProfiling,
+  AstParseSingleNodeProfiling,
   PatternSetAlternativeProfiling,
 } from './common';
-export { AstParserImpl as ParserImpl } from './ast_parser_impl';
+export { AstParserImpl } from './ast_parser_impl';
 export { ParserNode, ParserNodeKind, CharMatchNode, GeneralCharMatchNode, CharMatchRange, CharMatchSet, PatternSeq, CharSeq, PatternSet, completeCharRange, completeCharSet, completePatternSeq, completeCharSeq, completePatternSet, isGeneralCharMatchNode, Quantifier } from './parser_node';
 export { Symbol, Letter, Digit, SymbolChar } from './synx_parser_node';
-export * as SynxSlimParserNode from './synx_slim_parser_node';
 export { SynxFmt } from './synx_fmt';

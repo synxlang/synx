@@ -1,15 +1,15 @@
-﻿import { mkAstParser, ParserConfig, ParserInput, ParseResult, ASTNode } from '../../src/ast_parser';
+﻿import { mkAstParser, AstParserConfig, AstParserInput, AstParseResult, ASTNode } from '../../src/ast_parser';
 import type { ParserNode } from '../../src/parser_node';
 import { Symbol, Letter, SymbolChar } from '../../src/synx_parser_node';
 import assert from 'assert';
 
 /** parse (Symbol and other entry points): multiple (config, input, root, expected) cases, iterate through test cases and assert within function */
 function test_parser(): void {
-  const config: ParserConfig = { parser_nodes: [Symbol] };
+  const config: AstParserConfig = { parser_nodes: [Symbol] };
   const cases: Array<{
-    input: ParserInput;
+    input: AstParserInput;
     root: ParserNode;
-    expected: ParseResult;
+    expected: AstParseResult;
   }> = [
     // TODO: single letter, letter+digit, multiple characters, underscore prefix, digit prefix, empty input, containing spaces, non-zero pos, etc.
   ];
@@ -24,10 +24,10 @@ function test_parser(): void {
 }
 
 function test_parseAll(): void {
-  const config: ParserConfig = { parser_nodes: [Symbol] };
+  const config: AstParserConfig = { parser_nodes: [Symbol] };
   const cases: Array<{
     id: number;
-    input: ParserInput;
+    input: AstParserInput;
     node: ParserNode;
     expected: ASTNode[];
   }> = [

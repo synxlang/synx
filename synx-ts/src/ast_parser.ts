@@ -2,11 +2,11 @@ import type { ParserNode } from "./parser_node";
 import { AstParserImpl } from "./ast_parser_impl";
 export type {
   ASTNode,
-  AstParserConfig as ParserConfig,
-  AstParserInput as ParserInput,
-  AstParseProfiling as ParseProfiling,
-  AstParseResult as ParseResult,
-  AstParseSingleNodeProfiling as ParseSingleNodeProfiling,
+  AstParserConfig,
+  AstParserInput,
+  AstParseProfiling,
+  AstParseResult,
+  AstParseSingleNodeProfiling,
   PatternSetAlternativeProfiling,
 } from "./common";
 export { ParseResultKind } from "./common";

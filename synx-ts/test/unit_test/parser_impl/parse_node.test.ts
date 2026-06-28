@@ -2,7 +2,7 @@ import assert from 'assert';
 import { AstParserImpl } from '../../../src/ast_parser_impl';
 import { completeCharSeq, completeCharRange, completeCharSet, completePatternSeq } from '../../../src/parser_node';
 import type { CharMatchNode, ParserNode, Quantifier } from '../../../src/parser_node';
-import type { ParserInput } from '../../../src/ast_parser';
+import type { AstParserInput } from '../../../src/ast_parser';
 import type { ASTNode } from '../../../src/ast_parser';
 function parse_node_result_count(parse_res: ASTNode[] | ASTNode | null): number {
   if (parse_res === null)
@@ -26,7 +26,7 @@ function test_parsePatternSeq_singleSlot_quantifiers(): void {
         id: number;
         node: ParserNode;
         quantifier: Quantifier;
-        input: ParserInput;
+        input: AstParserInput;
         expected_count: number;
         expected_error: boolean;
     }> = [
