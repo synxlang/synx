@@ -11,7 +11,7 @@ import { AnyChar } from "../../../src/parser_node";
 import { exit } from "node:process";
 import { AstParserImpl } from "../../../src/ast_parser_impl";
 function isAstNode(x: unknown): x is ASTNode {
-    return (typeof x === "object" &&
+  return (typeof x === "object" &&
         x !== null &&
         "parser_nodes" in x &&
         "range" in x &&
@@ -20,21 +20,21 @@ function isAstNode(x: unknown): x is ASTNode {
         "seps" in x);
 }
 function extractAstValue(node: ASTNode | null): any {
-    if (node === null)
-        return null;
-    const peel = (v: any): any => {
-        if (v === null || typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
-            return v;
-        }
-        if (Array.isArray(v)) {
-            return v.map(peel);
-        }
-        if (isAstNode(v)) {
-            return extractAstValue(v);
-        }
-        return v;
-    };
-    return peel(node.value);
+  if (node === null)
+    return null;
+  const peel = (v: any): any => {
+    if (v === null || typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
+      return v;
+    }
+    if (Array.isArray(v)) {
+      return v.map(peel);
+    }
+    if (isAstNode(v)) {
+      return extractAstValue(v);
+    }
+    return v;
+  };
+  return peel(node.value);
 }
 const inspectOpts = { depth: null, colors: true } as const;
 const ignore_pattern = AnyChar;

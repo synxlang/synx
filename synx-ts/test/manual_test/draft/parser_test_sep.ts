@@ -18,60 +18,60 @@ const Seq_LetterPlusComma_Digit = completePatternSeq({ sub_nodes: [Letter, Digit
 const Seq_LetterOnlyPlusComma = completePatternSeq({ sub_nodes: [Letter], sub_quantifiers: "+", raw: false, sep: CommaSep, accept_trailing_sep: false, ignore: null });
 const SRC = "a,a,5";
 function main(): void {
-    console.log("=== 输入串下标 ===");
-    console.log([...SRC].map((ch, i) => `${i}:${JSON.stringify(ch)}`).join("  "), "| len=", SRC.length);
-    console.log("期望：`aa` 由 Letter+ 吃掉，逗号在重复间隔与子节点之间复用；Digit 在 index 4 的 `5`。\n");
-    const parser = new AstParserImpl({ parser_nodes: [] });
-    // --- 1) 单 child 的 PatternSeq（Letter+ \sep CommaSep），等价于原先用 parseNode(Letter, '+', null, CommaSep) ---
-    parser.initParse({ src: SRC, pos: 0 });
-    const seqTop = parser.parsePatternSeq(Seq_LetterOnlyPlusComma);
-    if (seqTop === null) {
-        throw new Error("expected Seq_LetterOnlyPlusComma to match for this scenario");
-    }
-    const slot0 = seqTop.value[0];
-    const ex_ast_nodes = Array.isArray(slot0)
-        ? slot0
-        : slot0 !== null
-            ? [slot0]
-            : [];
-    const ex = { ast_node_res: slot0, seps: seqTop.seps };
-    console.log("=== parsePatternSeq(Seq_LetterOnlyPlusComma) 之后 ===");
-    console.log({
-        isSuccess: parser.isSuccess(),
-        getError: parser.getError(),
-        input_pos: parser.input.pos,
-        nodes_count: ex_ast_nodes.length,
-        seps_count: ex.seps.length,
-        sep_ranges: ex.seps.map((s) => s.range),
-        node_ranges: ex_ast_nodes.map((n) => n.range),
-    });
-    console.log("ex 详情:\n" + inspect(ex, { depth: 6, colors: true }));
-    // --- 2) 在步骤 1 结束后，再尝试从当前 pos 吃一个 CommaSep（模拟 parsePatternSeq 子节点之间的 sep）---
-    const posAfterLetterPlus = parser.input.pos;
-    const sep2 = parser.parseSingleNode(CommaSep, null);
-    console.log("\n=== 紧接着 parseSingleNode(CommaSep)（模拟子节点间分隔符）===");
-    console.log({
-        pos_before: posAfterLetterPlus,
-        pos_after: parser.input.pos,
-        isSuccess: parser.isSuccess(),
-        getError: parser.getError(),
-        sep2_ast_null: sep2 === null,
-    });
-    // --- 3) 整条 PatternSeq ---
-    parser.initParse({ src: SRC, pos: 0 });
-    const seqResult = parser.parsePatternSeq(Seq_LetterPlusComma_Digit);
-    console.log("\n=== parsePatternSeq(Seq_LetterPlusComma_Digit) ===");
-    console.log({
-        isSuccess: parser.isSuccess(),
-        getError: parser.getError(),
-        input_pos: parser.input.pos,
-        result_is_null: seqResult === null,
-    });
-    if (seqResult) {
-        console.log("seps.length:", seqResult.seps.length);
-        console.log(inspect(seqResult, { depth: 5, colors: true }));
-    }
-    console.log("\n--- 控制台结论摘要 ---\n" +
+  console.log("=== 输入串下标 ===");
+  console.log([...SRC].map((ch, i) => `${i}:${JSON.stringify(ch)}`).join("  "), "| len=", SRC.length);
+  console.log("期望：`aa` 由 Letter+ 吃掉，逗号在重复间隔与子节点之间复用；Digit 在 index 4 的 `5`。\n");
+  const parser = new AstParserImpl({ parser_nodes: [] });
+  // --- 1) 单 child 的 PatternSeq（Letter+ \sep CommaSep），等价于原先用 parseNode(Letter, '+', null, CommaSep) ---
+  parser.initParse({ src: SRC, pos: 0 });
+  const seqTop = parser.parsePatternSeq(Seq_LetterOnlyPlusComma);
+  if (seqTop === null) {
+    throw new Error("expected Seq_LetterOnlyPlusComma to match for this scenario");
+  }
+  const slot0 = seqTop.value[0];
+  const ex_ast_nodes = Array.isArray(slot0)
+    ? slot0
+    : slot0 !== null
+      ? [slot0]
+      : [];
+  const ex = { ast_node_res: slot0, seps: seqTop.seps };
+  console.log("=== parsePatternSeq(Seq_LetterOnlyPlusComma) 之后 ===");
+  console.log({
+    isSuccess: parser.isSuccess(),
+    getError: parser.getError(),
+    input_pos: parser.input.pos,
+    nodes_count: ex_ast_nodes.length,
+    seps_count: ex.seps.length,
+    sep_ranges: ex.seps.map((s) => s.range),
+    node_ranges: ex_ast_nodes.map((n) => n.range),
+  });
+  console.log("ex 详情:\n" + inspect(ex, { depth: 6, colors: true }));
+  // --- 2) 在步骤 1 结束后，再尝试从当前 pos 吃一个 CommaSep（模拟 parsePatternSeq 子节点之间的 sep）---
+  const posAfterLetterPlus = parser.input.pos;
+  const sep2 = parser.parseSingleNode(CommaSep, null);
+  console.log("\n=== 紧接着 parseSingleNode(CommaSep)（模拟子节点间分隔符）===");
+  console.log({
+    pos_before: posAfterLetterPlus,
+    pos_after: parser.input.pos,
+    isSuccess: parser.isSuccess(),
+    getError: parser.getError(),
+    sep2_ast_null: sep2 === null,
+  });
+  // --- 3) 整条 PatternSeq ---
+  parser.initParse({ src: SRC, pos: 0 });
+  const seqResult = parser.parsePatternSeq(Seq_LetterPlusComma_Digit);
+  console.log("\n=== parsePatternSeq(Seq_LetterPlusComma_Digit) ===");
+  console.log({
+    isSuccess: parser.isSuccess(),
+    getError: parser.getError(),
+    input_pos: parser.input.pos,
+    result_is_null: seqResult === null,
+  });
+  if (seqResult) {
+    console.log("seps.length:", seqResult.seps.length);
+    console.log(inspect(seqResult, { depth: 5, colors: true }));
+  }
+  console.log("\n--- 控制台结论摘要 ---\n" +
         "`parseNode` 在 `+` 循环里：先 parseSingleNode(CommaSep)，再 parseSingleNode(Letter)。\n" +
         "第二次重复成功后仍进入下一轮：又吃掉 index=3 的逗号，再对 index=4 的 `5` 做 Letter，失败时只 break，未把 pos/seps 回滚到吃逗号之前。\n" +
         "因此 input_pos=4，且 ret.seps 里已有两段逗号（重复间隔用掉了「本该留给子节点之间」的那一段）。\n" +

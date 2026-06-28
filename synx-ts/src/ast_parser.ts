@@ -1,13 +1,13 @@
 import type { ParserNode } from "./parser_node";
 import { AstParserImpl } from "./ast_parser_impl";
 export type {
-    ASTNode,
-    AstParserConfig as ParserConfig,
-    AstParserInput as ParserInput,
-    AstParseProfiling as ParseProfiling,
-    AstParseResult as ParseResult,
-    AstParseSingleNodeProfiling as ParseSingleNodeProfiling,
-    PatternSetAlternativeProfiling,
+  ASTNode,
+  AstParserConfig as ParserConfig,
+  AstParserInput as ParserInput,
+  AstParseProfiling as ParseProfiling,
+  AstParseResult as ParseResult,
+  AstParseSingleNodeProfiling as ParseSingleNodeProfiling,
+  PatternSetAlternativeProfiling,
 } from "./common";
 export { ParseResultKind } from "./common";
 import type { ASTNode, AstParserConfig, AstParserInput, AstParseResult } from "./common";
@@ -22,5 +22,5 @@ export interface AstParser {
 }
 
 export function mkAstParser(config: AstParserConfig): AstParser {
-    return new AstParserImpl(config);
+  return new AstParserImpl(config);
 }
