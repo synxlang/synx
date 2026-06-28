@@ -5,6 +5,7 @@
   PatternSeq,
   CharSeq,
   PatternSet,
+  UnresolvedPattern,
   ParserNodeKindEnd,
 }
 
@@ -219,13 +220,23 @@ export interface PatternSet {
 export const AnyChar = { kind: ParserNodeKind.AnyChar, name: "AnyChar" } as const;
 
 /**
+ * Unresolved pattern, used only as a placeholder; must not appear in actual parsing.
+ * 
+ * 尚未解析的 pattern，仅用于占位，实际解析中不可出现。
+ */
+export interface UnresolvedPattern{
+  kind: ParserNodeKind.UnresolvedPattern;
+  name: string;
+}
+
+/**
  * Single character match node.
  *
  * 单字符匹配节点。
  */
 export type CharMatchNode = CharMatchRange | CharMatchSet | typeof AnyChar;
 export type GeneralCharMatchNode = CharMatchNode | (PatternSet & { charset_flag: true });
-export type ParserNode = CharMatchNode | PatternSeq | CharSeq | PatternSet;
+export type ParserNode = CharMatchNode | PatternSeq | CharSeq | PatternSet | UnresolvedPattern;
 
 /**
  * All kinds that belong to CharMatchNode, used for branch checking to avoid hardcoding multiple kinds.
