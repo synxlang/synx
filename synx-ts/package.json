@@ -5,10 +5,14 @@
   "types": "dist/src/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "test": "node --test -r ts-node/register \"test/**/*.test.ts\""
+    "test": "node --test -r ts-node/register \"test/**/*.test.ts\"",
+    "format": "eslint --fix \"src/**/*.ts\" \"test/**/*.ts\""
   },
   "devDependencies": {
     "@types/node": "^25.2.1",
+    "@typescript-eslint/eslint-plugin": "^8.62.0",
+    "@typescript-eslint/parser": "^8.62.0",
+    "eslint": "^10.6.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.0.0"
   },
