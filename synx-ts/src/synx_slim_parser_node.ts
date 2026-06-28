@@ -61,7 +61,6 @@ export const DigitLiteral: PatternSeq = completePatternSeq({
   name: "DigitLiteral",
   sub_nodes: [Digit],
   sub_quantifiers: "+",
-  raw: true,
 });
 
 // Symbol=\raw (Letter,SymbolChar*);
