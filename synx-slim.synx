@@ -18,8 +18,8 @@ Ignorable={Space;Comment};
 
 EscapeChar=("\\", c:AnyChar)=>c;
 StringLiteral=(text:{EscapeChar; {-EscapeChar; -"\""; AnyChar}+}* \enclosedby "\"\"")=>text;
-GeneralChar={SymbolChar;StringLiteral};
-CharRange=(first:GeneralChar, "~", last:GeneralChar)=>[.first=first, .last=last];
+CharRangeBound={SymbolChar;StringLiteral};
+CharRange=(start:CharRangeBound, "~", end:CharRangeBound)=>[.start=start, .end=end];
 
 FieldAssignment=(".", symbol:Symbol, "=", expr:Expr \ignore Ignorable)=>[.target=symbol, .source=expr];
 Struct=(field_assignments:FieldAssignment* \sep "," \ignore Ignorable \enclosedby "[]")=>field_assignments;
@@ -31,14 +31,11 @@ CharSet = {
     \ignore Ignorable
 };
 
-Option=(pattern:Pattern, "?")=>pattern;
-OneOrMany=(pattern:Pattern, "+")=>pattern;
-Many=(pattern:Pattern, "*")=>pattern;
+PatternWithPostfixOp=(pattern:Pattern, op:\oneof "?+*^");
 RawPattern=("\\raw", pattern:Pattern \ignore Ignorable)=>pattern;
 
 AssociateByPart=("\\associateby", pattern:Pattern \ignore Ignorable)=>pattern;
 NegPattern=("-", pattern:Pattern \ignore Ignorable)=>[.pattern=pattern]; \\ reject if match, only can be used in PatternSet
-NonGreedyPattern=(pattern:Pattern, "^")=>pattern;
 PatternSet=((patterns:{PatternBinding;Pattern}* \sep ";" \ignore Ignorable),
     ";"?,
     associateby_part:AssociateByPart?, 
@@ -58,13 +55,13 @@ PatternSeq=(
 PatternBinding=(symbol:Symbol,":",pattern:Pattern)=>[.symbol=symbol, .pattern=pattern];
 Rule=(pattern:PatternSeq,"=>",returned:Expr)=>[.pattern=pattern, .returned=returned];
 
-Pattern={NegPattern;Option;OneOrMany;Many;RawPattern;Rule;
+Pattern={NegPattern;PatternWithPostfixOp;RawPattern;Rule;
     PatternSeq;PatternSet;CharSet;StringLiteral;GeneralSymbol \associateby "()" \ignore Ignorable};
 
 List=(exprs:Expr* \sep "," \ignore Ignorable \enclosedby "[]")=>exprs;
 
 Assignment = {
-    (symbol:Symbol, "=", expr:Expr \ignore Ignorable)=>[.target=symbol, .source=expr];
+    (symbol:Symbol, "=", pattern:Pattern \ignore Ignorable)=>[.target=symbol, .source=pattern];
 };
 
 Expr={

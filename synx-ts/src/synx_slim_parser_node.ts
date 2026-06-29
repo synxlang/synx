@@ -154,21 +154,21 @@ export const StringLiteral: PatternSeq = completePatternSeq({
   assignment_map: "text",
 });
 
-// GeneralChar={SymbolChar;StringLiteral};
-export const GeneralChar: PatternSet = completePatternSet({
-  name: "GeneralChar",
+// CharRangeBound={SymbolChar;StringLiteral};
+export const CharRangeBound: PatternSet = completePatternSet({
+  name: "CharRangeBound",
   sub_nodes: [SymbolChar, StringLiteral],
 });
 
-// CharRange=(first:GeneralChar, "~", last:GeneralChar)=>[.first=first, .last=last];
+// CharRange=(start:CharRangeBound, "~", end:CharRangeBound)=>[.start=start, .end=end];
 export const CharRange: PatternSeq = completePatternSeq({
   name: "CharRange",
-  sub_nodes: [GeneralChar, completeCharSeq({ literal: "~" }), GeneralChar],
+  sub_nodes: [CharRangeBound, completeCharSeq({ literal: "~" }), CharRangeBound],
   sub_quantifiers: "   ",
-  sub_node_bindings: ["first", null, "last"],
+  sub_node_bindings: ["start", null, "end"],
   assignment_map: new Map([
-    ["first", "first"],
-    ["last", "last"],
+    ["start", "start"],
+    ["end", "end"],
   ]),
 });
 
@@ -207,31 +207,11 @@ export const OneOfCharSet: PatternSeq = completePatternSeq({
   assignment_map: "string",
 });
 
-// Option=(pattern:Pattern, "?")=>pattern;
-export const Option: PatternSeq = completePatternSeq({
-  name: "Option",
-  sub_nodes: [Pattern, completeCharSeq({ literal: "?" })],
+// PatternWithPostfixOp=(pattern:Pattern, op:\oneof "?+*^");
+export const PatternWithPostfixOp: PatternSeq = completePatternSeq({
+  name: "PatternWithPostfixOp",
+  sub_nodes: [Pattern, completeCharSet({ sub_nodes: "?+*^" })],
   sub_quantifiers: "  ",
-  sub_node_bindings: ["pattern", null],
-  assignment_map: "pattern",
-});
-
-// OneOrMany=(pattern:Pattern, "+")=>pattern;
-export const OneOrMany: PatternSeq = completePatternSeq({
-  name: "OneOrMany",
-  sub_nodes: [Pattern, completeCharSeq({ literal: "+" })],
-  sub_quantifiers: "  ",
-  sub_node_bindings: ["pattern", null],
-  assignment_map: "pattern",
-});
-
-// Many=(pattern:Pattern, "*")=>pattern;
-export const Many: PatternSeq = completePatternSeq({
-  name: "Many",
-  sub_nodes: [Pattern, completeCharSeq({ literal: "*" })],
-  sub_quantifiers: "  ",
-  sub_node_bindings: ["pattern", null],
-  assignment_map: "pattern",
 });
 
 // RawPattern=("\\raw", pattern:Pattern \ignore Ignorable)=>pattern;
@@ -264,14 +244,6 @@ export const NegPattern: PatternSeq = completePatternSeq({
   assignment_map: new Map([["pattern", "pattern"]]),
 });
 
-// NonGreedyPattern=(pattern:Pattern, "^")=>pattern;
-export const NonGreedyPattern: PatternSeq = completePatternSeq({
-  name: "NonGreedyPattern",
-  sub_nodes: [Pattern, completeCharSeq({ literal: "^" })],
-  sub_quantifiers: "  ",
-  sub_node_bindings: ["pattern", null],
-  assignment_map: "pattern",
-});
 
 // SepPart=("\\sep", pattern:Pattern \ignore Ignorable)=>pattern;
 export const SepPart: PatternSeq = completePatternSeq({
@@ -402,16 +374,16 @@ export const List: PatternSeq = completePatternSeq({
   assignment_map: "exprs",
 });
 
-// Assignment = { (symbol:Symbol, "=", expr:Expr \ignore Ignorable)=>[.target=symbol, .source=expr]; };
+// Assignment = { (symbol:Symbol, "=", pattern:Pattern \ignore Ignorable)=>[.target=symbol, .source=pattern]; };
 export const AssignmentPattern: PatternSeq = completePatternSeq({
-  name: "(symbol:Symbol, \"=\", expr:Expr \\ignore Ignorable)=>[.target=symbol, .source=expr]",
-  sub_nodes: [Symbol, completeCharSeq({ literal: "=" }), Expr],
+  name: "(symbol:Symbol, \"=\", pattern:Pattern \\ignore Ignorable)=>[.target=symbol, .source=pattern]",
+  sub_nodes: [Symbol, completeCharSeq({ literal: "=" }), Pattern],
   sub_quantifiers: "   ",
   ignore: Ignorable,
-  sub_node_bindings: ["symbol", null, "expr"],
+  sub_node_bindings: ["symbol", null, "pattern"],
   assignment_map: new Map([
     ["target", "symbol"],
-    ["source", "expr"],
+    ["source", "pattern"],
   ]),
 });
 export const Assignment: PatternSet = completePatternSet({
@@ -438,12 +410,10 @@ CharSet.sub_nodes.push(CharRange, OneOfCharSet);
 CharSet.neg_flags.push(false, false);
 completePatternSet(CharSet);
 
-// Pattern={NegPattern;Option;OneOrMany;Many;RawPattern;Rule; PatternSeq;PatternSet;CharSet;StringLiteral;GeneralSymbol \associateby "()" \ignore Ignorable};
+// Pattern={NegPattern;PatternWithPostfixOp;RawPattern;Rule; PatternSeq;PatternSet;CharSet;StringLiteral;GeneralSymbol \associateby "()" \ignore Ignorable};
 Pattern.sub_nodes.push(
   NegPattern,
-  Option,
-  OneOrMany,
-  Many,
+  PatternWithPostfixOp,
   RawPattern,
   Rule,
   PatternSeqNode,
@@ -452,7 +422,7 @@ Pattern.sub_nodes.push(
   StringLiteral,
   GeneralSymbol,
 );
-Pattern.neg_flags.push(false, false, false, false, false, false, false, false, false, false, false);
+Pattern.neg_flags.push(false, false, false, false, false, false, false, false, false);
 completePatternSet(Pattern);
 
 // Expr={ Assignment; List; Struct; Pattern; GeneralSymbol; };

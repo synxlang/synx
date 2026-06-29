@@ -19,8 +19,8 @@ Comment=(CommentPrefix,comment:AnyChar*,LineDelimiter?)=>comment;     \\ AnyChar
 EscapeChar=("\\", c:AnyChar)=>c;
 StringLiteral=(text:{EscapeChar; {-EscapeChar; -"\""; AnyChar}+}* \enclosedby "\"\"")=>text;
 SingleCharString=(text:StringLiteral) \where char_cnt(text)==1;
-GeneralChar={SymbolChar;SingleCharString;};
-CharRange=(first:GeneralChar, "~", last:GeneralChar)=>[.first=first, .last=last];
+CharRangeBound={SymbolChar;SingleCharString;};
+CharRange=(first:CharRangeBound, "~", last:CharRangeBound)=>[.first=first, .last=last];
 
 FieldAssignment=(".", symbol:Symbol, "=", expr:Expr \ignore Space)=>[.target=symbol, .source=expr];
 Struct=(field_assignments:FieldAssignment* \sep "," \ignore Space \enclosedby "[]")=>field_assignments;
