@@ -1,4 +1,4 @@
-﻿export enum ParserNodeKind {
+export enum ParserNodeKind {
   AnyChar,
   CharMatchRange,
   CharMatchSet,
@@ -254,13 +254,13 @@ export function isGeneralCharMatchNode(node: ParserNode): node is GeneralCharMat
     || (node.kind === ParserNodeKind.PatternSet && (node as PatternSet).charset_flag);
 }
 
-function validatePartialCharRange(partial: Partial<CharMatchRange>): void {
+export function validatePartialCharRange(partial: Partial<CharMatchRange>): Error | undefined {
   const start = partial.start ?? '';
   const end = partial.end ?? '';
   const startCp = start === '' ? 0 : (start.codePointAt(0) ?? 0);
   const endCp = end === '' ? 0x10ffff : (end.codePointAt(0) ?? 0x10ffff);
   if (startCp > endCp) {
-    throw new Error(`completeCharRange: start (${JSON.stringify(start)}, U+${startCp.toString(16).toUpperCase()}) must not be greater than end (${JSON.stringify(end)}, U+${endCp.toString(16).toUpperCase()})`);
+    return new Error(`completeCharRange: start (${JSON.stringify(start)}, U+${startCp.toString(16).toUpperCase()}) must not be greater than end (${JSON.stringify(end)}, U+${endCp.toString(16).toUpperCase()})`);
   }
 }
 
@@ -286,7 +286,8 @@ function validatePartialCharRange(partial: Partial<CharMatchRange>): void {
  *   当 `start` 和 `end` 均非空时，`start` 必须 <= `end`（按码点比较）。
  */
 export function completeCharRange(partial: Partial<CharMatchRange>): CharMatchRange {
-  validatePartialCharRange(partial);
+  const err = validatePartialCharRange(partial);
+  if (err) throw err;
   return Object.assign(partial, {
     kind: ParserNodeKind.CharMatchRange,
     name: partial.name ?? "",
@@ -299,23 +300,24 @@ export function completeCharRange(partial: Partial<CharMatchRange>): CharMatchRa
   }) as CharMatchRange;
 }
 
-function validatePartialCharSet(partial: Partial<CharMatchSet>): void {
+function validatePartialCharSet(partial: Partial<CharMatchSet>): Error | undefined {
   const sub_nodes = partial.sub_nodes;
   if (sub_nodes === undefined || sub_nodes === null) {
-    throw new Error("completeCharSet: sub_nodes must not be empty");
+    return new Error("completeCharSet: sub_nodes must not be empty");
   }
   if (typeof sub_nodes !== 'string' && !Array.isArray(sub_nodes)) {
-    throw new Error("completeCharSet: sub_nodes must be a string or an array");
+    return new Error("completeCharSet: sub_nodes must be a string or an array");
   }
   if (sub_nodes.length === 0) {
-    throw new Error("completeCharSet: sub_nodes must not be empty");
+    return new Error("completeCharSet: sub_nodes must not be empty");
   }
 }
 
 export function completeCharSet(
   partial: Partial<CharMatchSet>,
 ): CharMatchSet {
-  validatePartialCharSet(partial);
+  const err = validatePartialCharSet(partial);
+  if (err) throw err;
   return Object.assign(partial, {
     kind: ParserNodeKind.CharMatchSet,
     name: partial.name ?? "",
@@ -323,24 +325,24 @@ export function completeCharSet(
   }) as CharMatchSet;
 }
 
-function validatePartialPatternSeq(partial: PatternSeqInput): void {
+function validatePartialPatternSeq(partial: PatternSeqInput): Error | undefined {
   if (partial.sub_nodes.length === 0) {
-    throw new Error("completePatternSeq: sub_nodes must not be empty");
+    return new Error("completePatternSeq: sub_nodes must not be empty");
   }
   const n = partial.sub_nodes.length;
   if (partial.sub_quantifiers.length !== n) {
-    throw new Error("completePatternSeq: sub_quantifiers length must match sub_nodes length");
+    return new Error("completePatternSeq: sub_quantifiers length must match sub_nodes length");
   }
   if (partial.sub_node_bindings !== undefined && partial.sub_node_bindings !== null && partial.sub_node_bindings.length !== n) {
-    throw new Error("completePatternSeq: sub_node_bindings length must match sub_nodes length");
+    return new Error("completePatternSeq: sub_node_bindings length must match sub_nodes length");
   }
   if (partial.sub_node_isolated_scope_flags !== undefined && partial.sub_node_isolated_scope_flags !== null && partial.sub_node_isolated_scope_flags.length !== n) {
-    throw new Error("completePatternSeq: sub_node_isolated_scope_flags length must match sub_nodes length");
+    return new Error("completePatternSeq: sub_node_isolated_scope_flags length must match sub_nodes length");
   }
   if (partial.greedy_flags !== undefined && partial.greedy_flags !== null && partial.greedy_flags.length !== n) {
-    throw new Error("completePatternSeq: greedy_flags length must match sub_nodes length");
+    return new Error("completePatternSeq: greedy_flags length must match sub_nodes length");
   }
-  validateParserNodePairInput(partial.enclosure, "completePatternSeq: enclosure");
+  return validateParserNodePairInput(partial.enclosure, "completePatternSeq: enclosure");
 }
 
 function normalizeGreedyFlags(
@@ -416,19 +418,20 @@ function normalizeParserNodePair(
 function validateParserNodePairInput(
   value: ParserNodePairInput | undefined,
   field_name: string,
-): void {
+): Error | undefined {
   if (typeof value !== "string") {
     return;
   }
   if (Array.from(value).length !== 2) {
-    throw new Error(`${field_name} string must contain exactly 2 characters`);
+    return new Error(`${field_name} string must contain exactly 2 characters`);
   }
 }
 
 export function completePatternSeq(
   partial: PatternSeqInput,
 ): PatternSeq {
-  validatePartialPatternSeq(partial);
+  const err = validatePartialPatternSeq(partial);
+  if (err) throw err;
   const n = partial.sub_nodes.length;
   const greedy_flags = normalizeGreedyFlags(n, partial.sub_quantifiers, partial.sub_nodes, partial.greedy_flags);
   const sub_node_bindings = normalizeSubNodeBindings(n, partial.sub_node_bindings);
@@ -453,9 +456,9 @@ export function completePatternSeq(
   }) as PatternSeq;
 }
 
-function validatePartialCharSeq(partial: Partial<CharSeq> & { literal: string }): void {
+function validatePartialCharSeq(partial: Partial<CharSeq> & { literal: string }): Error | undefined {
   if (partial.literal.length === 0) {
-    throw new Error("CharSeq.literal must be non-empty");
+    return new Error("CharSeq.literal must be non-empty");
   }
 }
 
@@ -465,7 +468,8 @@ function validatePartialCharSeq(partial: Partial<CharSeq> & { literal: string })
  * 构造 `CharSeq`；若 `literal` 为空则抛出。
  */
 export function completeCharSeq(partial: Partial<CharSeq> & { literal: string }): CharSeq {
-  validatePartialCharSeq(partial);
+  const err = validatePartialCharSeq(partial);
+  if (err) throw err;
   return Object.assign(partial, {
     kind: ParserNodeKind.CharSeq,
     name: partial.name ?? partial.literal,
@@ -478,23 +482,24 @@ type PatternSetInput = Omit<Partial<PatternSet>, "associateby"> & {
   associateby?: ParserNodePairInput;
 };
 
-function validatePartialPatternSet(partial: PatternSetInput): void {
+function validatePartialPatternSet(partial: PatternSetInput): Error | undefined {
   if (partial.sub_nodes.length === 0) {
-    throw new Error("completePatternSet: sub_nodes must not be empty");
+    return new Error("completePatternSet: sub_nodes must not be empty");
   }
   const n = partial.sub_nodes.length;
   if (partial.neg_flags !== undefined && partial.neg_flags.length !== n) {
-    throw new Error("completePatternSet: neg_flags length must match patterns length");
+    return new Error("completePatternSet: neg_flags length must match patterns length");
   }
-  const charset_flag = inferPatternSetCharsetFlag(partial.sub_nodes, partial.neg_flags ?? Array.from({ length: n }, () => false));
-  validateParserNodePairInput(partial.associateby, "completePatternSet: associateby");
+  const err = validateParserNodePairInput(partial.associateby, "completePatternSet: associateby");
+  if (err) return err;
   const associateby = normalizeParserNodePair(partial.associateby);
+  const charset_flag = inferPatternSetCharsetFlag(partial.sub_nodes, partial.neg_flags ?? Array.from({ length: n }, () => false));
   if (charset_flag && associateby !== null) {
-    throw new Error("completePatternSet: associateby is only allowed when charset_flag is false");
+    return new Error("completePatternSet: associateby is only allowed when charset_flag is false");
   }
   const ignore = partial.ignore ?? null;
   if (ignore !== null && associateby === null) {
-    throw new Error("completePatternSet: ignore is only allowed when associateby is also non-null");
+    return new Error("completePatternSet: ignore is only allowed when associateby is also non-null");
   }
 }
 
@@ -505,7 +510,8 @@ function normalizeNegFlags(n: number, neg_flags: boolean[] | undefined): boolean
 export function completePatternSet(
   partial: PatternSetInput,
 ): PatternSet {
-  validatePartialPatternSet(partial);
+  const err = validatePartialPatternSet(partial);
+  if (err) throw err;
   const n = partial.sub_nodes.length;
   const neg_flags = normalizeNegFlags(n, partial.neg_flags);
   const charset_flag = inferPatternSetCharsetFlag(partial.sub_nodes, neg_flags);
