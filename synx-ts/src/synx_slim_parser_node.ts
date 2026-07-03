@@ -353,18 +353,14 @@ export const List: PatternSeq = completePatternSeq({
   transform: (ctx) => ctx.bindings.exprs,
 });
 
-// Assignment = { (symbol:Symbol, "=", pattern:Pattern \ignore Ignorable)=>[.target=symbol, .source=pattern]; };
-export const AssignmentPattern: PatternSeq = completePatternSeq({
-  name: "(symbol:Symbol, \"=\", pattern:Pattern \\ignore Ignorable)=>[.target=symbol, .source=pattern]",
+// Assignment=(symbol:Symbol, "=", pattern:Pattern \ignore Ignorable)=>[.target=symbol, .source=pattern];
+export const Assignment: PatternSeq = completePatternSeq({
+  name: "Assignment",
   sub_nodes: [Symbol, completeCharSeq({ literal: "=" }), Pattern],
   sub_quantifiers: "   ",
   ignore: Ignorable,
   sub_node_bindings: ["symbol", null, "pattern"],
   transform: (ctx) => ({ target: ctx.bindings.symbol, source: ctx.bindings.pattern }),
-});
-export const Assignment: PatternSet = completePatternSet({
-  name: "Assignment",
-  sub_nodes: [AssignmentPattern],
 });
 
 // Keyword={...};

@@ -60,9 +60,7 @@ Pattern={NegPattern;PatternWithPostfixOp;RawPattern;Rule;
 
 List=(exprs:Expr* \sep "," \ignore Ignorable \enclosedby "[]")=>exprs;
 
-Assignment = {
-    (symbol:Symbol, "=", pattern:Pattern \ignore Ignorable)=>[.target=symbol, .source=pattern];
-};
+Assignment = (symbol:Symbol, "=", pattern:Pattern \ignore Ignorable)=>[.target=symbol, .source=pattern];
 
 Expr={
     Assignment;
