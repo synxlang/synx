@@ -1,5 +1,7 @@
 import type { ParserNode, PatternSet } from "./parser_node";
 
+export type ASTNodeValue = string | (ASTNode[] | ASTNode | null)[] | any;
+
 /**
  * ============================== EN ==============================
  *
@@ -26,8 +28,8 @@ import type { ParserNode, PatternSet } from "./parser_node";
 export interface ASTNode {
     parser_nodes: ParserNode[];
     range: [number, number];
-    value: any;
-    raw_value: any;
+    value: ASTNodeValue;
+    raw_value: ASTNodeValue;
     seps: ASTNode[];
     enclosure: [ASTNode, ASTNode] | null;
     associate_enclosures: [ASTNode[], ASTNode[]] | null;

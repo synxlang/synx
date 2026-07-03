@@ -46,6 +46,12 @@ export interface CharSeq {
   literal: string;
 }
 
+export interface AstTransformCtx {
+  bindings: Record<string, any>;
+}
+
+export type AstTransformFn = (ctx: AstTransformCtx) => any;
+
 /**
  * ============================== EN ==============================
  *
@@ -115,10 +121,8 @@ export interface CharSeq {
  * 而 `Wrapper=((left:Symbol, ":", right:Symbol))=>[.left=left, .right=right]`
  * 可以看到 `left`、`right`，因为该子节点是原地的。
  *
- * `assignment_map`（非 null 时）：
- * - string 会把对应上下文变量直接赋值给 AST `value`，例如 `=>comment` 使 `value = comment`。
- * - Map 会将 AST `value` 的 key 映射到上下文变量名。
- *   对每个映射项，`value[key]` 会从对应上下文变量赋值；map 中不存在的 key 不会被赋值。
+ * `transform`为ast变换函数，如果非null，则value由transform函数产生
+ * 
  * `raw_value` 不受 binding 相关规则影响。
  */
 export interface PatternSeq {
@@ -135,7 +139,7 @@ export interface PatternSeq {
   enclosure: [ParserNode, ParserNode] | null;
   sub_node_bindings: (string | null)[] | null;
   sub_node_isolated_scope_flags: boolean[] | null;
-  assignment_map: Map<string, string> | string | null;
+  transform: AstTransformFn | null;
 }
 
 /**
@@ -224,7 +228,7 @@ export const AnyChar = { kind: ParserNodeKind.AnyChar, name: "AnyChar" } as cons
  * 
  * 尚未解析的 pattern，仅用于占位，实际解析中不可出现。
  */
-export interface UnresolvedPattern{
+export interface UnresolvedPattern {
   kind: ParserNodeKind.UnresolvedPattern;
   name: string;
 }
