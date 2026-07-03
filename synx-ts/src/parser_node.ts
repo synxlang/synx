@@ -300,7 +300,7 @@ export function completeCharRange(partial: Partial<CharMatchRange>): CharMatchRa
   }) as CharMatchRange;
 }
 
-function validatePartialCharSet(partial: Partial<CharMatchSet>): Error | undefined {
+function validatePartialCharMatchSet(partial: Partial<CharMatchSet>): Error | undefined {
   const sub_nodes = partial.sub_nodes;
   if (sub_nodes === undefined || sub_nodes === null) {
     return new Error("completeCharSet: sub_nodes must not be empty");
@@ -316,7 +316,7 @@ function validatePartialCharSet(partial: Partial<CharMatchSet>): Error | undefin
 export function completeCharMatchSet(
   partial: Partial<CharMatchSet>,
 ): CharMatchSet {
-  const err = validatePartialCharSet(partial);
+  const err = validatePartialCharMatchSet(partial);
   if (err) throw err;
   return Object.assign(partial, {
     kind: ParserNodeKind.CharMatchSet,
