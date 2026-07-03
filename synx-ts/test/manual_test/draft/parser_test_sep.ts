@@ -8,10 +8,10 @@
 */
 import { inspect } from "node:util";
 import { AstParserImpl } from "../../../src/ast_parser_impl";
-import { completeCharSeq, completeCharRange, completeCharSet, completePatternSeq } from "../../../src/parser_node";
+import { completeCharSeq, completeCharRange, completeCharMatchSet, completePatternSeq } from "../../../src/parser_node";
 import type { CharMatchNode } from "../../../src/parser_node";
 const Digit: CharMatchNode = completeCharRange({ start: "0", end: "9" });
-const Letter: CharMatchNode = completeCharSet({ sub_nodes: [completeCharRange({ start: "a", end: "z" })] });
+const Letter: CharMatchNode = completeCharMatchSet({ sub_nodes: [completeCharRange({ start: "a", end: "z" })] });
 const CommaSep = completeCharSeq({ literal: "," });
 const Seq_LetterPlusComma_Digit = completePatternSeq({ sub_nodes: [Letter, Digit], sub_quantifiers: "+ ", raw: false, sep: CommaSep });
 /** Single child: Letter+ with CommaSep — same `parseNode` path as inside `parsePatternSeq`. */

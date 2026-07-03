@@ -1,5 +1,5 @@
 import { AstParserImpl } from '../../../src/ast_parser_impl';
-import { completeCharSeq, completeCharRange, completeCharSet, completePatternSeq } from '../../../src/parser_node';
+import { completeCharSeq, completeCharRange, completeCharMatchSet, completePatternSeq } from '../../../src/parser_node';
 import type { Quantifier } from '../../../src/parser_node';
 import type { ASTNode, AstParserInput } from '../../../src/ast_parser';
 import { ParserNodeKind } from '../../../src/parser_node';
@@ -111,7 +111,7 @@ function test_parsePatternSeq_byteSeq_quantifiers(): void {
 /** CharSeq as a child of PatternSeq (e.g. synx `=>` before a symbol) */
 function test_parsePatternSeq_embedsCharSeq(): void {
   const lit = completeCharSeq({ literal: '=>' });
-  const letter = completeCharSet({ sub_nodes: [completeCharRange({ start: 'a', end: 'z' })] });
+  const letter = completeCharMatchSet({ sub_nodes: [completeCharRange({ start: 'a', end: 'z' })] });
   const seq = completePatternSeq({ sub_nodes: [lit, letter], sub_quantifiers: '  ' });
   const parser = new AstParserImpl({ parser_nodes: [] });
   parser.initParse({ src: '=>b', pos: 0 });

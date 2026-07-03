@@ -1,5 +1,5 @@
 import { AstParserImpl } from '../../../src/ast_parser_impl';
-import { completeCharRange, completeCharSet, AnyChar } from '../../../src/parser_node';
+import { completeCharRange, completeCharMatchSet, AnyChar } from '../../../src/parser_node';
 import type { CharMatchNode, Quantifier } from '../../../src/parser_node';
 import type { ASTNode, AstParserInput } from '../../../src/ast_parser';
 /** parseCharMatchNode: multiple inputs covering quantifiers ' ' / '?' / '*' / '+' and match/no-match scenarios */
@@ -21,7 +21,7 @@ function test_parseCharMatchNode(): void {
       { id: 6, node: Digit, quantifier: '*', input: { src: '123', pos: 0 }, expected_value: '123', expected_error: false },
       { id: 7, node: Digit, quantifier: '+', input: { src: 'a', pos: 0 }, expected_value: null, expected_error: true },
       { id: 8, node: Digit, quantifier: '+', input: { src: '12', pos: 0 }, expected_value: '12', expected_error: false },
-      { id: 9, node: completeCharSet({ sub_nodes: '😀' }), quantifier: ' ', input: { src: '😀', pos: 0 }, expected_value: '😀', expected_error: false },
+      { id: 9, node: completeCharMatchSet({ sub_nodes: '😀' }), quantifier: ' ', input: { src: '😀', pos: 0 }, expected_value: '😀', expected_error: false },
       { id: 10, node: completeCharRange({ start: '😀', end: '😀' }), quantifier: ' ', input: { src: '😀', pos: 0 }, expected_value: '😀', expected_error: false },
       // AnyChar test cases
       { id: 11, node: AnyChar, quantifier: ' ', input: { src: 'a', pos: 0 }, expected_value: 'a', expected_error: false },

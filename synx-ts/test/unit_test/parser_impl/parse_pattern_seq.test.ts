@@ -1,16 +1,16 @@
 import { AstParserImpl } from '../../../src/ast_parser_impl';
-import { AnyChar, completeCharRange, completeCharSet, completeCharSeq, completePatternSeq } from '../../../src/parser_node';
+import { AnyChar, completeCharRange, completeCharMatchSet, completeCharSeq, completePatternSeq } from '../../../src/parser_node';
 import type { CharSeq, CharMatchNode, ParserNode, PatternSeq } from '../../../src/parser_node';
 import type { ASTNode, AstParserInput } from '../../../src/ast_parser';
 import { strict as assert } from 'assert';
 import { inspect } from 'node:util';
 // Basic node constants
 const Digit: CharMatchNode = completeCharRange({ start: '0', end: '9' });
-const Letter: CharMatchNode = completeCharSet({ sub_nodes: [completeCharRange({ start: 'a', end: 'z' })] });
-const Emoji: CharMatchNode = completeCharSet({ sub_nodes: '😀' }); // emoji is a multi-code-unit character
-const Chinese: CharMatchNode = completeCharSet({ sub_nodes: '中' }); // Chinese character
+const Letter: CharMatchNode = completeCharMatchSet({ sub_nodes: [completeCharRange({ start: 'a', end: 'z' })] });
+const Emoji: CharMatchNode = completeCharMatchSet({ sub_nodes: '😀' }); // emoji is a multi-code-unit character
+const Chinese: CharMatchNode = completeCharMatchSet({ sub_nodes: '中' }); // Chinese character
 /** Layout-only gap between sub-nodes / between `*`/`+` repeats (synx `\ignore Space`). */
-const Space: CharMatchNode = completeCharSet({ sub_nodes: ' ' });
+const Space: CharMatchNode = completeCharMatchSet({ sub_nodes: ' ' });
 /** Used to verify ignore has lower priority than the real child match. */
 const IgnoreLetter: CharMatchNode = Letter;
 // Sequence node constants

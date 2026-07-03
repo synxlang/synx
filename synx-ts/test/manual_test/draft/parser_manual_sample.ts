@@ -6,7 +6,7 @@
 */
 import { inspect } from "node:util";
 import { type ASTNode, mkAstParser, ParseResultKind } from "../../../src/ast_parser";
-import { completeCharSeq, completeCharRange, completeCharSet, completePatternSeq } from "../../../src/parser_node";
+import { completeCharSeq, completeCharRange, completeCharMatchSet, completePatternSeq } from "../../../src/parser_node";
 import { AnyChar } from "../../../src/parser_node";
 import { exit } from "node:process";
 import { AstParserImpl } from "../../../src/ast_parser_impl";

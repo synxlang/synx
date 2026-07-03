@@ -1,5 +1,5 @@
 import { CharMatchRange, CharMatchSet, CharMatchNode, ParserNodeKind, AnyChar } from './parser_node';
-export { ParserNodeKind, completeCharRange, completeCharSet, completePatternSeq } from './parser_node';
+export { ParserNodeKind, completeCharRange, completeCharMatchSet as completeCharSet, completePatternSeq } from './parser_node';
 export type { CharMatchNode } from './parser_node';
 export interface CharMatchSetResult {
     /** Matched nodes, ordered from child to parent */

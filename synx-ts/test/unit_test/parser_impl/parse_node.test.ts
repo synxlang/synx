@@ -1,6 +1,6 @@
 import assert from 'assert';
 import { AstParserImpl } from '../../../src/ast_parser_impl';
-import { completeCharSeq, completeCharRange, completeCharSet, completePatternSeq } from '../../../src/parser_node';
+import { completeCharSeq, completeCharRange, completeCharMatchSet, completePatternSeq } from '../../../src/parser_node';
 import type { CharMatchNode, ParserNode, Quantifier } from '../../../src/parser_node';
 import type { AstParserInput } from '../../../src/ast_parser';
 import type { ASTNode } from '../../../src/ast_parser';
@@ -21,7 +21,7 @@ function firstSlotFromSeqResult(top: ASTNode): ASTNode[] | ASTNode | null {
 /** Quantified single-child PatternSeq: same path as `parsePatternSeq` in production (no direct `parseNode` in tests). */
 function test_parsePatternSeq_singleSlot_quantifiers(): void {
   const Digit: CharMatchNode = completeCharRange({ start: '0', end: '9' });
-  const Letter: CharMatchNode = completeCharSet({ sub_nodes: [completeCharRange({ start: 'a', end: 'z' }), completeCharRange({ start: 'A', end: 'Z' })] });
+  const Letter: CharMatchNode = completeCharMatchSet({ sub_nodes: [completeCharRange({ start: 'a', end: 'z' }), completeCharRange({ start: 'A', end: 'Z' })] });
   const cases: Array<{
         id: number;
         node: ParserNode;

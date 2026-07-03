@@ -313,7 +313,7 @@ function validatePartialCharSet(partial: Partial<CharMatchSet>): Error | undefin
   }
 }
 
-export function completeCharSet(
+export function completeCharMatchSet(
   partial: Partial<CharMatchSet>,
 ): CharMatchSet {
   const err = validatePartialCharSet(partial);

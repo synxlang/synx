@@ -2,7 +2,7 @@ import { strict as assert } from "assert";
 import {
   completeCharRange,
   completeCharSeq,
-  completeCharSet,
+  completeCharMatchSet,
   completePatternSeq,
   completePatternSet,
   ParserNodeKind,
@@ -15,7 +15,7 @@ function test_complete_functions_mutate_input(): void {
   assert.strictEqual(range.name, "");
 
   const setPartial = { sub_nodes: "abc" };
-  const set = completeCharSet(setPartial);
+  const set = completeCharMatchSet(setPartial);
   assert.strictEqual(set, setPartial);
   assert.strictEqual(set.name, "");
 

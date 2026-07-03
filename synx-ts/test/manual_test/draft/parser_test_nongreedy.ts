@@ -12,14 +12,14 @@
 import { inspect } from "node:util";
 import type { ASTNode } from "../../../src/ast_parser";
 import { AstParserImpl } from "../../../src/ast_parser_impl";
-import { AnyChar, completeCharSeq, completeCharRange, completeCharSet, completePatternSeq, type ParserNode, type PatternSeq } from "../../../src/parser_node";
+import { AnyChar, completeCharSeq, completeCharRange, completeCharMatchSet, completePatternSeq, type ParserNode, type PatternSeq } from "../../../src/parser_node";
 const A = completeCharSeq({ literal: "a" });
 const B = completeCharSeq({ literal: "b" });
 const C = completeCharSeq({ literal: "c" });
 const Bang = completeCharSeq({ literal: "!" });
 const Five = completeCharSeq({ literal: "5" });
 const Comma = completeCharSeq({ literal: "," });
-const Space = completeCharSet({ sub_nodes: " " });
+const Space = completeCharMatchSet({ sub_nodes: " " });
 const Digit = completeCharRange({ start: "0", end: "9" });
 function isAstNode(value: unknown): value is ASTNode {
   return (typeof value === "object" &&

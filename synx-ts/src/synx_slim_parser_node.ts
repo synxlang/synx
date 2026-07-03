@@ -2,7 +2,7 @@ import {
   AnyChar,
   completeCharRange,
   completeCharSeq,
-  completeCharSet,
+  completeCharMatchSet,
   completePatternSeq,
   completePatternSet,
 } from "./parser_node";
@@ -18,21 +18,21 @@ export const Digit: CharMatchRange = completeCharRange({ name: "Digit", start: "
 
 // Letter={a~z;A~Z;"_";OtherLanguageLetter};
 export const OtherLanguageLetter: CharMatchRange = completeCharRange({ name: "OtherLanguageLetter", start: "\u0080" });
-export const Letter: CharMatchSet = completeCharSet({
+export const Letter: CharMatchSet = completeCharMatchSet({
   name: "Letter",
   sub_nodes: [
     completeCharRange({ name: "a~z", start: "a", end: "z" }),
     completeCharRange({ name: "A~Z", start: "A", end: "Z" }),
-    completeCharSet({ name: "\"_\"", sub_nodes: "_" }),
+    completeCharMatchSet({ name: "\"_\"", sub_nodes: "_" }),
     OtherLanguageLetter,
   ],
 });
 
 // SymbolChar={Letter;Digit};
-export const SymbolChar: CharMatchSet = completeCharSet({ name: "SymbolChar", sub_nodes: [Letter, Digit] });
+export const SymbolChar: CharMatchSet = completeCharMatchSet({ name: "SymbolChar", sub_nodes: [Letter, Digit] });
 
 // SpaceChar= \oneof " \t\v\r\n";
-export const SpaceChar: CharMatchSet = completeCharSet({ name: "SpaceChar", sub_nodes: " \t\v\r\n" });
+export const SpaceChar: CharMatchSet = completeCharMatchSet({ name: "SpaceChar", sub_nodes: " \t\v\r\n" });
 
 // Delimiter=";";
 export const Delimiter = completeCharSeq({ name: "Delimiter", literal: ";" });
@@ -210,7 +210,7 @@ export const OneOfCharSet: PatternSeq = completePatternSeq({
 // PatternWithPostfixOp=(pattern:Pattern, op:\oneof "?+*^");
 export const PatternWithPostfixOp: PatternSeq = completePatternSeq({
   name: "PatternWithPostfixOp",
-  sub_nodes: [Pattern, completeCharSet({ sub_nodes: "?+*^" })],
+  sub_nodes: [Pattern, completeCharMatchSet({ sub_nodes: "?+*^" })],
   sub_quantifiers: "  ",
 });
 
