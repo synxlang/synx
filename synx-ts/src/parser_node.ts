@@ -85,10 +85,7 @@ export type AstTransformFn = (ctx: AstTransformCtx) => any;
  * while `Wrapper=((left:Symbol, ":", right:Symbol))=>[.left=left, .right=right]` can see
  * `left` and `right` because the child node is inplace.
  *
- * `assignment_map` (when non-null):
- * - A string assigns the corresponding context variable directly to AST `value`, e.g. `=>comment` makes `value = comment`.
- * - A Map maps AST `value` keys to names in the parse context.
- *   For each entry, `value[key]` is assigned from the corresponding context variable; keys absent from the map are not assigned.
+ * `transform` (when non-null): AST transform function. When non-null, `value` is produced by calling `transform({ bindings })`.
  * `raw_value` is not affected by binding-related rules.
  *
  * ============================== 中文 ==============================
@@ -388,13 +385,10 @@ function normalizeSubNodeIsolatedScopeFlags(
   return sub_node_bindings !== null ? Array.from({ length: n }, () => true) : null;
 }
 
-function normalizeAssignmentMap(
-  assignment_map: Map<string, string> | string | undefined | null,
-): Map<string, string> | string | null {
-  if (assignment_map === undefined) {
-    return null;
-  }
-  return assignment_map instanceof Map ? new Map(assignment_map) : assignment_map;
+function normalizeTransform(
+  transform: AstTransformFn | undefined | null,
+): AstTransformFn | null {
+  return transform ?? null;
 }
 
 type PatternSeqInput = Omit<Partial<PatternSeq>, "enclosure"> & {
@@ -440,7 +434,7 @@ export function completePatternSeq(
   const greedy_flags = normalizeGreedyFlags(n, partial.sub_quantifiers, partial.sub_nodes, partial.greedy_flags);
   const sub_node_bindings = normalizeSubNodeBindings(n, partial.sub_node_bindings);
   const sub_node_isolated_scope_flags = normalizeSubNodeIsolatedScopeFlags(n, partial.sub_node_isolated_scope_flags, sub_node_bindings);
-  const assignment_map = normalizeAssignmentMap(partial.assignment_map);
+  const transform = normalizeTransform(partial.transform);
   const enclosure = normalizeParserNodePair(partial.enclosure);
   return Object.assign(partial, {
     kind: ParserNodeKind.PatternSeq,
@@ -456,7 +450,7 @@ export function completePatternSeq(
     enclosure,
     sub_node_bindings,
     sub_node_isolated_scope_flags,
-    assignment_map,
+    transform,
   }) as PatternSeq;
 }
 

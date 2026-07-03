@@ -1442,11 +1442,7 @@ function test_parsePatternSeq_enclosure_end_applies_to_last_nongreedy_child(): v
   });
 }
 function test_parsePatternSeq_binding_assignment_isolated_scope(): void {
-  const seq = completePatternSeq({ sub_nodes: [Digit, Letter], sub_quantifiers: '  ', raw: false, sep: null, accept_trailing_sep: false, ignore: null, enclosure: null, sub_node_bindings: ['digit', 'letter'], sub_node_isolated_scope_flags: [true, true], assignment_map: new Map([
-    ['left', 'digit'],
-    ['right', 'letter'],
-    ['missing', 'unknown'],
-  ]) });
+  const seq = completePatternSeq({ sub_nodes: [Digit, Letter], sub_quantifiers: '  ', raw: false, sep: null, accept_trailing_sep: false, ignore: null, enclosure: null, sub_node_bindings: ['digit', 'letter'], sub_node_isolated_scope_flags: [true, true], transform: (ctx) => ({ left: ctx.bindings.digit, right: ctx.bindings.letter }) });
   const parser = new AstParserImpl({ parser_nodes: [] });
   parser.initParse({ src: '5a', pos: 0 });
   const result = parser.parsePatternSeq(seq);
@@ -1477,7 +1473,7 @@ function test_parsePatternSeq_binding_assignment_isolated_scope(): void {
   assert.deepStrictEqual(result.raw_value, expected_raw_value);
 }
 function test_parsePatternSeq_binding_assignment_direct_value(): void {
-  const seq = completePatternSeq({ sub_nodes: [Digit, Letter], sub_quantifiers: '  ', raw: false, sep: null, accept_trailing_sep: false, ignore: null, enclosure: null, sub_node_bindings: ['digit', 'comment'], sub_node_isolated_scope_flags: [true, true], assignment_map: 'comment' });
+  const seq = completePatternSeq({ sub_nodes: [Digit, Letter], sub_quantifiers: '  ', raw: false, sep: null, accept_trailing_sep: false, ignore: null, enclosure: null, sub_node_bindings: ['digit', 'comment'], sub_node_isolated_scope_flags: [true, true], transform: (ctx) => ctx.bindings.comment });
   const parser = new AstParserImpl({ parser_nodes: [] });
   parser.initParse({ src: '5a', pos: 0 });
   const result = parser.parsePatternSeq(seq);
@@ -1496,11 +1492,7 @@ function test_parsePatternSeq_binding_assignment_direct_value(): void {
 }
 function test_parsePatternSeq_binding_non_isolated_scope(): void {
   const inner = completePatternSeq({ sub_nodes: [Digit], sub_quantifiers: ' ', raw: false, sep: null, accept_trailing_sep: false, ignore: null, enclosure: null, sub_node_bindings: ['digit'], sub_node_isolated_scope_flags: [false] });
-  const outer = completePatternSeq({ sub_nodes: [inner, Letter], sub_quantifiers: '  ', raw: false, sep: null, accept_trailing_sep: false, ignore: null, enclosure: null, sub_node_bindings: ['inner', 'letter'], sub_node_isolated_scope_flags: [false, true], assignment_map: new Map([
-    ['digit_value', 'digit'],
-    ['inner_value', 'inner'],
-    ['letter_value', 'letter'],
-  ]) });
+  const outer = completePatternSeq({ sub_nodes: [inner, Letter], sub_quantifiers: '  ', raw: false, sep: null, accept_trailing_sep: false, ignore: null, enclosure: null, sub_node_bindings: ['inner', 'letter'], sub_node_isolated_scope_flags: [false, true], transform: (ctx) => ({ digit_value: ctx.bindings.digit, inner_value: ctx.bindings.inner, letter_value: ctx.bindings.letter }) });
   const parser = new AstParserImpl({ parser_nodes: [] });
   parser.initParse({ src: '5a', pos: 0 });
   const result = parser.parsePatternSeq(outer);

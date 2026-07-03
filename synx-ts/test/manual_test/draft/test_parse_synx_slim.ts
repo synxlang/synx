@@ -81,23 +81,24 @@ function printProfiling(): void {
   console.log(JSON.stringify(alt_top, null, 2));
 }
 
-// console.log("=== parse synx-slim.synx ===");
-// console.log(JSON.stringify({
-//   project_root,
-//   synx_slim_path,
-//   kind: ParseResultKind[ast_result.kind],
-//   success,
-//   end_pos: ast_result.end_pos,
-//   error: ast_result.error,
-//   len: src.length,
-//   fully_consumed: success && ast_result.end_pos === src.length,
-//   next: src.slice(ast_result.end_pos, ast_result.end_pos + 160),
-// }, null, 2));
+if (ast_result.ast_nodes.length > 0) {
+  console.log("\n=== result ===");
+  console.log(SynxFmt.stringify(ast_result.ast_nodes.length === 1 ? ast_result.ast_nodes[0] : ast_result.ast_nodes));
+}
 
-// if (ast_result.ast_nodes.length > 0) {
-//   console.log("\n=== result ===");
-//   console.log(SynxFmt.stringify(ast_result.ast_nodes.length === 1 ? ast_result.ast_nodes[0] : ast_result.ast_nodes));
-// }
+console.log("=== parse synx-slim.synx ===");
+console.log(JSON.stringify({
+  project_root,
+  synx_slim_path,
+  kind: ParseResultKind[ast_result.kind],
+  success,
+  end_pos: ast_result.end_pos,
+  error: ast_result.error,
+  len: src.length,
+  fully_consumed: success && ast_result.end_pos === src.length,
+  next: src.slice(ast_result.end_pos, ast_result.end_pos + 160),
+}, null, 2));
+
 
 // printProfiling();
 
