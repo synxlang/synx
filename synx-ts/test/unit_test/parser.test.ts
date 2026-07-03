@@ -1,4 +1,4 @@
-﻿import { mkAstParser, AstParserConfig, AstParserInput, AstParseResult, ASTNode } from '../../src/ast_parser';
+﻿import { mkAstParser, AstParserConfig, AstParserInput, AstParseResult, AstNode } from '../../src/ast_parser';
 import type { ParserNode } from '../../src/parser_node';
 import { Symbol, Letter, SymbolChar } from '../../src/synx_parser_node';
 import assert from 'assert';
@@ -29,7 +29,7 @@ function test_parseAll(): void {
     id: number;
     input: AstParserInput;
     node: ParserNode;
-    expected: ASTNode[];
+    expected: AstNode[];
   }> = [
     { id: 1, input: { src: '', pos: 0 }, node: Symbol, expected: [] },
     { id: 2, input: { src: 'abc', pos: 0 }, node: Symbol, expected: [

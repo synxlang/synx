@@ -1,5 +1,5 @@
 import assert from "assert";
-import { ASTNode } from "./common";
+import { AstNode } from "./common";
 import {
   ParserNode, validatePartialCharRange, completeCharRange
 } from "./parser_node";
@@ -20,7 +20,7 @@ export type SynxAssignmentValueExpr = SynxParserNodeExpr | SynxUnknownExpr | Syn
 
 export interface SynxUnknownExpr {
   kind: SynxExprKind.UNKNOWN;
-  value: ASTNode;
+  value: AstNode;
 }
 
 export interface SynxRootExpr {
@@ -47,7 +47,7 @@ export interface SynxErrorRangeExpr {
 export interface SynxSemanticResult {
   root: SynxExpr;
   symbol_table: Map<string, SynxAssignmentValueExpr>;
-  expr_to_ast_node_map: Map<SynxExpr, ASTNode>;
+  expr_to_ast_node_map: Map<SynxExpr, AstNode>;
   err_exprs: SynxErrorExpr[];
 }
 
@@ -58,7 +58,7 @@ export interface SynxSemanticParser {
   /**
    * node必须由SYNX_PARSER_NODE中定义的parser_node解析而来
    */
-  parse(node: ASTNode): SynxSemanticResult;
+  parse(node: AstNode): SynxSemanticResult;
 }
 
 export function mkSynxSemanticParser(config: SynxSemanticParserConfig = {}): SynxSemanticParser {
@@ -73,7 +73,7 @@ export function resolve_symbols(symbol_table: Map<string, ParserNode>) {
 
 class SynxSemanticParserImpl implements SynxSemanticParser {
   symbol_table = new Map<string, SynxAssignmentValueExpr>;
-  expr_to_ast_node_map = new Map<SynxExpr, ASTNode>();
+  expr_to_ast_node_map = new Map<SynxExpr, AstNode>();
   err_exprs: SynxErrorExpr[] = [];
 
   constructor(config: SynxSemanticParserConfig) {
@@ -81,7 +81,7 @@ class SynxSemanticParserImpl implements SynxSemanticParser {
 
   initParse() {
     this.symbol_table = new Map<string, SynxAssignmentValueExpr>;
-    this.expr_to_ast_node_map = new Map<SynxExpr, ASTNode>();
+    this.expr_to_ast_node_map = new Map<SynxExpr, AstNode>();
     this.err_exprs = [];
   }
 
@@ -89,7 +89,7 @@ class SynxSemanticParserImpl implements SynxSemanticParser {
     throw new Error("unexpected parser_node");
   }
 
-  parse(node: ASTNode): SynxSemanticResult {
+  parse(node: AstNode): SynxSemanticResult {
     this.initParse();
     let root = this.parseNode(node);
     return {
@@ -100,7 +100,7 @@ class SynxSemanticParserImpl implements SynxSemanticParser {
     };
   }
 
-  parseUnknownExpr(node: ASTNode): SynxUnknownExpr {
+  parseUnknownExpr(node: AstNode): SynxUnknownExpr {
     let ret: SynxUnknownExpr = {
       kind: SynxExprKind.UNKNOWN,
       value: node
@@ -113,11 +113,11 @@ class SynxSemanticParserImpl implements SynxSemanticParser {
     this.err_exprs.push(expr);
   }
 
-  parseStringLiteral(node: ASTNode): string {
+  parseStringLiteral(node: AstNode): string {
     throw "todo";
   }
 
-  parseCharRangeBound(node: ASTNode): string {
+  parseCharRangeBound(node: AstNode): string {
     const parser_node = node.parser_nodes.at(-2);
     if (parser_node === SYNX_PARSER_NODE.StringLiteral) {
       return this.parseStringLiteral(node);
@@ -127,7 +127,7 @@ class SynxSemanticParserImpl implements SynxSemanticParser {
     this.procUnexpectedParserNode(parser_node);
   }
 
-  parseCharRange(node: ASTNode): SynxParserNodeExpr | SynxErrorRangeExpr {
+  parseCharRange(node: AstNode): SynxParserNodeExpr | SynxErrorRangeExpr {
     let partial = {
       start: this.parseCharRangeBound(node.value.start),
       end: this.parseCharRangeBound(node.value.end)
@@ -152,7 +152,7 @@ class SynxSemanticParserImpl implements SynxSemanticParser {
     return ret;
   }
 
-  parseAssignmentValue(node: ASTNode): SynxAssignmentValueExpr {
+  parseAssignmentValue(node: AstNode): SynxAssignmentValueExpr {
     if (node.parser_nodes.at(-1) !== SYNX_PARSER_NODE.Pattern) {
       this.procUnexpectedParserNode(node.parser_nodes.at(-1));
     }
@@ -168,7 +168,7 @@ class SynxSemanticParserImpl implements SynxSemanticParser {
     return ret;
   }
 
-  parseNode(node: ASTNode): SynxExpr {
+  parseNode(node: AstNode): SynxExpr {
     let ret: SynxExpr = {
       kind: SynxExprKind.UNKNOWN,
       value: node,

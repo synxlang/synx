@@ -1,7 +1,7 @@
 import { AstParserImpl } from '../../../src/ast_parser_impl';
 import { AnyChar, completeCharRange, completeCharMatchSet, completeCharSeq, completePatternSeq } from '../../../src/parser_node';
 import type { CharSeq, CharMatchNode, ParserNode, PatternSeq } from '../../../src/parser_node';
-import type { ASTNode, AstParserInput } from '../../../src/ast_parser';
+import type { AstNode, AstParserInput } from '../../../src/ast_parser';
 import { strict as assert } from 'assert';
 import { inspect } from 'node:util';
 // Basic node constants
@@ -64,11 +64,11 @@ const Seq_DigitOptionalOptionalLetter_Comma_IgnoreSpace = completePatternSeq({ s
 const Seq_DigitStarLetterMandatory_Comma_IgnoreSpace = completePatternSeq({ sub_nodes: [Digit, Letter], sub_quantifiers: '* ', raw: false, sep: CommaSep, accept_trailing_sep: false, ignore: Space as ParserNode });
 const Seq_DigitCommaLetter_Trailing_IgnoreSpace = completePatternSeq({ sub_nodes: [Digit, Letter], sub_quantifiers: '  ', raw: false, sep: CommaSep, accept_trailing_sep: true, ignore: Space as ParserNode });
 const Seq_DigitStarLetterStar_Comma_IgnoreSpace = completePatternSeq({ sub_nodes: [Digit, Letter], sub_quantifiers: '**', raw: false, sep: CommaSep, accept_trailing_sep: false, ignore: Space as ParserNode });
-/** Helper function: construct child node ASTNode */
+/** Helper function: construct child node AstNode */
 function mkChildAST(node: CharMatchNode, value: string, range: [
     number,
     number
-]): ASTNode {
+]): AstNode {
   return {
     parser_nodes: [node],
     range,
@@ -80,7 +80,7 @@ function mkChildAST(node: CharMatchNode, value: string, range: [
 function mkCharSeqAST(n: CharSeq, value: string, range: [
     number,
     number
-]): ASTNode {
+]): AstNode {
   return {
     parser_nodes: [n],
     range,
@@ -101,10 +101,10 @@ type LeafDesc = {
  * 与 `parsePatternSeq` 的 `children` 一致：与 `sub_nodes` 等长；`null` 表示该槽未匹配（如 `?` 失败）；
  * CharMatch 在 `*`/`+` 且无 seq `sep`、且无 `PatternSeq.ignore` 时合并为单槽，用 `LeafDesc`；
  * 有 `sep` 或有 `ignore` 时 `*`/`+` 不合并，用 `LeafDesc[]`（每项一次匹配）；零次重复在非合并路径为 `[]`。
- * 非字符子节点等用 `ASTNode`。
+ * 非字符子节点等用 `AstNode`。
  */
-type SeqPart = ASTNode | LeafDesc | LeafDesc[] | null;
-function normalizeSeqPart(p: SeqPart): ASTNode | ASTNode[] | null {
+type SeqPart = AstNode | LeafDesc | LeafDesc[] | null;
+function normalizeSeqPart(p: SeqPart): AstNode | AstNode[] | null {
   if (p === null) {
     return null;
   }
@@ -112,15 +112,15 @@ function normalizeSeqPart(p: SeqPart): ASTNode | ASTNode[] | null {
     return p.map((x) => mkChildAST(x.node, x.value, x.range));
   }
   if (p && typeof p === "object" && "parser_nodes" in p) {
-    return p as ASTNode;
+    return p as AstNode;
   }
   return mkChildAST((p as LeafDesc).node, (p as LeafDesc).value, (p as LeafDesc).range);
 }
-/** Helper: construct sequence ASTNode (`value` / `raw_value` mirror parser output). */
+/** Helper: construct sequence AstNode (`value` / `raw_value` mirror parser output). */
 function mkSeqAST(seq: PatternSeq, range: [
     number,
     number
-], parts: SeqPart[], seps: ASTNode[] = [], enclosure: [ASTNode, ASTNode] | null = null): ASTNode {
+], parts: SeqPart[], seps: AstNode[] = [], enclosure: [AstNode, AstNode] | null = null): AstNode {
   const normalized = parts.map(normalizeSeqPart);
   return {
     parser_nodes: [seq],
@@ -135,7 +135,7 @@ type TestCase = {
     id: number;
     seq: PatternSeq;
     input: AstParserInput;
-    expected: ASTNode | null;
+    expected: AstNode | null;
     expected_error: boolean;
 };
 function test_mkPatternSeq_validates_shape(): void {
@@ -1197,16 +1197,16 @@ function test_parsePatternSeq(): void {
     }
     else {
       if (result === null) {
-        throw new Error(`[case ${c.id}] expected ASTNode, got null`);
+        throw new Error(`[case ${c.id}] expected AstNode, got null`);
       }
-      // Use deep comparison to validate the entire ASTNode structure
+      // Use deep comparison to validate the entire AstNode structure
       try {
         assert.deepStrictEqual(result, c.expected);
       }
       catch (e) {
         const detail = e instanceof Error ? e.message : String(e);
         const printOpts = { depth: null as number | null, maxArrayLength: null as number | null };
-        throw new Error(`[case ${c.id}] ASTNode mismatch: ${detail}\n-- result --\n${inspect(result, printOpts)}\n-- expected --\n${inspect(c.expected, printOpts)}`);
+        throw new Error(`[case ${c.id}] AstNode mismatch: ${detail}\n-- result --\n${inspect(result, printOpts)}\n-- expected --\n${inspect(c.expected, printOpts)}`);
       }
     }
   }
@@ -1498,10 +1498,10 @@ function test_parsePatternSeq_binding_non_isolated_scope(): void {
   const result = parser.parsePatternSeq(outer);
   assert(parser.isSuccess());
   assert(result !== null);
-  const inner_ast = (result.raw_value as ASTNode[])[0];
-  const letter_ast = (result.raw_value as ASTNode[])[1];
+  const inner_ast = (result.raw_value as AstNode[])[0];
+  const letter_ast = (result.raw_value as AstNode[])[1];
   assert.deepStrictEqual(result.value, {
-    digit_value: (inner_ast.raw_value as ASTNode[])[0],
+    digit_value: (inner_ast.raw_value as AstNode[])[0],
     inner_value: inner_ast,
     letter_value: letter_ast,
   });

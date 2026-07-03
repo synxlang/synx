@@ -1,4 +1,4 @@
-﻿import type { ASTNode } from "./ast_parser";
+﻿import type { AstNode } from "./ast_parser";
 import {
   ParserNodeKind,
   type CharSeq,
@@ -10,7 +10,7 @@ import {
   type PatternSet,
 } from "./parser_node";
 
-type StringifyTarget = ParserNode | ASTNode | unknown;
+type StringifyTarget = ParserNode | AstNode | unknown;
 
 type SeenState = {
   parser_nodes: WeakMap<object, number>;
@@ -39,8 +39,8 @@ function stringifyValue(value: unknown, seen: SeenState): string {
   if (isParserNode(value)) {
     return stringifyParserNode(value, seen);
   }
-  if (isASTNode(value)) {
-    return stringifyASTNode(value, seen);
+  if (isAstNode(value)) {
+    return stringifyAstNode(value, seen);
   }
   if (Array.isArray(value)) {
     return stringifyArray(value, seen);
@@ -127,10 +127,10 @@ function stringifyPatternSet(node: PatternSet, id: number, seen: SeenState): str
   ].join("\n");
 }
 
-function stringifyASTNode(node: ASTNode, seen: SeenState): string {
-  return withObjectRef(node, seen.ast_nodes, seen, "ASTNode", (id) => {
+function stringifyAstNode(node: AstNode, seen: SeenState): string {
+  return withObjectRef(node, seen.ast_nodes, seen, "AstNode", (id) => {
     return [
-      `#${id} ASTNode(`,
+      `#${id} AstNode(`,
       indentLines([
         `parser_nodes: ${stringifyArray(node.parser_nodes, seen)},`,
         `range: ${stringifyArray(node.range, seen)},`,
@@ -225,7 +225,7 @@ function isParserNode(value: unknown): value is ParserNode {
   );
 }
 
-function isASTNode(value: unknown): value is ASTNode {
+function isAstNode(value: unknown): value is AstNode {
   return (
     typeof value === "object" &&
     value !== null &&

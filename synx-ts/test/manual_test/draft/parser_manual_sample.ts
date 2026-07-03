@@ -5,12 +5,12 @@
 *   npx tsx test/manual_test/draft/parser_manual_sample.ts
 */
 import { inspect } from "node:util";
-import { type ASTNode, mkAstParser, ParseResultKind } from "../../../src/ast_parser";
+import { type AstNode, mkAstParser, ParseResultKind } from "../../../src/ast_parser";
 import { completeCharSeq, completeCharRange, completeCharMatchSet, completePatternSeq } from "../../../src/parser_node";
 import { AnyChar } from "../../../src/parser_node";
 import { exit } from "node:process";
 import { AstParserImpl } from "../../../src/ast_parser_impl";
-function isAstNode(x: unknown): x is ASTNode {
+function isAstNode(x: unknown): x is AstNode {
   return (typeof x === "object" &&
         x !== null &&
         "parser_nodes" in x &&
@@ -19,7 +19,7 @@ function isAstNode(x: unknown): x is ASTNode {
         "raw_value" in x &&
         "seps" in x);
 }
-function extractAstValue(node: ASTNode | null): any {
+function extractAstValue(node: AstNode | null): any {
   if (node === null)
     return null;
   const peel = (v: any): any => {

@@ -20,7 +20,7 @@ import type {
   AstParserInput,
   AstParseSingleNodeProfiling,
   PatternSetAlternativeProfiling,
-  ASTNode,
+  AstNode,
 } from "./common";
 import { ParseResultKind } from "./common";
 import type { AstParser } from "./ast_parser";
@@ -39,7 +39,7 @@ enum ParseActionKind {
 }
 
 // [number, number]用于记录连续子字符串
-type ParsedValueType = [number, number] | ASTNode | null;
+type ParsedValueType = [number, number] | AstNode | null;
 
 interface ParsedElement {
     slot: number;
@@ -92,7 +92,7 @@ interface PatternSetParseRecord {
     node: ParserNode;
     pos: number;
     alt_idx: number;
-    result: ASTNode | null;
+    result: AstNode | null;
     reject: boolean;
 }
 
@@ -179,7 +179,7 @@ export class AstParserImpl implements AstParser {
 
   private error: string | null = null;
   private error_pos: number = 0;
-  private parse_records: ASTNode[][] = [];
+  private parse_records: AstNode[][] = [];
   private pattern_seq_parse_info_cache = new Map<PatternSeq, PatternSeqParseInfo>();
   private parse_single_node_stack: Array<{ node: ParserNode; pos: number; profile_record?: AstParseSingleNodeProfiling }> = [];
   private profiling: AstParseProfiling = this.profileCreate();
@@ -333,7 +333,7 @@ export class AstParserImpl implements AstParser {
     }
   }
 
-  private profileRecordParseSingleNodeExit(node: ParserNode, pos: number, ret: ASTNode | null): void {
+  private profileRecordParseSingleNodeExit(node: ParserNode, pos: number, ret: AstNode | null): void {
     if (this.config.debug !== true) {
       return;
     }
@@ -507,7 +507,7 @@ export class AstParserImpl implements AstParser {
      * Record a parse result by its matched start position to avoid repeated parsing.
      * 按解析结果的匹配起始位置缓存解析结果，避免重复解析。
      */
-  recordParse(pos: number, ast_node: ASTNode): void {
+  recordParse(pos: number, ast_node: AstNode): void {
     this.parse_records[pos].push(ast_node);
   }
 
@@ -515,7 +515,7 @@ export class AstParserImpl implements AstParser {
      * Get cached parse results at `pos`; return an empty array if no result exists.
      * 获取 `pos` 位置的缓存解析结果；如果没有解析结果则返回空数组。
      */
-  getParseRecords(pos: number): ASTNode[] {
+  getParseRecords(pos: number): AstNode[] {
     return this.parse_records[pos] ?? [];
   }
 
@@ -523,7 +523,7 @@ export class AstParserImpl implements AstParser {
      * Find the first cached result at `pos` whose `parser_nodes` contains `parser_node`.
      * 返回缓存中 `pos` 位置第一个包含 `parser_node` 的解析结果；如果没有找到则返回 `null`。
      */
-  findParseRecord(pos: number, parser_node: ParserNode): ASTNode | null {
+  findParseRecord(pos: number, parser_node: ParserNode): AstNode | null {
     const records = this.getParseRecords(pos);
     for (const record of records) {
       if (record.parser_nodes.includes(parser_node)) {
@@ -548,7 +548,7 @@ export class AstParserImpl implements AstParser {
 
   parse(input: AstParserInput, root: ParserNode): AstParseResult {
     this.initParse(input);
-    let parse_node_res: ASTNode[] | ASTNode | null = null;
+    let parse_node_res: AstNode[] | AstNode | null = null;
     try {
       parse_node_res = this.parseSingleNodeSimple(root);
     } catch (err) {
@@ -590,16 +590,16 @@ export class AstParserImpl implements AstParser {
     };
   }
 
-  parseAll(input: AstParserInput, node: ParserNode): ASTNode[] {
+  parseAll(input: AstParserInput, node: ParserNode): AstNode[] {
     this.initParse(input);
-    const results: ASTNode[] = [];
+    const results: AstNode[] = [];
 
     while (this.input.pos < this.input.src.length) {
       const start = this.input.pos;
       const parse_node_res = this.parseSingleNodeSimple(node);
 
       if (this.isSuccess()) {
-        results.push(parse_node_res as ASTNode);
+        results.push(parse_node_res as AstNode);
       } else {
         this.input.pos = start + 1;
       }
@@ -743,7 +743,7 @@ export class AstParserImpl implements AstParser {
      *
      * 每次匹配失败时，尝试忽略一次 `ignored` 节点，直到匹配成功或即使忽略也不可能匹配成功
      */
-  parseSingleNode(node: ParserNode, ignored: ParserNode | null = null): ASTNode | null {
+  parseSingleNode(node: ParserNode, ignored: ParserNode | null = null): AstNode | null {
     const start = this.input.pos;
     if (this.config.debug === true) {
       this.parse_single_node_stack.push({ node, pos: start });
@@ -752,7 +752,7 @@ export class AstParserImpl implements AstParser {
       this.checkParseTimeout();
     }
     try {
-      const complete_return = (ret: ASTNode | null): ASTNode | null => {
+      const complete_return = (ret: AstNode | null): AstNode | null => {
         if (this.isSuccess() && ret !== null) {
           this.assertConsumed(start, node);
         }
@@ -783,7 +783,7 @@ export class AstParserImpl implements AstParser {
     }
   }
 
-  parseSingleNodeSimple(node: ParserNode): ASTNode | null {
+  parseSingleNodeSimple(node: ParserNode): AstNode | null {
     const start = this.input.pos;
     const cached = this.findParseRecord(start, node);
     if (cached !== null) {
@@ -792,7 +792,7 @@ export class AstParserImpl implements AstParser {
       return cached;
     }
 
-    let ret: ASTNode | null;
+    let ret: AstNode | null;
     if (node.kind === ParserNodeKind.CharSeq) {
       ret = this.parseCharSeq(node as CharSeq);
     } else if (node.kind === ParserNodeKind.PatternSeq) {
@@ -806,13 +806,13 @@ export class AstParserImpl implements AstParser {
     }
 
     if (this.isSuccess() && node.kind !== ParserNodeKind.PatternSet) {
-      assert.ok(ret !== null, "parseSingleNodeSimple succeeded with null ASTNode");
+      assert.ok(ret !== null, "parseSingleNodeSimple succeeded with null AstNode");
       this.recordParse(start, ret);
     }
     return ret;
   }
 
-  parsePatternSet(node: PatternSet): ASTNode | null {
+  parsePatternSet(node: PatternSet): AstNode | null {
     const node_start = this.input.pos;
     const pattern_set_node_parse_stack_start_length = this.pattern_set_node_parse_stack.length;
     let parse_record = this.getPatternSetParseRecord(node, this.input.pos);
@@ -867,7 +867,7 @@ export class AstParserImpl implements AstParser {
         return;
       };
 
-      let make_returned = (associate_enclosures: [ASTNode[], ASTNode[]] | null = null): ASTNode | null => {
+      let make_returned = (associate_enclosures: [AstNode[], AstNode[]] | null = null): AstNode | null => {
         let ret = parse_record.result;
         if (ret === null) {
           this.input.pos = node_start;
@@ -892,7 +892,7 @@ export class AstParserImpl implements AstParser {
         return make_returned();
       }
 
-      const lefts: ASTNode[] = [];
+      const lefts: AstNode[] = [];
       for (; ;) {
         parse_record.pos = this.input.pos;
         parse_record.alt_idx = 0;
@@ -919,7 +919,7 @@ export class AstParserImpl implements AstParser {
         return make_returned();
       }
 
-      const rights: ASTNode[] = [];
+      const rights: AstNode[] = [];
       for (let i = lefts.length - 1; i >= 0; i--) {
         const right = this.parseSingleNode(node.associateby[1], node.ignore);
         if (!this.isSuccess()) {
@@ -1253,7 +1253,7 @@ export class AstParserImpl implements AstParser {
     return parse_info;
   }
 
-  parsePatternSeq(node: PatternSeq): ASTNode | null {
+  parsePatternSeq(node: PatternSeq): AstNode | null {
     const start = this.input.pos;
     const bindings: Record<string, any> = {};
     const parse_info = this.acquirePatternSeqParseInfo(node);
@@ -1262,7 +1262,7 @@ export class AstParserImpl implements AstParser {
       return Array.isArray(value);
     };
 
-    const make_ast_node = (parser_node: ParserNode, value: ParsedValueType): ASTNode | null => {
+    const make_ast_node = (parser_node: ParserNode, value: ParsedValueType): AstNode | null => {
       if (value === null) {
         return null;
       }
@@ -1287,7 +1287,7 @@ export class AstParserImpl implements AstParser {
       return null;
     }
 
-    const children: (ASTNode[] | ASTNode | null)[] = [];
+    const children: (AstNode[] | AstNode | null)[] = [];
     for (let i = 0; i < node.sub_nodes.length; i++) {
       if (parse_info.single_child_flags[i]) {
         children.push(null);
@@ -1296,9 +1296,9 @@ export class AstParserImpl implements AstParser {
       }
     }
 
-    const seps: ASTNode[] = [];
-    let left_enclosure: ASTNode | null = null;
-    let right_enclosure: ASTNode | null = null;
+    const seps: AstNode[] = [];
+    let left_enclosure: AstNode | null = null;
+    let right_enclosure: AstNode | null = null;
     for (const element of parse_res.parsed_elements) {
       if (element.slot === ParseValueSlot.SEP) {
         assert.ok(node.sep !== null);
@@ -1398,16 +1398,16 @@ export class AstParserImpl implements AstParser {
   }
 
   /**
-     * Character matching: match according to quantifier and merge into a string, returns an ASTNode (value/raw_value is the matched string); 
+     * Character matching: match according to quantifier and merge into a string, returns an AstNode (value/raw_value is the matched string); 
      *
-     * 字符匹配：按量词匹配并合并为字符串，返回 `ASTNode`（`value` / `raw_value` 为被匹配的字符串）。
+     * 字符匹配：按量词匹配并合并为字符串，返回 `AstNode`（`value` / `raw_value` 为被匹配的字符串）。
      */
   parseCharMatchNode(
     node: GeneralCharMatchNode,
     quantifier: Quantifier,
-  ): ASTNode | null {
+  ): AstNode | null {
     const start = this.input.pos;
-    const make_returned = (): ASTNode => {
+    const make_returned = (): AstNode => {
       this.setSuccess();
       const end = this.input.pos;
       return {
@@ -1471,7 +1471,7 @@ export class AstParserImpl implements AstParser {
      *
      * 匹配 `CharSeq.literal` 一次（在二进制串模型下于当前字节偏移处 `startsWith`）。
      */
-  parseCharSeq(node: CharSeq): ASTNode | null {
+  parseCharSeq(node: CharSeq): AstNode | null {
     const { src, pos } = this.input;
     const start = pos;
     if (!src.startsWith(node.literal, start)) {

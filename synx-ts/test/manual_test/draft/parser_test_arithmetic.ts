@@ -7,7 +7,7 @@
  * If a TypeScript runner is installed:
  *   npx tsx test/manual_test/draft/parser_test_arithmetic.ts
  */
-import type { ASTNode } from "../../../src/ast_parser";
+import type { AstNode } from "../../../src/ast_parser";
 import { AstParserImpl } from "../../../src/ast_parser_impl";
 import { SynxFmt } from "../../../src/synx_fmt";
 import { completeCharRange, completeCharSeq, completePatternSeq, completePatternSet, type ParserNode, type PatternSeq, type PatternSet } from "../../../src/parser_node";
@@ -41,16 +41,16 @@ interface CaseDef {
     note: string;
     expected_value?: number;
 }
-function nodeText(src: string, node: ASTNode): string {
+function nodeText(src: string, node: AstNode): string {
   return src.slice(node.range[0], node.range[1]);
 }
-function flattenAstNodes(slot: ASTNode[] | ASTNode | null): ASTNode[] {
+function flattenAstNodes(slot: AstNode[] | AstNode | null): AstNode[] {
   if (slot === null) {
     return [];
   }
   return Array.isArray(slot) ? slot : [slot];
 }
-function compactNode(src: string, node: ASTNode): object {
+function compactNode(src: string, node: AstNode): object {
   return {
     range: node.range,
     text: nodeText(src, node),
@@ -64,9 +64,9 @@ function compactNode(src: string, node: ASTNode): object {
       ],
   };
 }
-function collectNodesByParserNode(root: ASTNode, target: ParserNode): ASTNode[] {
-  const ret: ASTNode[] = [];
-  const visit = (node: ASTNode): void => {
+function collectNodesByParserNode(root: AstNode, target: ParserNode): AstNode[] {
+  const ret: AstNode[] = [];
+  const visit = (node: AstNode): void => {
     if (node.parser_nodes.includes(target)) {
       ret.push(node);
     }
@@ -86,7 +86,7 @@ function printInputIndex(src: string): void {
 }
 function parseCaseRoot(src: string): {
     parser: AstParserImpl;
-    result: ASTNode | null;
+    result: AstNode | null;
 } {
   const parser = new AstParserImpl({ parser_nodes: [] });
   parser.initParse({ src, pos: 0 });
@@ -95,28 +95,28 @@ function parseCaseRoot(src: string): {
     result: parser.parsePatternSeq(Sum),
   };
 }
-function asAstNode(value: ASTNode[] | ASTNode | null, label: string): ASTNode {
+function asAstNode(value: AstNode[] | AstNode | null, label: string): AstNode {
   if (value === null || Array.isArray(value)) {
-    throw new Error(`${label}: expected one ASTNode`);
+    throw new Error(`${label}: expected one AstNode`);
   }
   return value;
 }
-function asAstNodeArray(value: ASTNode[] | ASTNode | null, label: string): ASTNode[] {
+function asAstNodeArray(value: AstNode[] | AstNode | null, label: string): AstNode[] {
   if (value === null) {
     return [];
   }
   if (!Array.isArray(value)) {
-    throw new Error(`${label}: expected ASTNode[]`);
+    throw new Error(`${label}: expected AstNode[]`);
   }
   return value;
 }
-function evalOperator(node: ASTNode): string {
+function evalOperator(node: AstNode): string {
   if (typeof node.value !== "string") {
     throw new Error(`operator is not string at range ${node.range.join(":")}`);
   }
   return node.value;
 }
-function evalFactor(node: ASTNode): number {
+function evalFactor(node: AstNode): number {
   if (node.parser_nodes.includes(NumberLiteral)) {
     return Number(node.value);
   }
@@ -125,22 +125,22 @@ function evalFactor(node: ASTNode): number {
   }
   throw new Error(`unknown Factor shape at range ${node.range.join(":")}`);
 }
-function evalProductTail(node: ASTNode): {
+function evalProductTail(node: AstNode): {
     op: string;
     value: number;
 } {
   const [opSlot, factorSlot] = node.raw_value as [
-        ASTNode | null,
-        ASTNode | null
+        AstNode | null,
+        AstNode | null
     ];
   const op = evalOperator(asAstNode(opSlot, "ProductTail op"));
   const value = evalFactor(asAstNode(factorSlot, "ProductTail factor"));
   return { op, value };
 }
-function evalProduct(node: ASTNode): number {
+function evalProduct(node: AstNode): number {
   const [firstSlot, tailSlot] = node.raw_value as [
-        ASTNode | null,
-        ASTNode[] | null
+        AstNode | null,
+        AstNode[] | null
     ];
   let value = evalFactor(asAstNode(firstSlot, "Product first factor"));
   for (const tail of asAstNodeArray(tailSlot, "Product tails")) {
@@ -157,22 +157,22 @@ function evalProduct(node: ASTNode): number {
   }
   return value;
 }
-function evalSumTail(node: ASTNode): {
+function evalSumTail(node: AstNode): {
     op: string;
     value: number;
 } {
   const [opSlot, productSlot] = node.raw_value as [
-        ASTNode | null,
-        ASTNode | null
+        AstNode | null,
+        AstNode | null
     ];
   const op = evalOperator(asAstNode(opSlot, "SumTail op"));
   const value = evalProduct(asAstNode(productSlot, "SumTail product"));
   return { op, value };
 }
-function evalSum(node: ASTNode): number {
+function evalSum(node: AstNode): number {
   const [firstSlot, tailSlot] = node.raw_value as [
-        ASTNode | null,
-        ASTNode[] | null
+        AstNode | null,
+        AstNode[] | null
     ];
   let value = evalProduct(asAstNode(firstSlot, "Sum first product"));
   for (const tail of asAstNodeArray(tailSlot, "Sum tails")) {

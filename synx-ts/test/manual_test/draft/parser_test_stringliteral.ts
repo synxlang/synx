@@ -7,7 +7,7 @@
 * If a TypeScript runner is installed:
 *   npx tsx test/manual_test/draft/parser_test_stringliteral.ts
 */
-import type { ASTNode } from "../../../src/ast_parser";
+import type { AstNode } from "../../../src/ast_parser";
 import { AstParserImpl } from "../../../src/ast_parser_impl";
 import { SynxFmt } from "../../../src/synx_fmt";
 import { AnyChar, completeCharSeq, completePatternSeq, completePatternSet, type ParserNode, type PatternSeq } from "../../../src/parser_node";
@@ -37,7 +37,7 @@ interface CaseDef {
     note: string;
     root?: "StringLiteral" | "MutiStringLiterals";
 }
-function isAstNode(value: unknown): value is ASTNode {
+function isAstNode(value: unknown): value is AstNode {
   return (typeof value === "object" &&
         value !== null &&
         "parser_nodes" in value &&
@@ -46,7 +46,7 @@ function isAstNode(value: unknown): value is ASTNode {
         "raw_value" in value &&
         "seps" in value);
 }
-function astText(node: ASTNode): string {
+function astText(node: AstNode): string {
   if (typeof node.value === "string") {
     return node.value;
   }
@@ -58,7 +58,7 @@ function astText(node: ASTNode): string {
   }
   return String(node.value);
 }
-function slotText(slot: ASTNode[] | ASTNode | null): string | null {
+function slotText(slot: AstNode[] | AstNode | null): string | null {
   if (slot === null) {
     return null;
   }
@@ -70,7 +70,7 @@ function slotText(slot: ASTNode[] | ASTNode | null): string | null {
   }
   return String(slot);
 }
-function slotRange(slot: ASTNode[] | ASTNode | null): Array<[
+function slotRange(slot: AstNode[] | AstNode | null): Array<[
     number,
     number
 ]> | [
@@ -90,7 +90,7 @@ function printInputIndex(src: string): void {
 }
 function parseCaseRoot(src: string, root: PatternSeq): {
     parser: AstParserImpl;
-    result: ASTNode | null;
+    result: AstNode | null;
 } {
   const parser = new AstParserImpl({ parser_nodes: [] });
   parser.initParse({ src, pos: 0 });
@@ -99,18 +99,18 @@ function parseCaseRoot(src: string, root: PatternSeq): {
     result: parser.parsePatternSeq(root),
   };
 }
-function stringLiteralNodes(rootName: CaseDef["root"] | "StringLiteral", result: ASTNode): ASTNode[] {
+function stringLiteralNodes(rootName: CaseDef["root"] | "StringLiteral", result: AstNode): AstNode[] {
   if (rootName !== "MutiStringLiterals") {
     return [result];
   }
-  const string_literals = result.raw_value[0] as ASTNode[] | ASTNode | null;
+  const string_literals = result.raw_value[0] as AstNode[] | AstNode | null;
   return Array.isArray(string_literals)
     ? string_literals
     : string_literals === null
       ? []
       : [string_literals];
 }
-function simpleStringLiteralView(src: string, node: ASTNode): object {
+function simpleStringLiteralView(src: string, node: AstNode): object {
   return {
     range: node.range,
     text: src.slice(node.range[0], node.range[1]),

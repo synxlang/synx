@@ -3,8 +3,8 @@ import { AstParserImpl } from '../../../src/ast_parser_impl';
 import { completeCharSeq, completeCharRange, completeCharMatchSet, completePatternSeq } from '../../../src/parser_node';
 import type { CharMatchNode, ParserNode, Quantifier } from '../../../src/parser_node';
 import type { AstParserInput } from '../../../src/ast_parser';
-import type { ASTNode } from '../../../src/ast_parser';
-function parse_node_result_count(parse_res: ASTNode[] | ASTNode | null): number {
+import type { AstNode } from '../../../src/ast_parser';
+function parse_node_result_count(parse_res: AstNode[] | AstNode | null): number {
   if (parse_res === null)
     return 0;
   if (Array.isArray(parse_res))
@@ -12,11 +12,11 @@ function parse_node_result_count(parse_res: ASTNode[] | ASTNode | null): number 
   return 1;
 }
 /** First child slot of a non-raw PatternSeq (same payload as `parseNode` would return in `ast_node_res`). */
-function firstSlotFromSeqResult(top: ASTNode): ASTNode[] | ASTNode | null {
+function firstSlotFromSeqResult(top: AstNode): AstNode[] | AstNode | null {
   const v = top.value;
   if (!Array.isArray(v) || v.length === 0)
     return null;
-  return v[0] as ASTNode[] | ASTNode | null;
+  return v[0] as AstNode[] | AstNode | null;
 }
 /** Quantified single-child PatternSeq: same path as `parsePatternSeq` in production (no direct `parseNode` in tests). */
 function test_parsePatternSeq_singleSlot_quantifiers(): void {

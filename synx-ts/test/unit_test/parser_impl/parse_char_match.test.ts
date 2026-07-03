@@ -1,7 +1,7 @@
 import { AstParserImpl } from '../../../src/ast_parser_impl';
 import { completeCharRange, completeCharMatchSet, AnyChar } from '../../../src/parser_node';
 import type { CharMatchNode, Quantifier } from '../../../src/parser_node';
-import type { ASTNode, AstParserInput } from '../../../src/ast_parser';
+import type { AstNode, AstParserInput } from '../../../src/ast_parser';
 /** parseCharMatchNode: multiple inputs covering quantifiers ' ' / '?' / '*' / '+' and match/no-match scenarios */
 function test_parseCharMatchNode(): void {
   const Digit: CharMatchNode = completeCharRange({ start: '0', end: '9' });
@@ -47,7 +47,7 @@ function test_parseCharMatchNode(): void {
     }
     if (c.expected_value === null) {
       if (result !== null)
-        throw new Error(`[case ${c.id}] expected null, got value ${(result as ASTNode).value}`);
+        throw new Error(`[case ${c.id}] expected null, got value ${(result as AstNode).value}`);
     }
     else {
       if (result === null)

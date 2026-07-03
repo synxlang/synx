@@ -1,7 +1,7 @@
 import { strict as assert } from "assert";
 import { inspect } from "node:util";
 import { AstParserImpl } from "../../../src/ast_parser_impl";
-import type { ASTNode, AstParserInput } from "../../../src/ast_parser";
+import type { AstNode, AstParserInput } from "../../../src/ast_parser";
 import { AnyChar, completeCharSeq, completeCharRange, completeCharMatchSet, completePatternSeq, type CharSeq, type CharMatchNode, type ParserNode, type PatternSeq } from "../../../src/parser_node";
 const A = completeCharSeq({ literal: "a" });
 const B = completeCharSeq({ literal: "b" });
@@ -23,7 +23,7 @@ const Seq_AnyChar_star_Digit = completePatternSeq({ sub_nodes: [AnyChar, Digit],
 function mkCharSeqAST(n: CharSeq, value: string, range: [
     number,
     number
-]): ASTNode {
+]): AstNode {
   return {
     parser_nodes: [n],
     range,
@@ -35,7 +35,7 @@ function mkCharSeqAST(n: CharSeq, value: string, range: [
 function mkCharRangeAST(n: CharMatchNode, value: string, range: [
     number,
     number
-]): ASTNode {
+]): AstNode {
   return {
     parser_nodes: [n],
     range,
@@ -47,7 +47,7 @@ function mkCharRangeAST(n: CharMatchNode, value: string, range: [
 function mkAnyCharAST(value: string, range: [
     number,
     number
-]): ASTNode {
+]): AstNode {
   return {
     parser_nodes: [AnyChar],
     range,
@@ -59,7 +59,7 @@ function mkAnyCharAST(value: string, range: [
 function mkSeqAST(seq: PatternSeq, range: [
     number,
     number
-], parts: (ASTNode | ASTNode[] | null)[], seps: ASTNode[] = []): ASTNode {
+], parts: (AstNode | AstNode[] | null)[], seps: AstNode[] = []): AstNode {
   return {
     parser_nodes: [seq],
     range,
@@ -74,7 +74,7 @@ type NongreedyCase = {
     name: string;
     seq: PatternSeq;
     input: AstParserInput;
-    expected: ASTNode | null;
+    expected: AstNode | null;
     expected_error: boolean;
 };
 /** Non-greedy `ends`, explicit `greedy_flags`, and `AnyChar` default non-greedy (`parsePatternSeq`). */

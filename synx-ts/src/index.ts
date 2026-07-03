@@ -4,7 +4,7 @@ export {
   AstParseResult,
   ParseResultKind,
   AstParserInput,
-  ASTNode,
+  AstNode,
   AstParseProfiling,
   AstParseSingleNodeProfiling,
   PatternSetAlternativeProfiling,

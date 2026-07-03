@@ -2,13 +2,13 @@ import { strict as assert } from 'assert';
 import { AstParserImpl } from '../../../src/ast_parser_impl';
 import { AnyChar, completeCharSeq, completeCharRange, completePatternSeq, completePatternSet } from '../../../src/parser_node';
 import type { PatternSet, ParserNode } from '../../../src/parser_node';
-import type { ASTNode, AstParserInput } from '../../../src/ast_parser';
+import type { AstNode, AstParserInput } from '../../../src/ast_parser';
 function test_parsePatternSet_basic(): void {
   const set: PatternSet = completePatternSet({ sub_nodes: [completeCharSeq({ literal: 'ab' }), completeCharSeq({ literal: 'a' })] });
   const cases: Array<{
         id: number;
         input: AstParserInput;
-        expected: ASTNode | null;
+        expected: AstNode | null;
         expected_error: boolean;
     }> = [
       {
@@ -70,7 +70,7 @@ function test_parsePatternSet_associateby(): void {
   const Left = completeCharSeq({ literal: '(' });
   const Right = completeCharSeq({ literal: ')' });
   const set: PatternSet = completePatternSet({ sub_nodes: [A], neg_flags: undefined, associateby: [Left, Right] });
-  const leaf = (parser_nodes: ParserNode[], start: number, end: number, value: string): ASTNode => ({
+  const leaf = (parser_nodes: ParserNode[], start: number, end: number, value: string): AstNode => ({
     parser_nodes,
     range: [start, end],
     value,
@@ -80,7 +80,7 @@ function test_parsePatternSet_associateby(): void {
   const cases: Array<{
         id: number;
         input: AstParserInput;
-        expected: ASTNode | null;
+        expected: AstNode | null;
         expected_pos: number;
         expected_success: boolean;
     }> = [
@@ -137,7 +137,7 @@ function test_parsePatternSet_associateby_ignore(): void {
   const Right = completeCharSeq({ literal: ')' });
   const Space = completeCharSeq({ literal: ' ' });
   const set: PatternSet = completePatternSet({ sub_nodes: [A], neg_flags: undefined, associateby: [Left, Right], ignore: Space });
-  const leaf = (parser_nodes: ParserNode[], start: number, end: number, value: string): ASTNode => ({
+  const leaf = (parser_nodes: ParserNode[], start: number, end: number, value: string): AstNode => ({
     parser_nodes,
     range: [start, end],
     value,
@@ -147,7 +147,7 @@ function test_parsePatternSet_associateby_ignore(): void {
   const cases: Array<{
         id: number;
         input: AstParserInput;
-        expected: ASTNode | null;
+        expected: AstNode | null;
         expected_pos: number;
         expected_success: boolean;
     }> = [
@@ -408,7 +408,7 @@ function test_parsePatternSet_left_recursive_expr_plus_expr(): void {
   expr.sub_nodes.push(seq as unknown as ParserNode, one as unknown as ParserNode);
   expr.neg_flags.push(false, false);
   completePatternSet(expr);
-  const leafAt = (lo: number, hi: number): ASTNode => ({
+  const leafAt = (lo: number, hi: number): AstNode => ({
     parser_nodes: [one, expr],
     range: [lo, hi],
     value: '1',
@@ -443,10 +443,10 @@ function test_parsePatternSet_left_recursive_expr_plus_expr(): void {
   assert(p3.isSuccess());
   assert.deepStrictEqual(r3?.range, [0, 5]);
   assert.ok(Array.isArray(r3?.value) && r3!.value.length === 3);
-  const right = r3!.value[2] as ASTNode;
+  const right = r3!.value[2] as AstNode;
   assert.deepStrictEqual(right.range, [2, 5]);
   assert.ok(Array.isArray(right.value) && right.value.length === 3);
-  const inner = right.value as ASTNode[];
+  const inner = right.value as AstNode[];
   assert.deepStrictEqual(inner[0], leafAt(2, 3));
   assert.deepStrictEqual(inner[1], { parser_nodes: [plus], range: [3, 4], value: '+', raw_value: '+', seps: [], enclosure: null, associate_enclosures: null, bindings: {} });
   assert.deepStrictEqual(inner[2], leafAt(4, 5));

@@ -1,10 +1,10 @@
 import { AstParserImpl } from '../../../src/ast_parser_impl';
 import { completeCharSeq, completeCharRange, completeCharMatchSet, completePatternSeq } from '../../../src/parser_node';
 import type { Quantifier } from '../../../src/parser_node';
-import type { ASTNode, AstParserInput } from '../../../src/ast_parser';
+import type { AstNode, AstParserInput } from '../../../src/ast_parser';
 import { ParserNodeKind } from '../../../src/parser_node';
 import { strict as assert } from 'assert';
-function parse_node_result_count(parse_res: ASTNode[] | ASTNode | null): number {
+function parse_node_result_count(parse_res: AstNode[] | AstNode | null): number {
   if (parse_res === null)
     return 0;
   if (Array.isArray(parse_res))
@@ -30,7 +30,7 @@ function test_parseCharSeq(): void {
     const result = parser.parseCharSeq(node);
     if (c.expected_value === null) {
       if (result !== null) {
-        throw new Error(`[case ${c.id}] expected null, got ${(result as ASTNode).value}`);
+        throw new Error(`[case ${c.id}] expected null, got ${(result as AstNode).value}`);
       }
     }
     else {
@@ -88,7 +88,7 @@ function test_parsePatternSeq_byteSeq_quantifiers(): void {
     if (!Array.isArray(v) || v.length === 0) {
       throw new Error(`[case ${c.id}] expected one child slot in PatternSeq value`);
     }
-    const slot = v[0] as ASTNode[] | ASTNode | null;
+    const slot = v[0] as AstNode[] | AstNode | null;
     const count = parse_node_result_count(slot);
     if (c.expected_values === null) {
       if (count !== 0) {

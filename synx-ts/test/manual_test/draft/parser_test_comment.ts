@@ -7,7 +7,7 @@
 * If a TypeScript runner is installed:
 *   npx tsx test/manual_test/draft/parser_test_comment.ts
 */
-import type { ASTNode } from "../../../src/ast_parser";
+import type { AstNode } from "../../../src/ast_parser";
 import { AstParserImpl } from "../../../src/ast_parser_impl";
 import { SynxFmt } from "../../../src/synx_fmt";
 import { AnyChar, completeCharSeq, completePatternSeq, completePatternSet, type ParserNode, type PatternSeq } from "../../../src/parser_node";
@@ -37,7 +37,7 @@ interface CaseDef {
     note: string;
     root?: "Comment" | "MutiConmments";
 }
-function isAstNode(value: unknown): value is ASTNode {
+function isAstNode(value: unknown): value is AstNode {
   return (typeof value === "object" &&
         value !== null &&
         "parser_nodes" in value &&
@@ -46,7 +46,7 @@ function isAstNode(value: unknown): value is ASTNode {
         "raw_value" in value &&
         "seps" in value);
 }
-function astText(node: ASTNode): string {
+function astText(node: AstNode): string {
   if (typeof node.value === "string") {
     return node.value;
   }
@@ -55,7 +55,7 @@ function astText(node: ASTNode): string {
   }
   return String(node.value);
 }
-function slotText(slot: ASTNode[] | ASTNode | null): string | null {
+function slotText(slot: AstNode[] | AstNode | null): string | null {
   if (slot === null) {
     return null;
   }
@@ -67,7 +67,7 @@ function slotText(slot: ASTNode[] | ASTNode | null): string | null {
   }
   return String(slot);
 }
-function slotRange(slot: ASTNode[] | ASTNode | null): Array<[
+function slotRange(slot: AstNode[] | AstNode | null): Array<[
     number,
     number
 ]> | [
@@ -90,7 +90,7 @@ function printInputIndex(src: string): void {
 }
 function parseCaseRoot(src: string, root: PatternSeq): {
     parser: AstParserImpl;
-    result: ASTNode | null;
+    result: AstNode | null;
 } {
   const parser = new AstParserImpl({ parser_nodes: [] });
   parser.initParse({ src, pos: 0 });
@@ -99,18 +99,18 @@ function parseCaseRoot(src: string, root: PatternSeq): {
     result: parser.parsePatternSeq(root),
   };
 }
-function commentView(node: ASTNode): object {
-  const slots = node.value as Array<ASTNode[] | ASTNode | null>;
+function commentView(node: AstNode): object {
+  const slots = node.value as Array<AstNode[] | AstNode | null>;
   const [prefix, comment, lineDelimiter] = slots;
   return {
     range: node.range,
     text: astText(node),
-    prefix: printable(slotText(prefix as ASTNode | null)),
-    prefix_range: slotRange(prefix as ASTNode | null),
-    comment: printable(slotText(comment as ASTNode[] | ASTNode | null)),
-    comment_range: slotRange(comment as ASTNode[] | ASTNode | null),
-    line_delimiter: printable(slotText(lineDelimiter as ASTNode | null)),
-    line_delimiter_range: slotRange(lineDelimiter as ASTNode | null),
+    prefix: printable(slotText(prefix as AstNode | null)),
+    prefix_range: slotRange(prefix as AstNode | null),
+    comment: printable(slotText(comment as AstNode[] | AstNode | null)),
+    comment_range: slotRange(comment as AstNode[] | AstNode | null),
+    line_delimiter: printable(slotText(lineDelimiter as AstNode | null)),
+    line_delimiter_range: slotRange(lineDelimiter as AstNode | null),
   };
 }
 function runCase(c: CaseDef): void {
@@ -135,7 +135,7 @@ function runCase(c: CaseDef): void {
   if (result === null) {
     return;
   }
-  const slots = result.value as Array<ASTNode[] | ASTNode | null>;
+  const slots = result.value as Array<AstNode[] | AstNode | null>;
   if (rootName === "MutiConmments") {
     const commentsSlot = slots[0];
     const comments = Array.isArray(commentsSlot)
@@ -155,12 +155,12 @@ function runCase(c: CaseDef): void {
   const [prefix, comment, lineDelimiter] = slots;
   console.log("\n--- Comment semantic view ---");
   console.log(SynxFmt.stringify({
-    prefix: printable(slotText(prefix as ASTNode | null)),
-    prefix_range: slotRange(prefix as ASTNode | null),
-    comment: printable(slotText(comment as ASTNode[] | null)),
-    comment_range: slotRange(comment as ASTNode[] | null),
-    line_delimiter: printable(slotText(lineDelimiter as ASTNode | null)),
-    line_delimiter_range: slotRange(lineDelimiter as ASTNode | null),
+    prefix: printable(slotText(prefix as AstNode | null)),
+    prefix_range: slotRange(prefix as AstNode | null),
+    comment: printable(slotText(comment as AstNode[] | null)),
+    comment_range: slotRange(comment as AstNode[] | null),
+    line_delimiter: printable(slotText(lineDelimiter as AstNode | null)),
+    line_delimiter_range: slotRange(lineDelimiter as AstNode | null),
   }));
   console.log("\n--- slot summary ---");
   console.log(SynxFmt.stringify(slots.map((slot, i) => ({

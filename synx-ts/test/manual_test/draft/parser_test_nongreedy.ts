@@ -10,7 +10,7 @@
 *   npx tsx test/manual_test/draft/parser_test_nongreedy.ts
 */
 import { inspect } from "node:util";
-import type { ASTNode } from "../../../src/ast_parser";
+import type { AstNode } from "../../../src/ast_parser";
 import { AstParserImpl } from "../../../src/ast_parser_impl";
 import { AnyChar, completeCharSeq, completeCharRange, completeCharMatchSet, completePatternSeq, type ParserNode, type PatternSeq } from "../../../src/parser_node";
 const A = completeCharSeq({ literal: "a" });
@@ -21,7 +21,7 @@ const Five = completeCharSeq({ literal: "5" });
 const Comma = completeCharSeq({ literal: "," });
 const Space = completeCharMatchSet({ sub_nodes: " " });
 const Digit = completeCharRange({ start: "0", end: "9" });
-function isAstNode(value: unknown): value is ASTNode {
+function isAstNode(value: unknown): value is AstNode {
   return (typeof value === "object" &&
         value !== null &&
         "parser_nodes" in value &&
@@ -30,7 +30,7 @@ function isAstNode(value: unknown): value is ASTNode {
         "raw_value" in value &&
         "seps" in value);
 }
-function nodeText(node: ASTNode): string {
+function nodeText(node: AstNode): string {
   if (typeof node.value === "string") {
     return node.value;
   }
@@ -39,7 +39,7 @@ function nodeText(node: ASTNode): string {
   }
   return String(node.value);
 }
-function slotText(slot: ASTNode[] | ASTNode | null): string | null {
+function slotText(slot: AstNode[] | AstNode | null): string | null {
   if (slot === null) {
     return null;
   }
@@ -51,7 +51,7 @@ function slotText(slot: ASTNode[] | ASTNode | null): string | null {
   }
   return String(slot);
 }
-function slotRange(slot: ASTNode[] | ASTNode | null): Array<[
+function slotRange(slot: AstNode[] | AstNode | null): Array<[
     number,
     number
 ]> | [
@@ -94,7 +94,7 @@ function runCase(c: CaseDef, index: number): void {
   if (result === null) {
     return;
   }
-  const slots = result.value as Array<ASTNode[] | ASTNode | null>;
+  const slots = result.value as Array<AstNode[] | AstNode | null>;
   const slotSummary = slots.map((slot, i) => ({
     slot: i,
     text: slotText(slot),

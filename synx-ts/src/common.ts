@@ -1,6 +1,6 @@
 import type { ParserNode, PatternSet } from "./parser_node";
 
-export type ASTNodeValue = string | (ASTNode[] | ASTNode | null)[] | any;
+export type AstNodeValue = string | (AstNode[] | AstNode | null)[] | any;
 
 /**
  * ============================== EN ==============================
@@ -8,7 +8,7 @@ export type ASTNodeValue = string | (ASTNode[] | ASTNode | null)[] | any;
  * - `parser_nodes`: Matched parser nodes, usually one; when there are multiple nodes, they represent multiple matches, in match order from left to right.
  * - `range`: Matched span `[start, end)` (half-open).
  * - `value`: By default the same as `raw_value`; for special cases see the `ParserNode` definitions.
- * - `raw_value`: Raw AST payload: for `CharMatchNode` it is a string; for other kinds it is `ASTNode[]`, with each entry in one-to-one correspondence with `sub_nodes`.
+ * - `raw_value`: Raw AST payload: for `CharMatchNode` it is a string; for other kinds it is `AstNode[]`, with each entry in one-to-one correspondence with `sub_nodes`.
  * - `seps`: Separator matches for `PatternSeq` (see `PatternSeq.sep`); empty array for other node kinds.
  * - `enclosure`: See `PatternSeq` definition.
  * - `associate_enclosures`: Matched association boundary pairs produced by `PatternSet.associateby`; null when absent.
@@ -19,20 +19,20 @@ export type ASTNodeValue = string | (ASTNode[] | ASTNode | null)[] | any;
  * - `parser_nodes`：匹配的 parser 节点，通常 1 个；多个节点时表示多次被匹配，匹配次序从左到右。
  * - `range`：匹配区间 `[start, end)`（左闭右开）。
  * - `value`：默认value和raw_value相同，特殊情况见ParserNode定义。
- * - `raw_value`：原始 AST 值，对于CharMatchNode为字符串，其它为ASTNode[]，每个节点和sub_nodes一一对应。
+ * - `raw_value`：原始 AST 值，对于CharMatchNode为字符串，其它为AstNode[]，每个节点和sub_nodes一一对应。
  * - `seps`：`PatternSeq` 的分隔符匹配（见 `PatternSeq.sep`）；其它节点类型为空数组。
  * - `enclosure`：见PatternSeq定义。
  * - `associate_enclosures`：由 `PatternSet.associateby` 产生的结合边界匹配对；不存在时为 null。
  * - `bindings`：该 AST 节点生成的绑定上下文；没有生成绑定上下文时为空对象。
  */
-export interface ASTNode {
+export interface AstNode {
     parser_nodes: ParserNode[];
     range: [number, number];
-    value: ASTNodeValue;
-    raw_value: ASTNodeValue;
-    seps: ASTNode[];
-    enclosure: [ASTNode, ASTNode] | null;
-    associate_enclosures: [ASTNode[], ASTNode[]] | null;
+    value: AstNodeValue;
+    raw_value: AstNodeValue;
+    seps: AstNode[];
+    enclosure: [AstNode, AstNode] | null;
+    associate_enclosures: [AstNode[], AstNode[]] | null;
     bindings: Record<string, any>;
 }
 
@@ -49,7 +49,7 @@ export enum ParseResultKind {
 
 export interface AstParseResult {
     kind: ParseResultKind;
-    ast_nodes: ASTNode[];
+    ast_nodes: AstNode[];
     end_pos: number;    // not inclusive
     error?: string;
     profiling: AstParseProfiling;
