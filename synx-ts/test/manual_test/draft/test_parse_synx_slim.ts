@@ -12,12 +12,13 @@ import { dirname, join } from "path";
 import { mkAstParser, ParseResultKind } from "../../../src/ast_parser";
 import { SynxFmt } from "../../../src/synx_fmt";
 import { Synx } from "../../../src/synx_slim_parser_node";
+import { mkSynxSemanticParser } from "../../../src/synx_semantic_parser";
 
 const PROJECT_ID = "67j5ThfYmyYPZb2ogVTaEL";
 
 function findProjectRoot(start_dir: string): string {
   let dir = start_dir;
-  for (;;) {
+  for (; ;) {
     const info_path = join(dir, ".uu", "info.json");
     if (existsSync(info_path)) {
       const info = JSON.parse(readFileSync(info_path, "utf8")) as { id?: unknown };
@@ -38,12 +39,15 @@ const project_root = findProjectRoot(__dirname);
 const synx_slim_path = join(project_root, "synx-slim.synx");
 const src = readFileSync(synx_slim_path, "utf8");
 
-const parser = mkAstParser({ parser_nodes: [Synx], debug: true, timeout_s: 300 });
-const result = parser.parse({ src, pos: 0 }, Synx);
-const success = result.kind === ParseResultKind.Success;
+const ast_parser = mkAstParser({ parser_nodes: [Synx], debug: true, timeout_s: 300 });
+const ast_result = ast_parser.parse({ src, pos: 0 }, Synx);
+const success = ast_result.kind === ParseResultKind.Success;
+
+const semantic_parser = mkSynxSemanticParser();
+const semantic_result = semantic_parser.parse(ast_result.ast_nodes[0]);
 
 function printProfiling(): void {
-  const profiling = result.profiling;
+  const profiling = ast_result.profiling;
   console.log("\n=== profiling ===");
   console.log(JSON.stringify({
     parse_elapsed_s: profiling.parse_elapsed_s,
@@ -77,22 +81,25 @@ function printProfiling(): void {
   console.log(JSON.stringify(alt_top, null, 2));
 }
 
-console.log("=== parse synx-slim.synx ===");
-console.log(JSON.stringify({
-  project_root,
-  synx_slim_path,
-  kind: ParseResultKind[result.kind],
-  success,
-  end_pos: result.end_pos,
-  error: result.error,
-  len: src.length,
-  fully_consumed: success && result.end_pos === src.length,
-  next: src.slice(result.end_pos, result.end_pos + 160),
-}, null, 2));
+// console.log("=== parse synx-slim.synx ===");
+// console.log(JSON.stringify({
+//   project_root,
+//   synx_slim_path,
+//   kind: ParseResultKind[ast_result.kind],
+//   success,
+//   end_pos: ast_result.end_pos,
+//   error: ast_result.error,
+//   len: src.length,
+//   fully_consumed: success && ast_result.end_pos === src.length,
+//   next: src.slice(ast_result.end_pos, ast_result.end_pos + 160),
+// }, null, 2));
 
-if (result.ast_nodes.length > 0) {
-  console.log("\n=== result ===");
-  console.log(SynxFmt.stringify(result.ast_nodes.length === 1 ? result.ast_nodes[0] : result.ast_nodes));
-}
+// if (ast_result.ast_nodes.length > 0) {
+//   console.log("\n=== result ===");
+//   console.log(SynxFmt.stringify(ast_result.ast_nodes.length === 1 ? ast_result.ast_nodes[0] : ast_result.ast_nodes));
+// }
 
-printProfiling();
+// printProfiling();
+
+console.log(JSON.stringify(semantic_result.symbol_table, null, 2));
+

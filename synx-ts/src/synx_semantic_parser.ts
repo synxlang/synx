@@ -61,7 +61,7 @@ export interface SynxSemanticParser {
   parse(node: ASTNode): SynxSemanticResult;
 }
 
-export function mkSynxSemanticParser(config: SynxSemanticParserConfig): SynxSemanticParser {
+export function mkSynxSemanticParser(config: SynxSemanticParserConfig = {}): SynxSemanticParser {
   return new SynxSemanticParserImpl(config);
 }
 
@@ -173,8 +173,8 @@ class SynxSemanticParserImpl implements SynxSemanticParser {
       kind: SynxExprKind.UNKNOWN,
       value: node,
     }
-    const last_parser_node = node.parser_nodes.at(-1);
-    if (last_parser_node === SYNX_PARSER_NODE.Synx) {
+    const parser_node = node.parser_nodes[0];
+    if (parser_node === SYNX_PARSER_NODE.Synx) {
       let parsed_exprs: SynxExpr[] = [];
       for (const expr of node.value.exprs) {
         parsed_exprs.push(this.parseNode(expr));
@@ -183,7 +183,7 @@ class SynxSemanticParserImpl implements SynxSemanticParser {
         kind: SynxExprKind.ROOT,
         value: parsed_exprs,
       };
-    } else if (last_parser_node === SYNX_PARSER_NODE.Assignment) {
+    } else if (parser_node === SYNX_PARSER_NODE.Assignment) {
       let value = this.parseAssignmentValue(node.value.source);
       let target = node.value.target.value as string;
       ret = {
@@ -192,6 +192,7 @@ class SynxSemanticParserImpl implements SynxSemanticParser {
         target: target,
       };
       this.symbol_table.set(target, value);
+    }else{
     }
 
     this.expr_to_ast_node_map.set(ret, node);
