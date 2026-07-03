@@ -16,7 +16,7 @@ const Quote = completeCharSeq({ literal: "\"" });
 /**
  * EscapeChar = ("\\", c:AnyChar) => c
  */
-const EscapeChar: PatternSeq = completePatternSeq({ sub_nodes: [Backslash, AnyChar], sub_quantifiers: "  ", raw: false, sep: null, accept_trailing_sep: false, ignore: null, enclosure: null, sub_node_bindings: [null, "c"], sub_node_isolated_scope_flags: [true, true], assignment_map: "c" });
+const EscapeChar: PatternSeq = completePatternSeq({ sub_nodes: [Backslash, AnyChar], sub_quantifiers: "  ", raw: false, sep: null, accept_trailing_sep: false, ignore: null, enclosure: null, sub_node_bindings: [null, "c"], sub_node_isolated_scope_flags: [true, true], transform: (ctx) => ctx.bindings.c });
 /**
  * {-EscapeChar; -"\""; AnyChar}
  * A `GeneralCharSet`-style PatternSet: reject escaped sequences and bare quotes, otherwise consume one Char.
@@ -28,7 +28,7 @@ const NonEscapeText: PatternSeq = completePatternSeq({ sub_nodes: [NonEscapeChar
  * StringLiteral = (text:{EscapeChar; {-EscapeChar; -"\""; AnyChar}+}* \enclosedby "\"\"") => text
  */
 const StringTextPiece = completePatternSet({ sub_nodes: [EscapeChar, NonEscapeText] });
-const StringLiteral: PatternSeq = completePatternSeq({ sub_nodes: [StringTextPiece], sub_quantifiers: "*", raw: false, sep: null, accept_trailing_sep: false, ignore: null, enclosure: [Quote, Quote], sub_node_bindings: ["text"], sub_node_isolated_scope_flags: [true], assignment_map: "text" });
+const StringLiteral: PatternSeq = completePatternSeq({ sub_nodes: [StringTextPiece], sub_quantifiers: "*", raw: false, sep: null, accept_trailing_sep: false, ignore: null, enclosure: [Quote, Quote], sub_node_bindings: ["text"], sub_node_isolated_scope_flags: [true], transform: (ctx) => ctx.bindings.text });
 const MutiStringLiterals: PatternSeq = completePatternSeq({ sub_nodes: [StringLiteral], sub_quantifiers: "*", raw: false, sep: null, accept_trailing_sep: false, ignore: AnyChar });
 interface CaseDef {
     id: number;

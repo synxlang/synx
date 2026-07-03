@@ -78,7 +78,7 @@ export const SymbolDotChain: PatternSeq = completePatternSeq({
   sub_quantifiers: "+",
   sep: completeCharSeq({ literal: "." }),
   sub_node_bindings: ["symbols"],
-  assignment_map: "symbols",
+  transform: (ctx) => ctx.bindings.symbols,
 });
 
 // GeneralSymbol={Symbol;SymbolDotChain};
@@ -93,7 +93,7 @@ export const Comment: PatternSeq = completePatternSeq({
   sub_nodes: [CommentPrefix, AnyChar, LineDelimiter],
   sub_quantifiers: " *?",
   sub_node_bindings: [null, "comment", null],
-  assignment_map: "comment",
+  transform: (ctx) => ctx.bindings.comment,
 });
 
 // Ignorable={Space;Comment};
@@ -124,7 +124,7 @@ export const EscapeChar: PatternSeq = completePatternSeq({
   sub_nodes: [StringEscapePrefix, AnyChar],
   sub_quantifiers: "  ",
   sub_node_bindings: [null, "c"],
-  assignment_map: "c",
+  transform: (ctx) => ctx.bindings.c,
 });
 
 // {-EscapeChar; -"\""; AnyChar}
@@ -151,7 +151,7 @@ export const StringLiteral: PatternSeq = completePatternSeq({
   sub_quantifiers: "*",
   enclosure: "\"\"",
   sub_node_bindings: ["text"],
-  assignment_map: "text",
+  transform: (ctx) => ctx.bindings.text,
 });
 
 // CharRangeBound={SymbolChar;StringLiteral};
@@ -166,10 +166,7 @@ export const CharRange: PatternSeq = completePatternSeq({
   sub_nodes: [CharRangeBound, completeCharSeq({ literal: "~" }), CharRangeBound],
   sub_quantifiers: "   ",
   sub_node_bindings: ["start", null, "end"],
-  assignment_map: new Map([
-    ["start", "start"],
-    ["end", "end"],
-  ]),
+  transform: (ctx) => ({ start: ctx.bindings.start, end: ctx.bindings.end }),
 });
 
 // FieldAssignment=(".", symbol:Symbol, "=", expr:Expr \ignore Ignorable)=>[.target=symbol, .source=expr];
@@ -179,10 +176,7 @@ export const FieldAssignment: PatternSeq = completePatternSeq({
   sub_quantifiers: "    ",
   ignore: Ignorable,
   sub_node_bindings: [null, "symbol", null, "expr"],
-  assignment_map: new Map([
-    ["target", "symbol"],
-    ["source", "expr"],
-  ]),
+  transform: (ctx) => ({ target: ctx.bindings.symbol, source: ctx.bindings.expr }),
 });
 
 // Struct=(field_assignments:FieldAssignment* \sep "," \ignore Ignorable \enclosedby "[]")=>field_assignments;
@@ -194,7 +188,7 @@ export const Struct: PatternSeq = completePatternSeq({
   ignore: Ignorable,
   enclosure: "[]",
   sub_node_bindings: ["field_assignments"],
-  assignment_map: "field_assignments",
+  transform: (ctx) => ctx.bindings.field_assignments,
 });
 
 // ("\\oneof", string:StringLiteral \sep Space)=>string
@@ -204,7 +198,7 @@ export const OneOfCharSet: PatternSeq = completePatternSeq({
   sub_quantifiers: "  ",
   sep: Space,
   sub_node_bindings: [null, "string"],
-  assignment_map: "string",
+  transform: (ctx) => ctx.bindings.string,
 });
 
 // PatternWithPostfixOp=(pattern:Pattern, op:\oneof "?+*^");
@@ -221,7 +215,7 @@ export const RawPattern: PatternSeq = completePatternSeq({
   sub_quantifiers: "  ",
   ignore: Ignorable,
   sub_node_bindings: [null, "pattern"],
-  assignment_map: "pattern",
+  transform: (ctx) => ctx.bindings.pattern,
 });
 
 // AssociateByPart=("\\associateby", pattern:Pattern \ignore Ignorable)=>pattern;
@@ -231,7 +225,7 @@ export const AssociateByPart: PatternSeq = completePatternSeq({
   sub_quantifiers: "  ",
   ignore: Ignorable,
   sub_node_bindings: [null, "pattern"],
-  assignment_map: "pattern",
+  transform: (ctx) => ctx.bindings.pattern,
 });
 
 // NegPattern=("-", pattern:Pattern \ignore Ignorable)=>[.pattern=pattern];
@@ -241,7 +235,7 @@ export const NegPattern: PatternSeq = completePatternSeq({
   sub_quantifiers: "  ",
   ignore: Ignorable,
   sub_node_bindings: [null, "pattern"],
-  assignment_map: new Map([["pattern", "pattern"]]),
+  transform: (ctx) => ({ pattern: ctx.bindings.pattern }),
 });
 
 
@@ -252,7 +246,7 @@ export const SepPart: PatternSeq = completePatternSeq({
   sub_quantifiers: "  ",
   ignore: Ignorable,
   sub_node_bindings: [null, "pattern"],
-  assignment_map: "pattern",
+  transform: (ctx) => ctx.bindings.pattern,
 });
 
 // IgnorePart=({"\\ignore";"\\ignore_include_beginning"}, pattern:Pattern \ignore Ignorable)=>pattern;
@@ -269,7 +263,7 @@ export const IgnorePart: PatternSeq = completePatternSeq({
   sub_quantifiers: "  ",
   ignore: Ignorable,
   sub_node_bindings: [null, "pattern"],
-  assignment_map: "pattern",
+  transform: (ctx) => ctx.bindings.pattern,
 });
 
 // EnclosedbyPart=("\\enclosedby", pattern:Pattern \ignore Ignorable)=>pattern;
@@ -279,7 +273,7 @@ export const EnclosedbyPart: PatternSeq = completePatternSeq({
   sub_quantifiers: "  ",
   ignore: Ignorable,
   sub_node_bindings: [null, "pattern"],
-  assignment_map: "pattern",
+  transform: (ctx) => ctx.bindings.pattern,
 });
 
 // PatternBinding=(symbol:Symbol,":",pattern:Pattern)=>[.symbol=symbol, .pattern=pattern];
@@ -288,10 +282,7 @@ export const PatternBinding: PatternSeq = completePatternSeq({
   sub_nodes: [Symbol, completeCharSeq({ literal: ":" }), Pattern],
   sub_quantifiers: "   ",
   sub_node_bindings: ["symbol", null, "pattern"],
-  assignment_map: new Map([
-    ["symbol", "symbol"],
-    ["pattern", "pattern"],
-  ]),
+  transform: (ctx) => ({ symbol: ctx.bindings.symbol, pattern: ctx.bindings.pattern }),
 });
 
 export const PatternItem: PatternSet = completePatternSet({
@@ -306,7 +297,7 @@ export const PatternSeqPatterns: PatternSeq = completePatternSeq({
   sep: completeCharSeq({ literal: "," }),
   ignore: Ignorable,
   sub_node_bindings: ["patterns"],
-  assignment_map: "patterns",
+  transform: (ctx) => ctx.bindings.patterns,
 });
 
 // PatternSeq=((patterns:{PatternBinding;Pattern}+ \sep "," \ignore Ignorable), sep_part:SepPart?, ignore_part:IgnorePart?, enclosedby_part:EnclosedbyPart? \ignore Ignorable \enclosedby "()")=>...
@@ -317,12 +308,7 @@ export const PatternSeqNode: PatternSeq = completePatternSeq({
   ignore: Ignorable,
   enclosure: "()",
   sub_node_bindings: ["patterns", "sep_part", "ignore_part", "enclosedby_part"],
-  assignment_map: new Map([
-    ["patterns", "patterns"],
-    ["sep", "sep_part"],
-    ["ignore", "ignore_part"],
-    ["enclosedby", "enclosedby_part"],
-  ]),
+  transform: (ctx) => ({ patterns: ctx.bindings.patterns, sep: ctx.bindings.sep_part, ignore: ctx.bindings.ignore_part, enclosedby: ctx.bindings.enclosedby_part }),
 });
 
 export const PatternSetPatterns: PatternSeq = completePatternSeq({
@@ -332,7 +318,7 @@ export const PatternSetPatterns: PatternSeq = completePatternSeq({
   sep: completeCharSeq({ literal: ";" }),
   ignore: Ignorable,
   sub_node_bindings: ["patterns"],
-  assignment_map: "patterns",
+  transform: (ctx) => ctx.bindings.patterns,
 });
 
 // PatternSet=((patterns:{PatternBinding;Pattern}* \sep ";" \ignore Ignorable), ";"?, associateby_part:AssociateByPart?, ignore_part:IgnorePart? \ignore Ignorable \enclosedby "{}")=>...
@@ -343,11 +329,7 @@ export const PatternSetNode: PatternSeq = completePatternSeq({
   ignore: Ignorable,
   enclosure: "{}",
   sub_node_bindings: ["patterns", null, "associateby_part", "ignore_part"],
-  assignment_map: new Map([
-    ["patterns", "patterns"],
-    ["associateby", "associateby_part"],
-    ["ignore", "ignore_part"],
-  ]),
+  transform: (ctx) => ({ patterns: ctx.bindings.patterns, associateby: ctx.bindings.associateby_part, ignore: ctx.bindings.ignore_part }),
 });
 
 // Rule=(pattern:PatternSeq,"=>",returned:Expr)=>[.pattern=pattern, .returned=returned];
@@ -356,10 +338,7 @@ export const Rule: PatternSeq = completePatternSeq({
   sub_nodes: [PatternSeqNode, completeCharSeq({ literal: "=>" }), Expr],
   sub_quantifiers: "   ",
   sub_node_bindings: ["pattern", null, "returned"],
-  assignment_map: new Map([
-    ["pattern", "pattern"],
-    ["returned", "returned"],
-  ]),
+  transform: (ctx) => ({ pattern: ctx.bindings.pattern, returned: ctx.bindings.returned }),
 });
 
 // List=(exprs:Expr* \sep "," \ignore Ignorable \enclosedby "[]")=>exprs;
@@ -371,7 +350,7 @@ export const List: PatternSeq = completePatternSeq({
   ignore: Ignorable,
   enclosure: "[]",
   sub_node_bindings: ["exprs"],
-  assignment_map: "exprs",
+  transform: (ctx) => ctx.bindings.exprs,
 });
 
 // Assignment = { (symbol:Symbol, "=", pattern:Pattern \ignore Ignorable)=>[.target=symbol, .source=pattern]; };
@@ -381,10 +360,7 @@ export const AssignmentPattern: PatternSeq = completePatternSeq({
   sub_quantifiers: "   ",
   ignore: Ignorable,
   sub_node_bindings: ["symbol", null, "pattern"],
-  assignment_map: new Map([
-    ["target", "symbol"],
-    ["source", "pattern"],
-  ]),
+  transform: (ctx) => ({ target: ctx.bindings.symbol, source: ctx.bindings.pattern }),
 });
 export const Assignment: PatternSet = completePatternSet({
   name: "Assignment",
@@ -446,5 +422,5 @@ export const Synx: PatternSeq = completePatternSeq({
   ignore: Ignorable,
   ignore_beginning: true,
   sub_node_bindings: ["exprs"],
-  assignment_map: new Map([["exprs", "exprs"]]),
+  transform: (ctx) => ({ exprs: ctx.bindings.exprs }),
 });

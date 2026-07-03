@@ -46,6 +46,12 @@ export interface CharSeq {
   literal: string;
 }
 
+export interface AstTransformCtx {
+  bindings: Record<string, any>;
+}
+
+export type AstTransformFn = (ctx: AstTransformCtx) => any;
+
 /**
  * ============================== EN ==============================
  *
@@ -79,10 +85,7 @@ export interface CharSeq {
  * while `Wrapper=((left:Symbol, ":", right:Symbol))=>[.left=left, .right=right]` can see
  * `left` and `right` because the child node is inplace.
  *
- * `assignment_map` (when non-null):
- * - A string assigns the corresponding context variable directly to AST `value`, e.g. `=>comment` makes `value = comment`.
- * - A Map maps AST `value` keys to names in the parse context.
- *   For each entry, `value[key]` is assigned from the corresponding context variable; keys absent from the map are not assigned.
+ * `transform` (when non-null): AST transform function. When non-null, `value` is produced by calling `transform({ bindings })`.
  * `raw_value` is not affected by binding-related rules.
  *
  * ============================== 中文 ==============================
@@ -115,10 +118,8 @@ export interface CharSeq {
  * 而 `Wrapper=((left:Symbol, ":", right:Symbol))=>[.left=left, .right=right]`
  * 可以看到 `left`、`right`，因为该子节点是原地的。
  *
- * `assignment_map`（非 null 时）：
- * - string 会把对应上下文变量直接赋值给 AST `value`，例如 `=>comment` 使 `value = comment`。
- * - Map 会将 AST `value` 的 key 映射到上下文变量名。
- *   对每个映射项，`value[key]` 会从对应上下文变量赋值；map 中不存在的 key 不会被赋值。
+ * `transform`为ast变换函数，如果非null，则value由transform函数产生
+ * 
  * `raw_value` 不受 binding 相关规则影响。
  */
 export interface PatternSeq {
@@ -135,7 +136,7 @@ export interface PatternSeq {
   enclosure: [ParserNode, ParserNode] | null;
   sub_node_bindings: (string | null)[] | null;
   sub_node_isolated_scope_flags: boolean[] | null;
-  assignment_map: Map<string, string> | string | null;
+  transform: AstTransformFn | null;
 }
 
 /**
@@ -224,7 +225,7 @@ export const AnyChar = { kind: ParserNodeKind.AnyChar, name: "AnyChar" } as cons
  * 
  * 尚未解析的 pattern，仅用于占位，实际解析中不可出现。
  */
-export interface UnresolvedPattern{
+export interface UnresolvedPattern {
   kind: ParserNodeKind.UnresolvedPattern;
   name: string;
 }
@@ -384,13 +385,10 @@ function normalizeSubNodeIsolatedScopeFlags(
   return sub_node_bindings !== null ? Array.from({ length: n }, () => true) : null;
 }
 
-function normalizeAssignmentMap(
-  assignment_map: Map<string, string> | string | undefined | null,
-): Map<string, string> | string | null {
-  if (assignment_map === undefined) {
-    return null;
-  }
-  return assignment_map instanceof Map ? new Map(assignment_map) : assignment_map;
+function normalizeTransform(
+  transform: AstTransformFn | undefined | null,
+): AstTransformFn | null {
+  return transform ?? null;
 }
 
 type PatternSeqInput = Omit<Partial<PatternSeq>, "enclosure"> & {
@@ -436,7 +434,7 @@ export function completePatternSeq(
   const greedy_flags = normalizeGreedyFlags(n, partial.sub_quantifiers, partial.sub_nodes, partial.greedy_flags);
   const sub_node_bindings = normalizeSubNodeBindings(n, partial.sub_node_bindings);
   const sub_node_isolated_scope_flags = normalizeSubNodeIsolatedScopeFlags(n, partial.sub_node_isolated_scope_flags, sub_node_bindings);
-  const assignment_map = normalizeAssignmentMap(partial.assignment_map);
+  const transform = normalizeTransform(partial.transform);
   const enclosure = normalizeParserNodePair(partial.enclosure);
   return Object.assign(partial, {
     kind: ParserNodeKind.PatternSeq,
@@ -452,7 +450,7 @@ export function completePatternSeq(
     enclosure,
     sub_node_bindings,
     sub_node_isolated_scope_flags,
-    assignment_map,
+    transform,
   }) as PatternSeq;
 }
 
