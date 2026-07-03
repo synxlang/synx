@@ -5,96 +5,56 @@ import { AstNode } from "./common";
  */
 function* iterAstNode(node: AstNode): Generator<AstNode> {
     const visited = new Set<AstNode>();
-    const stack: AstNode[] = [node];
-    while (stack.length > 0) {
-        const n = stack.pop()!;
-        if (visited.has(n)) continue;
+    function* walk(n: AstNode): Generator<AstNode> {
+        if (visited.has(n)) return;
         visited.add(n);
         yield n;
-
         if (Array.isArray(n.raw_value)) {
             for (const item of n.raw_value) {
                 if (item === null) continue;
                 if (Array.isArray(item)) {
-                    stack.push(...item.filter((x): x is AstNode => x !== null));
+                    for (const sub of item) {
+                        if (sub !== null) yield* walk(sub);
+                    }
                 } else {
-                    stack.push(item);
+                    yield* walk(item);
                 }
             }
         }
-
-        for (const sep of n.seps) stack.push(sep);
-        if (n.enclosure !== null) { stack.push(n.enclosure[0]); stack.push(n.enclosure[1]); }
-        if (n.associate_enclosures !== null) { stack.push(...n.associate_enclosures[0], ...n.associate_enclosures[1]); }
     }
+    yield* walk(node);
 }
 
 /**
  * 将node中所有可引用到包括可间接引用到的AstNode按ref_map进行替换
  */
 function replaceAstNodeRef(node: AstNode, ref_map: Map<AstNode, AstNode>) {
-    const visited = new Set<AstNode>();
+    function walk(obj: any): void {
+        if (obj === null || obj === undefined || typeof obj !== 'object') return;
 
-    function process(n: AstNode): void {
-        if (visited.has(n)) return;
-        visited.add(n);
-
-        function replaceItem(item: any): any {
-            return item !== null && typeof item === 'object' && ref_map.has(item)
-                ? ref_map.get(item)!
-                : item;
-        }
-
-        function processEntry(val: any): void {
-            if (val === null || val === undefined || typeof val === 'string') return;
-            if (Array.isArray(val)) {
-                for (let i = 0; i < val.length; i++) {
-                    const el = val[i];
-                    if (el === null) continue;
-                    if (Array.isArray(el)) {
-                        processEntry(el);
-                        continue;
-                    }
-                    const replaced = replaceItem(el);
-                    val[i] = replaced;
-                    if ('parser_nodes' in replaced) process(replaced);
-                }
-            } else if (typeof val === 'object') {
-                for (const key of Object.keys(val)) {
-                    processEntry(val[key]);
+        if (Array.isArray(obj)) {
+            for (let i = 0; i < obj.length; i++) {
+                const item = obj[i];
+                if (ref_map.has(item)) {
+                    obj[i] = ref_map.get(item)!;
+                } else {
+                    walk(obj[i]);
                 }
             }
-        }
-
-        processEntry(n.value);
-        processEntry(n.raw_value);
-
-        for (let i = 0; i < n.seps.length; i++) {
-            const replaced = replaceItem(n.seps[i]);
-            n.seps[i] = replaced;
-            process(replaced);
-        }
-
-        if (n.enclosure !== null) {
-            for (let i = 0; i < 2; i++) {
-                const replaced = replaceItem(n.enclosure[i]);
-                n.enclosure[i] = replaced;
-                process(replaced);
-            }
-        }
-
-        if (n.associate_enclosures !== null) {
-            for (const arr of n.associate_enclosures) {
-                for (let i = 0; i < arr.length; i++) {
-                    const replaced = replaceItem(arr[i]);
-                    arr[i] = replaced;
-                    process(replaced);
+        } else {
+            for (const key of Object.keys(obj)) {
+                if (key === 'parser_nodes') continue;
+                const item = obj[key];
+                if (ref_map.has(item)) {
+                    obj[key] = ref_map.get(item)!
+                } else {
+                    walk(obj[key]);
                 }
             }
         }
     }
 
-    process(node);
+    walk(node);
 }
 
 /**
@@ -106,16 +66,56 @@ function replaceParserNodeToStringInAstNode(node: AstNode) {
 
 export function stringifyAstNode(node: AstNode) {
     let all_nodes = Array.from(iterAstNode(node));
+    const node_set = new Set(all_nodes);
     let all_node_copies: AstNode[] = [];
     let node_ref_map = new Map<AstNode, AstNode>();
+
+    function cloneArray(arr: (AstNode | AstNode[] | null)[]): (AstNode | AstNode[] | null)[] {
+        return arr.map(item => item !== null && Array.isArray(item) ? item.slice() : item);
+    }
+
+    function cloneValue(val: any): any {
+        if (val === null || val === undefined || typeof val !== 'object') return val;
+        if (node_set.has(val)) return val;
+        if (Array.isArray(val)) return cloneArray(val);
+        const result: any = {};
+        for (const key of Object.keys(val)) {
+            result[key] = cloneValue(val[key]);
+        }
+        return result;
+    }
+
+    function cloneBindings(b: Record<string, any>): Record<string, any> {
+        const result: Record<string, any> = {};
+        for (const key of Object.keys(b)) {
+            result[key] = cloneValue(b[key]);
+        }
+        return result;
+    }
+
+    function cloneNode(n: AstNode): any {
+        const copy: any = { parser_nodes: n.parser_nodes.slice(), range: n.range };
+        copy.value = cloneValue(n.value);
+        if (n.seps.length > 0) copy.seps = n.seps.slice();
+        const b = cloneBindings(n.bindings);
+        if (Object.keys(b).length > 0) copy.bindings = b;
+        if (n.enclosure) copy.enclosure = [n.enclosure[0], n.enclosure[1]];
+        if (n.associate_enclosures) {
+            copy.associate_enclosures = [n.associate_enclosures[0].slice(), n.associate_enclosures[1].slice()];
+        }
+        return copy;
+    }
+
     for (const n of all_nodes) {
-        const copy = { ...n };
+        const copy = cloneNode(n);
         all_node_copies.push(copy);
         node_ref_map.set(n, copy);
     }
-    replaceAstNodeRef(node, node_ref_map);
-    for (let node of all_node_copies) {
-        replaceParserNodeToStringInAstNode(node);
+
+    for (const copy of all_node_copies) {
+        replaceAstNodeRef(copy, node_ref_map);
+        replaceParserNodeToStringInAstNode(copy as AstNode);
     }
-    return JSON.stringify(node);
+
+    return JSON.stringify(all_node_copies[0]);
 }

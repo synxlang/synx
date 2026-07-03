@@ -13,6 +13,7 @@ import { mkAstParser, ParseResultKind } from "../../../src/ast_parser";
 import { SynxFmt } from "../../../src/synx_fmt";
 import { Synx } from "../../../src/synx_slim_parser_node";
 import { mkSynxSemanticParser } from "../../../src/synx_semantic_parser";
+import {stringifyAstNode} from "../../../src/ast_node_utils";
 
 const PROJECT_ID = "67j5ThfYmyYPZb2ogVTaEL";
 
@@ -102,6 +103,7 @@ function printProfiling(): void {
 
 // // printProfiling();
 
+console.log(stringifyAstNode(ast_result.ast_nodes[0]));
 console.log(semantic_result.symbol_table.size);
-console.log(JSON.stringify(Object.fromEntries(semantic_result.symbol_table), null, 2));
+// console.log(JSON.stringify(Object.fromEntries(semantic_result.symbol_table), null, 2));
 
