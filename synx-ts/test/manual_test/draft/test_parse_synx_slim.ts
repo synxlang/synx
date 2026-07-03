@@ -7,7 +7,7 @@
  * If a TypeScript runner is installed:
  *   npx tsx test/manual_test/draft/test_parse_synx_slim.ts
  */
-import { existsSync, readFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 import { mkAstParser, ParseResultKind } from "../../../src/ast_parser";
 import { SynxFmt } from "../../../src/synx_fmt";
@@ -103,7 +103,11 @@ function printProfiling(): void {
 
 // // printProfiling();
 
-console.log(stringifyAstNode(ast_result.ast_nodes[0]));
-console.log(semantic_result.symbol_table.size);
+const out_dir = join(project_root, "data", "out", "log", "test_parse_synx_slim");
+mkdirSync(out_dir, { recursive: true });
+const out_path = join(out_dir, "ast_node.json");
+writeFileSync(out_path, stringifyAstNode(ast_result.ast_nodes[0]));
+console.log(`written to ${out_path}`);
+// console.log(semantic_result.symbol_table.size);
 // console.log(JSON.stringify(Object.fromEntries(semantic_result.symbol_table), null, 2));
 

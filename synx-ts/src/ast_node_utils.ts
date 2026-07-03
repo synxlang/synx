@@ -1,7 +1,7 @@
 import { AstNode } from "./common";
 
 /**
- * 遍历node，每个node只遍历一次，通过递归访问raw_value拿到所有的node
+ * 遍历node，每个node只遍历一次，通过递归访问raw_value/seps/enclosure/associate_enclosures拿到所有的node
  */
 function* iterAstNode(node: AstNode): Generator<AstNode> {
     const visited = new Set<AstNode>();
@@ -19,6 +19,21 @@ function* iterAstNode(node: AstNode): Generator<AstNode> {
                 } else {
                     yield* walk(item);
                 }
+            }
+        }
+        for (const item of n.seps) {
+            yield* walk(item);
+        }
+        if (n.enclosure) {
+            yield* walk(n.enclosure[0]);
+            yield* walk(n.enclosure[1]);
+        }
+        if (n.associate_enclosures) {
+            for (const item of n.associate_enclosures[0]) {
+                yield* walk(item);
+            }
+            for (const item of n.associate_enclosures[1]) {
+                yield* walk(item);
             }
         }
     }
@@ -85,20 +100,10 @@ export function stringifyAstNode(node: AstNode) {
         return result;
     }
 
-    function cloneBindings(b: Record<string, any>): Record<string, any> {
-        const result: Record<string, any> = {};
-        for (const key of Object.keys(b)) {
-            result[key] = cloneValue(b[key]);
-        }
-        return result;
-    }
-
     function cloneNode(n: AstNode): any {
         const copy: any = { parser_nodes: n.parser_nodes.slice(), range: n.range };
         copy.value = cloneValue(n.value);
         if (n.seps.length > 0) copy.seps = n.seps.slice();
-        const b = cloneBindings(n.bindings);
-        if (Object.keys(b).length > 0) copy.bindings = b;
         if (n.enclosure) copy.enclosure = [n.enclosure[0], n.enclosure[1]];
         if (n.associate_enclosures) {
             copy.associate_enclosures = [n.associate_enclosures[0].slice(), n.associate_enclosures[1].slice()];
@@ -117,5 +122,5 @@ export function stringifyAstNode(node: AstNode) {
         replaceParserNodeToStringInAstNode(copy as AstNode);
     }
 
-    return JSON.stringify(all_node_copies[0]);
+    return JSON.stringify(all_node_copies[0], null, 2);
 }
