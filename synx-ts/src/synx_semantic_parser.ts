@@ -1,12 +1,54 @@
+import assert from "assert";
 import { ASTNode } from "./common";
 import {
-  ParserNode
+  ParserNode, validatePartialCharRange, completeCharRange
 } from "./parser_node";
 import * as SYNX_PARSER_NODE from "./synx_parser_node"
 
+export enum SynxExprKind {
+  UNKNOWN,
+  ROOT,
+  PARSER_NODE,
+  ASSIGNMENT,
+  ERROR_RANGE,
+}
+
+export type SynxErrorExpr = SynxErrorRangeExpr;
+export type SynxExpr = SynxUnknownExpr | SynxRootExpr | SynxParserNodeExpr | SynxAssignmentExpr | SynxErrorExpr;
+export type SynxErrorAssignmentValueExpr = SynxErrorRangeExpr;
+export type SynxAssignmentValueExpr = SynxParserNodeExpr | SynxUnknownExpr | SynxErrorAssignmentValueExpr;
+
+export interface SynxUnknownExpr {
+  kind: SynxExprKind.UNKNOWN;
+  value: ASTNode;
+}
+
+export interface SynxRootExpr {
+  kind: SynxExprKind.ROOT;
+  value: SynxExpr[];
+}
+
+export interface SynxParserNodeExpr {
+  kind: SynxExprKind.PARSER_NODE;
+  value: ParserNode;
+}
+
+export interface SynxAssignmentExpr {
+  kind: SynxExprKind.ASSIGNMENT;
+  value: SynxAssignmentValueExpr;
+  target: string;
+}
+
+export interface SynxErrorRangeExpr {
+  kind: SynxExprKind.ERROR_RANGE;
+  value: [string, string];
+}
 
 export interface SynxSemanticResult {
-  symbol_table: Map<string, ParserNode>;
+  root: SynxExpr;
+  symbol_table: Map<string, SynxAssignmentValueExpr>;
+  expr_to_ast_node_map: Map<SynxExpr, ASTNode>;
+  err_exprs: SynxErrorExpr[];
 }
 
 export interface SynxSemanticParserConfig {
@@ -14,9 +56,9 @@ export interface SynxSemanticParserConfig {
 
 export interface SynxSemanticParser {
   /**
-   * 所有synx_ast_nodes必须由SYNX_PARSER_NODE中定义的parser_node解析而来
+   * node必须由SYNX_PARSER_NODE中定义的parser_node解析而来
    */
-  parse(synx_ast_nodes: ASTNode[]): SynxSemanticResult;
+  parse(node: ASTNode): SynxSemanticResult;
 }
 
 export function mkSynxSemanticParser(config: SynxSemanticParserConfig): SynxSemanticParser {
@@ -30,18 +72,130 @@ export function resolve_symbols(symbol_table: Map<string, ParserNode>) {
 
 
 class SynxSemanticParserImpl implements SynxSemanticParser {
+  symbol_table = new Map<string, SynxAssignmentValueExpr>;
+  expr_to_ast_node_map = new Map<SynxExpr, ASTNode>();
+  err_exprs: SynxErrorExpr[] = [];
+
   constructor(config: SynxSemanticParserConfig) {
   }
 
-  parse(synx_ast_nodes: ASTNode[]): SynxSemanticResult {
-    symbol_table: Map<string, ParserNode>;
-    for(const node of synx_ast_nodes){
-      if(node.parser_nodes.includes(SYNX_PARSER_NODE.Synx)){
-        
-      }
+  initParse() {
+    this.symbol_table = new Map<string, SynxAssignmentValueExpr>;
+    this.expr_to_ast_node_map = new Map<SynxExpr, ASTNode>();
+    this.err_exprs = [];
+  }
+
+  procUnexpectedParserNode(parser_node: ParserNode | undefined): never {
+    throw new Error("unexpected parser_node");
+  }
+
+  parse(node: ASTNode): SynxSemanticResult {
+    this.initParse();
+    let root = this.parseNode(node);
+    return {
+      root: root,
+      symbol_table: this.symbol_table,
+      expr_to_ast_node_map: this.expr_to_ast_node_map,
+      err_exprs: this.err_exprs,
+    };
+  }
+
+  parseUnknownExpr(node: ASTNode): SynxUnknownExpr {
+    let ret: SynxUnknownExpr = {
+      kind: SynxExprKind.UNKNOWN,
+      value: node
+    };
+    this.expr_to_ast_node_map.set(ret, node);
+    return ret;
+  }
+
+  pushErrExpr(expr: SynxErrorExpr) {
+    this.err_exprs.push(expr);
+  }
+
+  parseStringLiteral(node: ASTNode): string {
+    throw "todo";
+  }
+
+  parseCharRangeBound(node: ASTNode): string {
+    const parser_node = node.parser_nodes.at(-2);
+    if (parser_node === SYNX_PARSER_NODE.StringLiteral) {
+      return this.parseStringLiteral(node);
+    } else if (parser_node === SYNX_PARSER_NODE.SymbolChar) {
+      return node.value;
+    }
+    this.procUnexpectedParserNode(parser_node);
+  }
+
+  parseCharRange(node: ASTNode): SynxParserNodeExpr | SynxErrorRangeExpr {
+    let partial = {
+      start: this.parseCharRangeBound(node.value.start),
+      end: this.parseCharRangeBound(node.value.end)
     }
 
-    throw new Error("Method not implemented.");
+    const err = validatePartialCharRange(partial);
+    let ret: SynxParserNodeExpr | SynxErrorRangeExpr;
+    if (err) {
+      ret = {
+        kind: SynxExprKind.ERROR_RANGE,
+        value: [partial.start, partial.end]
+      };
+      this.pushErrExpr(ret);
+    } else {
+      ret = {
+        kind: SynxExprKind.PARSER_NODE,
+        value: completeCharRange(partial)
+      };
+    }
+
+    this.expr_to_ast_node_map.set(ret, node);
+    return ret;
+  }
+
+  parseAssignmentValue(node: ASTNode): SynxAssignmentValueExpr {
+    if (node.parser_nodes.at(-1) !== SYNX_PARSER_NODE.Pattern) {
+      this.procUnexpectedParserNode(node.parser_nodes.at(-1));
+    }
+    let ret: SynxAssignmentValueExpr;
+    const parser_node = node.parser_nodes.at(-2);
+    if (parser_node === SYNX_PARSER_NODE.CharRange) {
+      ret = this.parseCharRange(node);
+    } else {
+      ret = this.parseUnknownExpr(node);
+    }
+
+    this.expr_to_ast_node_map.set(ret, node);
+    return ret;
+  }
+
+  parseNode(node: ASTNode): SynxExpr {
+    let ret: SynxExpr = {
+      kind: SynxExprKind.UNKNOWN,
+      value: node,
+    }
+    const last_parser_node = node.parser_nodes.at(-1);
+    if (last_parser_node === SYNX_PARSER_NODE.Synx) {
+      let parsed_exprs: SynxExpr[] = [];
+      for (const expr of node.value.exprs) {
+        parsed_exprs.push(this.parseNode(expr));
+      }
+      ret = {
+        kind: SynxExprKind.ROOT,
+        value: parsed_exprs,
+      };
+    } else if (last_parser_node === SYNX_PARSER_NODE.Assignment) {
+      let value = this.parseAssignmentValue(node.value.source);
+      let target = node.value.target.value as string;
+      ret = {
+        kind: SynxExprKind.ASSIGNMENT,
+        value: value,
+        target: target,
+      };
+      this.symbol_table.set(target, value);
+    }
+
+    this.expr_to_ast_node_map.set(ret, node);
+    return ret;
   }
 }
 
