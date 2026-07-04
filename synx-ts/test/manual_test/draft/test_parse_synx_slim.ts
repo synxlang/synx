@@ -14,6 +14,7 @@ import { SynxFmt } from "../../../src/synx_fmt";
 import { Synx } from "../../../src/synx_slim_parser_node";
 import { mkSynxSemanticParser } from "../../../src/synx_semantic_parser";
 import {stringifyAstNode} from "../../../src/ast_node_utils";
+import {stringifySynxExpr, stringifySynxExprSymbolTable} from "../../../src/synx_semantic_utils";
 
 const PROJECT_ID = "67j5ThfYmyYPZb2ogVTaEL";
 
@@ -108,6 +109,8 @@ mkdirSync(out_dir, { recursive: true });
 const out_path = join(out_dir, "ast_node.json");
 writeFileSync(out_path, stringifyAstNode(ast_result.ast_nodes[0]));
 console.log(`written to ${out_path}`);
-// console.log(semantic_result.symbol_table.size);
-// console.log(JSON.stringify(Object.fromEntries(semantic_result.symbol_table), null, 2));
 
+
+const symbol_table_path = join(out_dir, "symbol_table.json");
+writeFileSync(symbol_table_path, stringifySynxExprSymbolTable(semantic_result.symbol_table));
+console.log(`written to ${symbol_table_path}`);
