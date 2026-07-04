@@ -1,7 +1,8 @@
 import assert from "assert";
 import { AstNode } from "./common";
 import {
-  ParserNode, validatePartialCharRange, completeCharRange
+  ParserNode, validatePartialCharRange, completeCharRange,
+  ParserNodeKind
 } from "./parser_node";
 import * as SYNX_PARSER_NODE from "./synx_parser_node"
 
@@ -157,7 +158,7 @@ class SynxSemanticParserImpl implements SynxSemanticParser {
       this.procUnexpectedParserNode(node.parser_nodes.at(-1));
     }
     let ret: SynxAssignmentValueExpr;
-    const parser_node = node.parser_nodes.at(-2);
+    const parser_node = node.parser_nodes[0];
     if (parser_node === SYNX_PARSER_NODE.CharRange) {
       ret = this.parseCharRange(node);
     } else {
@@ -184,15 +185,19 @@ class SynxSemanticParserImpl implements SynxSemanticParser {
         value: parsed_exprs,
       };
     } else if (parser_node === SYNX_PARSER_NODE.Assignment) {
-      let value = this.parseAssignmentValue(node.value.source);
       let target = node.value.target.value as string;
+      let value = this.parseAssignmentValue(node.value.source);
+      if (value.kind === SynxExprKind.PARSER_NODE) {
+        assert.ok(value.value.kind !== ParserNodeKind.AnyChar);
+        value.value.name = target;
+      }
       ret = {
         kind: SynxExprKind.ASSIGNMENT,
         value: value,
         target: target,
       };
       this.symbol_table.set(target, value);
-    }else{
+    } else {
     }
 
     this.expr_to_ast_node_map.set(ret, node);

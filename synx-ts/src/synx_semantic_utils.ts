@@ -1,30 +1,30 @@
 import { SynxExpr, SynxExprKind, SynxUnknownExpr, SynxRootExpr, SynxParserNodeExpr, SynxAssignmentExpr, SynxErrorRangeExpr, SynxAssignmentValueExpr } from "./synx_semantic_parser";
 import { stringifyAstNode } from "./ast_node_utils";
 
-function synxExprToJson(e: SynxExpr, cache: Map<SynxExpr, any>): any {
-    const cached = cache.get(e);
+function synxExprToJson(expr: SynxExpr, cache: Map<SynxExpr, any>): any {
+    const cached = cache.get(expr);
     if (cached !== undefined) return cached;
     let result: any;
-    switch (e.kind) {
+    switch (expr.kind) {
         case SynxExprKind.UNKNOWN: {
-            const node = (e as SynxUnknownExpr).value;
+            const node = (expr as SynxUnknownExpr).value;
             result = { kind: "UNKNOWN", value: JSON.parse(stringifyAstNode(node)) };
             break;
         }
         case SynxExprKind.ROOT:
-            result = { kind: "ROOT", value: (e as SynxRootExpr).value.map(sub => synxExprToJson(sub, cache)) };
+            result = { kind: "ROOT", value: (expr as SynxRootExpr).value.map(sub => synxExprToJson(sub, cache)) };
             break;
         case SynxExprKind.PARSER_NODE:
-            result = { kind: "PARSER_NODE", value: (e as SynxParserNodeExpr).value.name };
+            result = { kind: "PARSER_NODE", value: expr.value };
             break;
         case SynxExprKind.ASSIGNMENT:
-            result = { kind: "ASSIGNMENT", target: (e as SynxAssignmentExpr).target, value: synxExprToJson((e as SynxAssignmentExpr).value, cache) };
+            result = { kind: "ASSIGNMENT", target: (expr as SynxAssignmentExpr).target, value: synxExprToJson((expr as SynxAssignmentExpr).value, cache) };
             break;
         case SynxExprKind.ERROR_RANGE:
-            result = { kind: "ERROR_RANGE", value: (e as SynxErrorRangeExpr).value };
+            result = { kind: "ERROR_RANGE", value: (expr as SynxErrorRangeExpr).value };
             break;
     }
-    cache.set(e, result);
+    cache.set(expr, result);
     return result;
 }
 
