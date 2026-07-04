@@ -195,6 +195,35 @@ class SynxSemanticParserImpl implements SynxSemanticParser {
     return ret;
   }
 
+  parseAssignment(node: AstNode): SynxAssignmentExpr {
+    let target = node.value.target.value as string;
+    let value = this.parseAssignmentValue(node.value.source);
+    if (value.kind === SynxExprKind.PARSER_NODE) {
+      assert.ok(value.value.kind !== ParserNodeKind.AnyChar);
+      value.value.name = target;
+    }
+    let ret:SynxAssignmentExpr = {
+      kind: SynxExprKind.ASSIGNMENT,
+      value: value,
+      target: target,
+    };
+    this.symbol_table.set(target, value);
+    return ret;
+  }
+
+  parseSynx(node: AstNode): SynxRootExpr {
+    let parsed_exprs: SynxExpr[] = [];
+    for (const expr of node.value.exprs) {
+      parsed_exprs.push(this.parseNode(expr));
+    }
+    let ret: SynxRootExpr = {
+      kind: SynxExprKind.ROOT,
+      value: parsed_exprs,
+    };
+    this.expr_to_ast_node_map.set(ret, node);
+    return ret;
+  }
+
   parseNode(node: AstNode): SynxExpr {
     let ret: SynxExpr = {
       kind: SynxExprKind.UNKNOWN,
@@ -202,31 +231,13 @@ class SynxSemanticParserImpl implements SynxSemanticParser {
     }
     const parser_node = node.parser_nodes[0];
     if (parser_node === SYNX_PARSER_NODE.Synx) {
-      let parsed_exprs: SynxExpr[] = [];
-      for (const expr of node.value.exprs) {
-        parsed_exprs.push(this.parseNode(expr));
-      }
-      ret = {
-        kind: SynxExprKind.ROOT,
-        value: parsed_exprs,
-      };
+      ret = this.parseSynx(node);
     } else if (parser_node === SYNX_PARSER_NODE.Assignment) {
-      let target = node.value.target.value as string;
-      let value = this.parseAssignmentValue(node.value.source);
-      if (value.kind === SynxExprKind.PARSER_NODE) {
-        assert.ok(value.value.kind !== ParserNodeKind.AnyChar);
-        value.value.name = target;
-      }
-      ret = {
-        kind: SynxExprKind.ASSIGNMENT,
-        value: value,
-        target: target,
-      };
-      this.symbol_table.set(target, value);
+      ret = this.parseAssignment(node);
     } else {
+      ret = this.parseAssignmentValue(node);
     }
 
-    this.expr_to_ast_node_map.set(ret, node);
     return ret;
   }
 }
