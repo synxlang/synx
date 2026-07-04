@@ -128,20 +128,20 @@ export const EscapeChar: PatternSeq = completePatternSeq({
 });
 
 // {-EscapeChar; -"\""; AnyChar}
-export const NonEscapeChar: PatternSet = completePatternSet({
+const NonEscapeChar: PatternSet = completePatternSet({
   name: "{-EscapeChar; -\"\\\"\"; AnyChar}",
   sub_nodes: [EscapeChar, completeCharSeq({ literal: "\"" }), AnyChar],
   neg_flags: [true, true, false],
 });
 
-export const NonEscapeText: PatternSeq = completePatternSeq({
+const NonEscapeText: PatternSeq = completePatternSeq({
   name: "{-EscapeChar; -\"\\\"\"; AnyChar}+",
   sub_nodes: [NonEscapeChar],
   sub_quantifiers: "+",
 });
 
 // StringLiteral=(text:{EscapeChar; {-EscapeChar; -"\""; AnyChar}+}* \enclosedby "\"\"")=>text;
-export const StringTextPiece: PatternSet = completePatternSet({
+const StringTextPiece: PatternSet = completePatternSet({
   name: "{EscapeChar; {-EscapeChar; -\"\\\"\"; AnyChar}+}",
   sub_nodes: [EscapeChar, NonEscapeText],
 });
@@ -192,7 +192,7 @@ export const Struct: PatternSeq = completePatternSeq({
 });
 
 // ("\\oneof", string:StringLiteral \sep Space)=>string
-export const OneOfCharSet: PatternSeq = completePatternSeq({
+const OneOfCharSet: PatternSeq = completePatternSeq({
   name: "(\"\\\\oneof\", string:StringLiteral \\sep Space)=>string",
   sub_nodes: [completeCharSeq({ literal: "\\oneof" }), StringLiteral],
   sub_quantifiers: "  ",
@@ -250,7 +250,7 @@ export const SepPart: PatternSeq = completePatternSeq({
 });
 
 // IgnorePart=({"\\ignore";"\\ignore_include_beginning"}, pattern:Pattern \ignore Ignorable)=>pattern;
-export const IgnorePartKeyword: PatternSet = completePatternSet({
+const IgnorePartKeyword: PatternSet = completePatternSet({
   name: "{\"\\\\ignore\";\"\\\\ignore_include_beginning\"}",
   sub_nodes: [
     completeCharSeq({ literal: "\\ignore_include_beginning" }),
@@ -285,12 +285,12 @@ export const PatternBinding: PatternSeq = completePatternSeq({
   transform: (ctx) => ({ symbol: ctx.bindings.symbol, pattern: ctx.bindings.pattern }),
 });
 
-export const PatternItem: PatternSet = completePatternSet({
+const PatternItem: PatternSet = completePatternSet({
   name: "{PatternBinding;Pattern}",
   sub_nodes: [PatternBinding, Pattern],
 });
 
-export const PatternSeqPatterns: PatternSeq = completePatternSeq({
+const PatternSeqPatterns: PatternSeq = completePatternSeq({
   name: "(patterns:{PatternBinding;Pattern}+ \\sep \",\" \\ignore Ignorable)",
   sub_nodes: [PatternItem],
   sub_quantifiers: "+",
@@ -301,7 +301,7 @@ export const PatternSeqPatterns: PatternSeq = completePatternSeq({
 });
 
 // PatternSeq=((patterns:{PatternBinding;Pattern}+ \sep "," \ignore Ignorable), sep_part:SepPart?, ignore_part:IgnorePart?, enclosedby_part:EnclosedbyPart? \ignore Ignorable \enclosedby "()")=>...
-export const PatternSeqNode: PatternSeq = completePatternSeq({
+const PatternSeqNode: PatternSeq = completePatternSeq({
   name: "PatternSeq",
   sub_nodes: [PatternSeqPatterns, SepPart, IgnorePart, EnclosedbyPart],
   sub_quantifiers: " ???",
@@ -311,7 +311,7 @@ export const PatternSeqNode: PatternSeq = completePatternSeq({
   transform: (ctx) => ({ patterns: ctx.bindings.patterns, sep: ctx.bindings.sep_part, ignore: ctx.bindings.ignore_part, enclosedby: ctx.bindings.enclosedby_part }),
 });
 
-export const PatternSetPatterns: PatternSeq = completePatternSeq({
+const PatternSetPatterns: PatternSeq = completePatternSeq({
   name: "(patterns:{PatternBinding;Pattern}* \\sep \";\" \\ignore Ignorable)",
   sub_nodes: [PatternItem],
   sub_quantifiers: "*",
@@ -322,7 +322,7 @@ export const PatternSetPatterns: PatternSeq = completePatternSeq({
 });
 
 // PatternSet=((patterns:{PatternBinding;Pattern}* \sep ";" \ignore Ignorable), ";"?, associateby_part:AssociateByPart?, ignore_part:IgnorePart? \ignore Ignorable \enclosedby "{}")=>...
-export const PatternSetNode: PatternSeq = completePatternSeq({
+const PatternSetNode: PatternSeq = completePatternSeq({
   name: "PatternSet",
   sub_nodes: [PatternSetPatterns, completeCharSeq({ literal: ";" }), AssociateByPart, IgnorePart],
   sub_quantifiers: " ???",
