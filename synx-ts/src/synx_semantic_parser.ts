@@ -153,6 +153,10 @@ class SynxSemanticParserImpl implements SynxSemanticParser {
     return ret;
   }
 
+  parseCharSeq(node: AstNode): SynxParserNodeExpr {
+    throw "todo";
+  }
+
   parseAssignmentValue(node: AstNode): SynxAssignmentValueExpr {
     if (node.parser_nodes.at(-1) !== SYNX_PARSER_NODE.Pattern) {
       this.procUnexpectedParserNode(node.parser_nodes.at(-1));
@@ -161,6 +165,8 @@ class SynxSemanticParserImpl implements SynxSemanticParser {
     const parser_node = node.parser_nodes[0];
     if (parser_node === SYNX_PARSER_NODE.CharRange) {
       ret = this.parseCharRange(node);
+    } else if (parser_node === SYNX_PARSER_NODE.StringLiteral) {
+      ret = this.parseCharSeq(node);
     } else {
       ret = this.parseUnknownExpr(node);
     }
