@@ -1,7 +1,7 @@
 import assert from "assert";
 import { AstNode } from "./common";
 import {
-  ParserNode, validatePartialCharRange, completeCharRange,
+  ParserNode, validatePartialCharRange, completeCharRange, completeCharSeq,
   ParserNodeKind
 } from "./parser_node";
 import * as SYNX_PARSER_NODE from "./synx_parser_node"
@@ -115,7 +115,22 @@ class SynxSemanticParserImpl implements SynxSemanticParser {
   }
 
   parseStringLiteral(node: AstNode): string {
-    throw "todo";
+    const pieces = node.value as AstNode[];
+    return pieces.map(p => {
+      if (p.parser_nodes[0] === SYNX_PARSER_NODE.EscapeChar) {
+        const ch = p.value.value as string;
+        switch (ch) {
+          case "t": return "\t";
+          case "n": return "\n";
+          case "r": return "\r";
+          case "v": return "\v";
+          case "f": return "\f";
+          case "0": return "\0";
+          default: return ch;
+        }
+      }
+      return p.value[0].value;
+    }).join('');
   }
 
   parseCharRangeBound(node: AstNode): string {
@@ -154,7 +169,12 @@ class SynxSemanticParserImpl implements SynxSemanticParser {
   }
 
   parseCharSeq(node: AstNode): SynxParserNodeExpr {
-    throw "todo";
+    const ret: SynxParserNodeExpr = {
+      kind: SynxExprKind.PARSER_NODE,
+      value: completeCharSeq({ literal: this.parseStringLiteral(node) }),
+    };
+    this.expr_to_ast_node_map.set(ret, node);
+    return ret;
   }
 
   parseAssignmentValue(node: AstNode): SynxAssignmentValueExpr {
