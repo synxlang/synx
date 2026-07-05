@@ -7,17 +7,17 @@ import {
 import * as SYNX_PARSER_NODE from "./synx_parser_node"
 
 export enum SynxExprKind {
-  UNKNOWN,
   ROOT,
   PARSER_NODE,
   ASSIGNMENT,
+  UNKNOWN,
   ERROR_RANGE,
+  ERROR_PATTERN_SET,
 }
 
-export type SynxErrorExpr = SynxErrorRangeExpr;
+export type SynxErrorExpr = SynxUnknownExpr | SynxErrorRangeExpr | SynxErrorPatternSetExpr;
 export type SynxExpr = SynxUnknownExpr | SynxRootExpr | SynxParserNodeExpr | SynxAssignmentExpr | SynxErrorExpr;
-export type SynxErrorAssignmentValueExpr = SynxErrorRangeExpr;
-export type SynxAssignmentValueExpr = SynxParserNodeExpr | SynxUnknownExpr | SynxErrorAssignmentValueExpr;
+export type SynxAssignmentValueExpr = SynxParserNodeExpr | SynxErrorExpr;
 
 export interface SynxUnknownExpr {
   kind: SynxExprKind.UNKNOWN;
@@ -43,6 +43,13 @@ export interface SynxAssignmentExpr {
 export interface SynxErrorRangeExpr {
   kind: SynxExprKind.ERROR_RANGE;
   value: [string, string];
+}
+
+export interface SynxErrorPatternSetExpr {
+  kind: SynxExprKind.ERROR_PATTERN_SET;
+  patterns: (SynxParserNodeExpr | SynxErrorExpr)[];
+  associateby: SynxParserNodeExpr | SynxErrorExpr;
+  ignore: SynxParserNodeExpr | SynxErrorExpr;
 }
 
 export interface SynxSemanticResult {
@@ -177,22 +184,68 @@ class SynxSemanticParserImpl implements SynxSemanticParser {
     return ret;
   }
 
-  parseAssignmentValue(node: AstNode): SynxAssignmentValueExpr {
+  parsePatternSet(node: AstNode): SynxParserNodeExpr | SynxErrorPatternSetExpr {
+    const value = node.value;
+    let has_error = false;
+    let pattern_exprs: (SynxParserNodeExpr | SynxErrorExpr)[] = [];
+    for (const pattern_ast_node of (value.patterns as AstNode[])) {
+      if (pattern_ast_node.parser_nodes[0] === SYNX_PARSER_NODE.PatternBinding) {
+        throw new Error("Notimplemented now");
+      }
+      let pattern_expr = this.parsePattern(pattern_ast_node);
+      if (pattern_expr.kind !== SynxExprKind.PARSER_NODE) {
+        has_error = true;
+      }
+      pattern_exprs.push(pattern_expr);
+    }
+
+    let associateby_pattern_expr = this.parsePattern(value.associateby.value);
+    if (associateby_pattern_expr.kind !== SynxExprKind.PARSER_NODE) {
+      has_error = true;
+    }
+
+    let ignore_pattern_expr = this.parsePattern(value.ignore.value);
+    if (ignore_pattern_expr.kind !== SynxExprKind.PARSER_NODE) {
+      has_error = true;
+    }
+
+    let ret: SynxParserNodeExpr | SynxErrorPatternSetExpr;
+    if (has_error) {
+      ret = {
+        kind: SynxExprKind.ERROR_PATTERN_SET,
+        patterns: pattern_exprs,
+        associateby: associateby_pattern_expr,
+        ignore: ignore_pattern_expr,
+      };
+    } else {
+      throw "todo";
+    }
+
+    return ret;
+  }
+
+  parsePattern(node: AstNode): SynxParserNodeExpr | SynxErrorExpr {
     if (node.parser_nodes.at(-1) !== SYNX_PARSER_NODE.Pattern) {
       this.procUnexpectedParserNode(node.parser_nodes.at(-1));
     }
-    let ret: SynxAssignmentValueExpr;
+    let ret: SynxParserNodeExpr | SynxErrorExpr;
     const parser_node = node.parser_nodes[0];
     if (parser_node === SYNX_PARSER_NODE.CharRange) {
       ret = this.parseCharRange(node);
     } else if (parser_node === SYNX_PARSER_NODE.StringLiteral) {
       ret = this.parseCharSeq(node);
+    } else if (parser_node === SYNX_PARSER_NODE.PatternSet) {
+      ret = this.parsePatternSet(node);
     } else {
       ret = this.parseUnknownExpr(node);
     }
 
     this.expr_to_ast_node_map.set(ret, node);
     return ret;
+  }
+
+  parseAssignmentValue(node: AstNode): SynxAssignmentValueExpr {
+    return this.parsePattern(node);
   }
 
   parseAssignment(node: AstNode): SynxAssignmentExpr {
@@ -202,7 +255,7 @@ class SynxSemanticParserImpl implements SynxSemanticParser {
       assert.ok(value.value.kind !== ParserNodeKind.AnyChar);
       value.value.name = target;
     }
-    let ret:SynxAssignmentExpr = {
+    let ret: SynxAssignmentExpr = {
       kind: SynxExprKind.ASSIGNMENT,
       value: value,
       target: target,
@@ -235,7 +288,7 @@ class SynxSemanticParserImpl implements SynxSemanticParser {
     } else if (parser_node === SYNX_PARSER_NODE.Assignment) {
       ret = this.parseAssignment(node);
     } else {
-      ret = this.parseAssignmentValue(node);
+      ret = this.parsePattern(node);
     }
 
     return ret;
