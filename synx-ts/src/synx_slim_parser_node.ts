@@ -196,10 +196,21 @@ const OneOfCharSet: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   transform: (ctx) => ctx.bindings.string,
 });
 
-// PatternWithPostfixOp=(pattern:Pattern, op:\oneof "?+*^");
+// GreedyQuantifier=\oneof "?+*";
+export const GreedyQuantifier: PARSER_NODE_TYPE.CharMatchSet = completeCharMatchSet({ name: "GreedyQuantifier", sub_nodes: "?+*" });
+
+// NonGreedyQuantifier=\raw GreedyQuantifier,"^";
+export const NonGreedyQuantifier: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
+  name: "NonGreedyQuantifier",
+  sub_nodes: [GreedyQuantifier, completeCharSeq({ literal: "^" })],
+  sub_quantifiers: "  ",
+  raw: true,
+});
+
+// PatternWithPostfixOp=(pattern:Pattern, op:{NonGreedyQuantifier;GreedyQuantifier});
 export const PatternWithPostfixOp: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   name: "PatternWithPostfixOp",
-  sub_nodes: [Pattern, completeCharMatchSet({ sub_nodes: "?+*^" })],
+  sub_nodes: [Pattern, completePatternSet({ name: "{NonGreedyQuantifier;GreedyQuantifier}", sub_nodes: [NonGreedyQuantifier, GreedyQuantifier] })],
   sub_quantifiers: "  ",
 });
 

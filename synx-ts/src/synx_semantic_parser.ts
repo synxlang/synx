@@ -234,9 +234,12 @@ class SynxSemanticParserImpl implements SynxSemanticParser {
       ret = this.parseCharRange(node);
     } else if (parser_node === SYNX_PARSER_NODE.StringLiteral) {
       ret = this.parseCharSeq(node);
-    } else if (parser_node === SYNX_PARSER_NODE.PatternSet) {
-      ret = this.parsePatternSet(node);
-    } else {
+    } 
+    // else if (parser_node === SYNX_PARSER_NODE.PatternSet) {
+    //   ret = this.parsePatternSet(node);
+    // } 
+    
+    else {
       ret = this.parseUnknownExpr(node);
     }
 

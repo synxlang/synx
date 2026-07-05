@@ -31,7 +31,9 @@ CharSet = {
     \ignore Ignorable
 };
 
-PatternWithPostfixOp=(pattern:Pattern, op:\oneof "?+*^");
+GreedyQuantifier=\oneof "?+*";
+NonGreedyQuantifier=\raw (GreedyQuantifier,"^");
+PatternWithPostfixOp=(pattern:Pattern, op: {NonGreedyQuantifier;GreedyQuantifier});
 RawPattern=("\\raw", pattern:Pattern \ignore Ignorable)=>pattern;
 
 AssociateByPart=("\\associateby", pattern:Pattern \ignore Ignorable)=>pattern;
