@@ -33,12 +33,14 @@ CharSet = {
 
 GreedyQuantifier=\oneof "?+*";
 NonGreedyQuantifier=\raw (GreedyQuantifier,"^");
-PatternWithPostfixOp=(pattern:Pattern, op: {NonGreedyQuantifier;GreedyQuantifier});
-RawPattern=("\\raw", pattern:Pattern \ignore Ignorable)=>pattern;
+PostfixOp={NonGreedyQuantifier;GreedyQuantifier};
+PatternWithPostfixOp=(pattern:Pattern, op: PostfixOp);
+PrefixOp={"\\raw"; "-"};
+PatternWithUnaryOp=(prefix_op:PrefixOp?, pattern:Pattern, postfix_op:PostfixOp? \ignore Ignorable)=>[.prefix_op=prefix_op, .pattern=pattern, .postfix_op=postfix_op];
+TopLevelPattern=PatternWithUnaryOp;
 
 AssociateByPart=("\\associateby", pattern:Pattern \ignore Ignorable)=>pattern;
-NegPattern=("-", pattern:Pattern \ignore Ignorable)=>[.pattern=pattern]; \\ reject if match, only can be used in PatternSet
-PatternSet=((patterns:{PatternBinding;Pattern}* \sep ";" \ignore Ignorable),
+PatternSet=((patterns:{PatternBinding;TopLevelPattern}* \sep ";" \ignore Ignorable),
     ";"?,
     associateby_part:AssociateByPart?, 
     ignore_part:IgnorePart? 
@@ -48,27 +50,26 @@ SepPart=("\\sep", pattern:Pattern \ignore Ignorable)=>pattern;
 IgnorePart=({"\\ignore_include_beginning";"\\ignore"}, pattern:Pattern \ignore Ignorable)=>pattern;
 EnclosedbyPart=("\\enclosedby", pattern:Pattern \ignore Ignorable)=>pattern;        \\ valid pattern is StringLiteral of length 2 or PatternSeq of length 2
 PatternSeq=(
-    (patterns:{PatternBinding;Pattern}+ \sep "," \ignore Ignorable), 
+    (patterns:{PatternBinding;TopLevelPattern}+ \sep "," \ignore Ignorable), 
     sep_part:SepPart?, ignore_part:IgnorePart?, enclosedby_part:EnclosedbyPart? 
     \ignore Ignorable
     \enclosedby "()"
 )=>[.patterns=patterns, .sep=sep_part, .ignore=ignore_part, .enclosedby=enclosedby_part];
 
-PatternBinding=(symbol:Symbol,":",pattern:Pattern)=>[.symbol=symbol, .pattern=pattern];
+PatternBinding=(symbol:Symbol,":",pattern:TopLevelPattern \ignore Ignorable)=>[.symbol=symbol, .pattern=pattern];
 Rule=(pattern:PatternSeq,"=>",returned:Expr)=>[.pattern=pattern, .returned=returned];
 
-Pattern={NegPattern;PatternWithPostfixOp;RawPattern;Rule;
-    PatternSeq;PatternSet;CharSet;StringLiteral;GeneralSymbol \associateby "()" \ignore Ignorable};
+Pattern={Rule;PatternSeq;PatternSet;CharSet;StringLiteral;GeneralSymbol \associateby "()" \ignore Ignorable};
 
 List=(exprs:Expr* \sep "," \ignore Ignorable \enclosedby "[]")=>exprs;
 
-Assignment = (symbol:Symbol, "=", pattern:Pattern \ignore Ignorable)=>[.target=symbol, .source=pattern];
+Assignment = (symbol:Symbol, "=", pattern:TopLevelPattern \ignore Ignorable)=>[.target=symbol, .source=pattern];
 
 Expr={
     Assignment;
     List;
     Struct;
-    Pattern;
+    TopLevelPattern;
     GeneralSymbol;
 };
 

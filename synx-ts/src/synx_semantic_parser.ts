@@ -234,11 +234,13 @@ class SynxSemanticParserImpl implements SynxSemanticParser {
       ret = this.parseCharRange(node);
     } else if (parser_node === SYNX_PARSER_NODE.StringLiteral) {
       ret = this.parseCharSeq(node);
-    } 
+    }
+    // TODO
+
     // else if (parser_node === SYNX_PARSER_NODE.PatternSet) {
     //   ret = this.parsePatternSet(node);
     // } 
-    
+
     else {
       ret = this.parseUnknownExpr(node);
     }
@@ -247,8 +249,13 @@ class SynxSemanticParserImpl implements SynxSemanticParser {
     return ret;
   }
 
+  parseTopLevelPattern(node: AstNode): SynxErrorExpr {
+    // TODO
+    return this.parseUnknownExpr(node);
+  }
+
   parseAssignmentValue(node: AstNode): SynxAssignmentValueExpr {
-    return this.parsePattern(node);
+    return this.parseTopLevelPattern(node);
   }
 
   parseAssignment(node: AstNode): SynxAssignmentExpr {
@@ -270,7 +277,7 @@ class SynxSemanticParserImpl implements SynxSemanticParser {
   parseSynx(node: AstNode): SynxRootExpr {
     let parsed_exprs: SynxExpr[] = [];
     for (const expr of node.value.exprs) {
-      parsed_exprs.push(this.parseNode(expr));
+      parsed_exprs.push(this.parseExpr(expr));
     }
     let ret: SynxRootExpr = {
       kind: SynxExprKind.ROOT,
@@ -280,18 +287,24 @@ class SynxSemanticParserImpl implements SynxSemanticParser {
     return ret;
   }
 
-  parseNode(node: AstNode): SynxExpr {
-    let ret: SynxExpr = {
-      kind: SynxExprKind.UNKNOWN,
-      value: node,
+  parseExpr(node: AstNode): SynxExpr {
+    let ret: SynxExpr;
+    const parser_node = node.parser_nodes[0];
+    if (parser_node === SYNX_PARSER_NODE.Assignment) {
+      ret = this.parseAssignment(node);
+    } else {
+      ret = this.parseTopLevelPattern(node);
     }
+    return ret;
+  }
+
+  parseNode(node: AstNode): SynxExpr {
+    let ret: SynxExpr;
     const parser_node = node.parser_nodes[0];
     if (parser_node === SYNX_PARSER_NODE.Synx) {
       ret = this.parseSynx(node);
-    } else if (parser_node === SYNX_PARSER_NODE.Assignment) {
-      ret = this.parseAssignment(node);
     } else {
-      ret = this.parsePattern(node);
+      ret = this.parseExpr(node);
     }
 
     return ret;
