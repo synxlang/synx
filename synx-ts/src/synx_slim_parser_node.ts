@@ -6,19 +6,14 @@ import {
   completePatternSeq,
   completePatternSet,
 } from "./parser_node";
-import type {
-  CharMatchRange,
-  CharMatchSet,
-  PatternSeq,
-  PatternSet,
-} from "./parser_node";
+import * as PARSER_NODE_TYPE from "./parser_node";
 
 // Digit=0~9;
-export const Digit: CharMatchRange = completeCharRange({ name: "Digit", start: "0", end: "9" });
+export const Digit: PARSER_NODE_TYPE.CharMatchRange = completeCharRange({ name: "Digit", start: "0", end: "9" });
 
 // Letter={a~z;A~Z;"_";OtherLanguageLetter};
-export const OtherLanguageLetter: CharMatchRange = completeCharRange({ name: "OtherLanguageLetter", start: "\u0080" });
-export const Letter: CharMatchSet = completeCharMatchSet({
+export const OtherLanguageLetter: PARSER_NODE_TYPE.CharMatchRange = completeCharRange({ name: "OtherLanguageLetter", start: "\u0080" });
+export const Letter: PARSER_NODE_TYPE.CharMatchSet = completeCharMatchSet({
   name: "Letter",
   sub_nodes: [
     completeCharRange({ name: "a~z", start: "a", end: "z" }),
@@ -29,16 +24,16 @@ export const Letter: CharMatchSet = completeCharMatchSet({
 });
 
 // SymbolChar={Letter;Digit};
-export const SymbolChar: CharMatchSet = completeCharMatchSet({ name: "SymbolChar", sub_nodes: [Letter, Digit] });
+export const SymbolChar: PARSER_NODE_TYPE.CharMatchSet = completeCharMatchSet({ name: "SymbolChar", sub_nodes: [Letter, Digit] });
 
 // SpaceChar= \oneof " \t\v\r\n";
-export const SpaceChar: CharMatchSet = completeCharMatchSet({ name: "SpaceChar", sub_nodes: " \t\v\r\n" });
+export const SpaceChar: PARSER_NODE_TYPE.CharMatchSet = completeCharMatchSet({ name: "SpaceChar", sub_nodes: " \t\v\r\n" });
 
 // Delimiter=";";
 export const Delimiter = completeCharSeq({ name: "Delimiter", literal: ";" });
 
 // LineDelimiter={"\n";"\r\n"};
-export const LineDelimiter: PatternSet = completePatternSet({
+export const LineDelimiter: PARSER_NODE_TYPE.PatternSet = completePatternSet({
   name: "LineDelimiter",
   sub_nodes: [completeCharSeq({ literal: "\n" }), completeCharSeq({ literal: "\r\n" })],
 });
@@ -50,21 +45,21 @@ export const CommentPrefix = completeCharSeq({ name: "CommentPrefix", literal: "
 export const StringEscapePrefix = completeCharSeq({ name: "StringEscapePrefix", literal: "\\" });
 
 // Space=SpaceChar+;
-export const Space: PatternSeq = completePatternSeq({
+export const Space: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   name: "Space",
   sub_nodes: [SpaceChar],
   sub_quantifiers: "+",
 });
 
 // DigitLiteral=Digit+;
-export const DigitLiteral: PatternSeq = completePatternSeq({
+export const DigitLiteral: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   name: "DigitLiteral",
   sub_nodes: [Digit],
   sub_quantifiers: "+",
 });
 
 // Symbol=\raw (Letter,SymbolChar*);
-export const Symbol: PatternSeq = completePatternSeq({
+export const Symbol: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   name: "Symbol",
   sub_nodes: [Letter, SymbolChar],
   sub_quantifiers: " *",
@@ -72,7 +67,7 @@ export const Symbol: PatternSeq = completePatternSeq({
 });
 
 // SymbolDotChain=(symbols:Symbol+ \sep ".")=>symbols;
-export const SymbolDotChain: PatternSeq = completePatternSeq({
+export const SymbolDotChain: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   name: "SymbolDotChain",
   sub_nodes: [Symbol],
   sub_quantifiers: "+",
@@ -82,13 +77,13 @@ export const SymbolDotChain: PatternSeq = completePatternSeq({
 });
 
 // GeneralSymbol={Symbol;SymbolDotChain};
-export const GeneralSymbol: PatternSet = completePatternSet({
+export const GeneralSymbol: PARSER_NODE_TYPE.PatternSet = completePatternSet({
   name: "GeneralSymbol",
   sub_nodes: [Symbol, SymbolDotChain],
 });
 
 // Comment=(CommentPrefix,comment:AnyChar*,LineDelimiter?)=>comment;
-export const Comment: PatternSeq = completePatternSeq({
+export const Comment: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   name: "Comment",
   sub_nodes: [CommentPrefix, AnyChar, LineDelimiter],
   sub_quantifiers: " *?",
@@ -97,29 +92,29 @@ export const Comment: PatternSeq = completePatternSeq({
 });
 
 // Ignorable={Space;Comment};
-export const Ignorable: PatternSet = completePatternSet({
+export const Ignorable: PARSER_NODE_TYPE.PatternSet = completePatternSet({
   name: "Ignorable",
   sub_nodes: [Space, Comment],
 });
 
 // Recursive grammar placeholders.
-export const Expr = { name: "Expr", sub_nodes: [], neg_flags: [] } as unknown as PatternSet;
+export const Expr = { name: "Expr", sub_nodes: [], neg_flags: [] } as unknown as PARSER_NODE_TYPE.PatternSet;
 export const Pattern = {
   name: "Pattern",
   sub_nodes: [],
   neg_flags: [],
   associateby: "()",
   ignore: Ignorable,
-} as unknown as PatternSet;
+} as unknown as PARSER_NODE_TYPE.PatternSet;
 export const CharSet = {
   name: "CharSet",
   sub_nodes: [],
   neg_flags: [],
   associateby: "()",
   ignore: Ignorable,
-} as unknown as PatternSet;
+} as unknown as PARSER_NODE_TYPE.PatternSet;
 // EscapeChar=("\\", c:AnyChar)=>c;
-export const EscapeChar: PatternSeq = completePatternSeq({
+export const EscapeChar: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   name: "EscapeChar",
   sub_nodes: [StringEscapePrefix, AnyChar],
   sub_quantifiers: "  ",
@@ -128,24 +123,24 @@ export const EscapeChar: PatternSeq = completePatternSeq({
 });
 
 // {-EscapeChar; -"\""; AnyChar}
-const NonEscapeChar: PatternSet = completePatternSet({
+const NonEscapeChar: PARSER_NODE_TYPE.PatternSet = completePatternSet({
   name: "{-EscapeChar; -\"\\\"\"; AnyChar}",
   sub_nodes: [EscapeChar, completeCharSeq({ literal: "\"" }), AnyChar],
   neg_flags: [true, true, false],
 });
 
-const NonEscapeText: PatternSeq = completePatternSeq({
+const NonEscapeText: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   name: "{-EscapeChar; -\"\\\"\"; AnyChar}+",
   sub_nodes: [NonEscapeChar],
   sub_quantifiers: "+",
 });
 
 // StringLiteral=(text:{EscapeChar; {-EscapeChar; -"\""; AnyChar}+}* \enclosedby "\"\"")=>text;
-const StringTextPiece: PatternSet = completePatternSet({
+const StringTextPiece: PARSER_NODE_TYPE.PatternSet = completePatternSet({
   name: "{EscapeChar; {-EscapeChar; -\"\\\"\"; AnyChar}+}",
   sub_nodes: [EscapeChar, NonEscapeText],
 });
-export const StringLiteral: PatternSeq = completePatternSeq({
+export const StringLiteral: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   name: "StringLiteral",
   sub_nodes: [StringTextPiece],
   sub_quantifiers: "*",
@@ -155,13 +150,13 @@ export const StringLiteral: PatternSeq = completePatternSeq({
 });
 
 // CharRangeBound={SymbolChar;StringLiteral};
-export const CharRangeBound: PatternSet = completePatternSet({
+export const CharRangeBound: PARSER_NODE_TYPE.PatternSet = completePatternSet({
   name: "CharRangeBound",
   sub_nodes: [SymbolChar, StringLiteral],
 });
 
 // CharRange=(start:CharRangeBound, "~", end:CharRangeBound)=>[.start=start, .end=end];
-export const CharRange: PatternSeq = completePatternSeq({
+export const CharRange: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   name: "CharRange",
   sub_nodes: [CharRangeBound, completeCharSeq({ literal: "~" }), CharRangeBound],
   sub_quantifiers: "   ",
@@ -170,7 +165,7 @@ export const CharRange: PatternSeq = completePatternSeq({
 });
 
 // FieldAssignment=(".", symbol:Symbol, "=", expr:Expr \ignore Ignorable)=>[.target=symbol, .source=expr];
-export const FieldAssignment: PatternSeq = completePatternSeq({
+export const FieldAssignment: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   name: "FieldAssignment",
   sub_nodes: [completeCharSeq({ literal: "." }), Symbol, completeCharSeq({ literal: "=" }), Expr],
   sub_quantifiers: "    ",
@@ -180,7 +175,7 @@ export const FieldAssignment: PatternSeq = completePatternSeq({
 });
 
 // Struct=(field_assignments:FieldAssignment* \sep "," \ignore Ignorable \enclosedby "[]")=>field_assignments;
-export const Struct: PatternSeq = completePatternSeq({
+export const Struct: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   name: "Struct",
   sub_nodes: [FieldAssignment],
   sub_quantifiers: "*",
@@ -192,7 +187,7 @@ export const Struct: PatternSeq = completePatternSeq({
 });
 
 // ("\\oneof", string:StringLiteral \sep Space)=>string
-const OneOfCharSet: PatternSeq = completePatternSeq({
+const OneOfCharSet: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   name: "(\"\\\\oneof\", string:StringLiteral \\sep Space)=>string",
   sub_nodes: [completeCharSeq({ literal: "\\oneof" }), StringLiteral],
   sub_quantifiers: "  ",
@@ -202,14 +197,14 @@ const OneOfCharSet: PatternSeq = completePatternSeq({
 });
 
 // PatternWithPostfixOp=(pattern:Pattern, op:\oneof "?+*^");
-export const PatternWithPostfixOp: PatternSeq = completePatternSeq({
+export const PatternWithPostfixOp: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   name: "PatternWithPostfixOp",
   sub_nodes: [Pattern, completeCharMatchSet({ sub_nodes: "?+*^" })],
   sub_quantifiers: "  ",
 });
 
 // RawPattern=("\\raw", pattern:Pattern \ignore Ignorable)=>pattern;
-export const RawPattern: PatternSeq = completePatternSeq({
+export const RawPattern: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   name: "RawPattern",
   sub_nodes: [completeCharSeq({ literal: "\\raw" }), Pattern],
   sub_quantifiers: "  ",
@@ -219,7 +214,7 @@ export const RawPattern: PatternSeq = completePatternSeq({
 });
 
 // AssociateByPart=("\\associateby", pattern:Pattern \ignore Ignorable)=>pattern;
-export const AssociateByPart: PatternSeq = completePatternSeq({
+export const AssociateByPart: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   name: "AssociateByPart",
   sub_nodes: [completeCharSeq({ literal: "\\associateby" }), Pattern],
   sub_quantifiers: "  ",
@@ -229,7 +224,7 @@ export const AssociateByPart: PatternSeq = completePatternSeq({
 });
 
 // NegPattern=("-", pattern:Pattern \ignore Ignorable)=>[.pattern=pattern];
-export const NegPattern: PatternSeq = completePatternSeq({
+export const NegPattern: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   name: "NegPattern",
   sub_nodes: [completeCharSeq({ literal: "-" }), Pattern],
   sub_quantifiers: "  ",
@@ -240,7 +235,7 @@ export const NegPattern: PatternSeq = completePatternSeq({
 
 
 // SepPart=("\\sep", pattern:Pattern \ignore Ignorable)=>pattern;
-export const SepPart: PatternSeq = completePatternSeq({
+export const SepPart: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   name: "SepPart",
   sub_nodes: [completeCharSeq({ literal: "\\sep" }), Pattern],
   sub_quantifiers: "  ",
@@ -250,14 +245,14 @@ export const SepPart: PatternSeq = completePatternSeq({
 });
 
 // IgnorePart=({"\\ignore";"\\ignore_include_beginning"}, pattern:Pattern \ignore Ignorable)=>pattern;
-const IgnorePartKeyword: PatternSet = completePatternSet({
+const IgnorePartKeyword: PARSER_NODE_TYPE.PatternSet = completePatternSet({
   name: "{\"\\\\ignore\";\"\\\\ignore_include_beginning\"}",
   sub_nodes: [
     completeCharSeq({ literal: "\\ignore_include_beginning" }),
     completeCharSeq({ literal: "\\ignore" }),
   ],
 });
-export const IgnorePart: PatternSeq = completePatternSeq({
+export const IgnorePart: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   name: "IgnorePart",
   sub_nodes: [IgnorePartKeyword, Pattern],
   sub_quantifiers: "  ",
@@ -267,7 +262,7 @@ export const IgnorePart: PatternSeq = completePatternSeq({
 });
 
 // EnclosedbyPart=("\\enclosedby", pattern:Pattern \ignore Ignorable)=>pattern;
-export const EnclosedbyPart: PatternSeq = completePatternSeq({
+export const EnclosedbyPart: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   name: "EnclosedbyPart",
   sub_nodes: [completeCharSeq({ literal: "\\enclosedby" }), Pattern],
   sub_quantifiers: "  ",
@@ -277,7 +272,7 @@ export const EnclosedbyPart: PatternSeq = completePatternSeq({
 });
 
 // PatternBinding=(symbol:Symbol,":",pattern:Pattern)=>[.symbol=symbol, .pattern=pattern];
-export const PatternBinding: PatternSeq = completePatternSeq({
+export const PatternBinding: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   name: "PatternBinding",
   sub_nodes: [Symbol, completeCharSeq({ literal: ":" }), Pattern],
   sub_quantifiers: "   ",
@@ -285,12 +280,12 @@ export const PatternBinding: PatternSeq = completePatternSeq({
   transform: (ctx) => ({ symbol: ctx.bindings.symbol, pattern: ctx.bindings.pattern }),
 });
 
-const PatternItem: PatternSet = completePatternSet({
+const PatternItem: PARSER_NODE_TYPE.PatternSet = completePatternSet({
   name: "{PatternBinding;Pattern}",
   sub_nodes: [PatternBinding, Pattern],
 });
 
-const PatternSeqPatterns: PatternSeq = completePatternSeq({
+const PatternSeqPatterns: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   name: "(patterns:{PatternBinding;Pattern}+ \\sep \",\" \\ignore Ignorable)",
   sub_nodes: [PatternItem],
   sub_quantifiers: "+",
@@ -301,7 +296,7 @@ const PatternSeqPatterns: PatternSeq = completePatternSeq({
 });
 
 // PatternSeq=((patterns:{PatternBinding;Pattern}+ \sep "," \ignore Ignorable), sep_part:SepPart?, ignore_part:IgnorePart?, enclosedby_part:EnclosedbyPart? \ignore Ignorable \enclosedby "()")=>...
-const PatternSeqNode: PatternSeq = completePatternSeq({
+export const PatternSeq: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   name: "PatternSeq",
   sub_nodes: [PatternSeqPatterns, SepPart, IgnorePart, EnclosedbyPart],
   sub_quantifiers: " ???",
@@ -311,7 +306,7 @@ const PatternSeqNode: PatternSeq = completePatternSeq({
   transform: (ctx) => ({ patterns: ctx.bindings.patterns, sep: ctx.bindings.sep_part, ignore: ctx.bindings.ignore_part, enclosedby: ctx.bindings.enclosedby_part }),
 });
 
-const PatternSetPatterns: PatternSeq = completePatternSeq({
+const PatternSetPatterns: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   name: "(patterns:{PatternBinding;Pattern}* \\sep \";\" \\ignore Ignorable)",
   sub_nodes: [PatternItem],
   sub_quantifiers: "*",
@@ -322,7 +317,7 @@ const PatternSetPatterns: PatternSeq = completePatternSeq({
 });
 
 // PatternSet=((patterns:{PatternBinding;Pattern}* \sep ";" \ignore Ignorable), ";"?, associateby_part:AssociateByPart?, ignore_part:IgnorePart? \ignore Ignorable \enclosedby "{}")=>...
-const PatternSetNode: PatternSeq = completePatternSeq({
+export const PatternSet: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   name: "PatternSet",
   sub_nodes: [PatternSetPatterns, completeCharSeq({ literal: ";" }), AssociateByPart, IgnorePart],
   sub_quantifiers: " ???",
@@ -333,16 +328,16 @@ const PatternSetNode: PatternSeq = completePatternSeq({
 });
 
 // Rule=(pattern:PatternSeq,"=>",returned:Expr)=>[.pattern=pattern, .returned=returned];
-export const Rule: PatternSeq = completePatternSeq({
+export const Rule: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   name: "Rule",
-  sub_nodes: [PatternSeqNode, completeCharSeq({ literal: "=>" }), Expr],
+  sub_nodes: [PatternSeq, completeCharSeq({ literal: "=>" }), Expr],
   sub_quantifiers: "   ",
   sub_node_bindings: ["pattern", null, "returned"],
   transform: (ctx) => ({ pattern: ctx.bindings.pattern, returned: ctx.bindings.returned }),
 });
 
 // List=(exprs:Expr* \sep "," \ignore Ignorable \enclosedby "[]")=>exprs;
-export const List: PatternSeq = completePatternSeq({
+export const List: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   name: "List",
   sub_nodes: [Expr],
   sub_quantifiers: "*",
@@ -354,7 +349,7 @@ export const List: PatternSeq = completePatternSeq({
 });
 
 // Assignment=(symbol:Symbol, "=", pattern:Pattern \ignore Ignorable)=>[.target=symbol, .source=pattern];
-export const Assignment: PatternSeq = completePatternSeq({
+export const Assignment: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   name: "Assignment",
   sub_nodes: [Symbol, completeCharSeq({ literal: "=" }), Pattern],
   sub_quantifiers: "   ",
@@ -364,7 +359,7 @@ export const Assignment: PatternSeq = completePatternSeq({
 });
 
 // Keyword={...};
-export const Keyword: PatternSet = completePatternSet({
+export const Keyword: PARSER_NODE_TYPE.PatternSet = completePatternSet({
   name: "Keyword",
   sub_nodes: [
     completeCharSeq({ literal: "\\oneof" }),
@@ -388,8 +383,8 @@ Pattern.sub_nodes.push(
   PatternWithPostfixOp,
   RawPattern,
   Rule,
-  PatternSeqNode,
-  PatternSetNode,
+  PatternSeq,
+  PatternSet,
   CharSet,
   StringLiteral,
   GeneralSymbol,
@@ -409,7 +404,7 @@ Expr.neg_flags.push(false, false, false, false, false);
 completePatternSet(Expr);
 
 // Synx=(exprs:Expr* \sep ";" \ignore_include_beginning Ignorable)=>[.exprs=exprs];
-export const Synx: PatternSeq = completePatternSeq({
+export const Synx: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   name: "Synx",
   sub_nodes: [Expr],
   sub_quantifiers: "*",
