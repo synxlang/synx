@@ -34,22 +34,24 @@ CharSet = {
 GreedyQuantifier=\oneof "?+*";
 NonGreedyQuantifier=\raw (GreedyQuantifier,"^");
 PostfixOp={NonGreedyQuantifier;GreedyQuantifier};
-PrefixOp={"\\raw"; "-"};
+PrefixOp={"-"};
 PatternWithUnaryOp=(prefix_op:PrefixOp?, pattern:Pattern, postfix_op:PostfixOp? \ignore Ignorable)=>[.prefix_op=prefix_op, .pattern=pattern, .postfix_op=postfix_op];
+RawPattern=("\\raw", pattern:Pattern \ignore Ignorable)=>pattern;
 TopLevelPattern=PatternWithUnaryOp;
 
-AssociateByPart=("\\associateby", pattern:Pattern \ignore Ignorable)=>pattern;
-PatternSet=((patterns:{PatternBinding;TopLevelPattern}* \sep ";" \ignore Ignorable),
+PatternPair={StringLiteral;(TopLevelPattern,TopLevelPattern \sep "," \ignore Ignorable \enclosedby "()")};
+AssociateByPart=("\\associateby", pattern:PatternPair \ignore Ignorable)=>pattern;
+IgnorePart=(prefix:{"\\ignore_include_beginning";"\\ignore"}, pattern:TopLevelPattern \ignore Ignorable)=>[.prefix=prefix, .pattern=pattern];
+PatternSet=((patterns:{PatternBinding;PatternWithUnaryOp}* \sep ";" \ignore Ignorable),
     ";"?,
     associateby_part:AssociateByPart?, 
     ignore_part:IgnorePart? 
     \ignore Ignorable \enclosedby "{}")=>[.patterns=patterns, .associateby=associateby_part, .ignore=ignore_part];
 
-SepPart=("\\sep", pattern:Pattern \ignore Ignorable)=>pattern;
-IgnorePart=({"\\ignore_include_beginning";"\\ignore"}, pattern:Pattern \ignore Ignorable)=>pattern;
-EnclosedbyPart=("\\enclosedby", pattern:Pattern \ignore Ignorable)=>pattern;        \\ valid pattern is StringLiteral of length 2 or PatternSeq of length 2
+SepPart=("\\sep", pattern:TopLevelPattern \ignore Ignorable)=>pattern;
+EnclosedbyPart=("\\enclosedby", pattern:PatternPair \ignore Ignorable)=>pattern;        \\ valid pattern is StringLiteral of length 2 or PatternSeq of length 2
 PatternSeq=(
-    (patterns:{PatternBinding;TopLevelPattern}+ \sep "," \ignore Ignorable), 
+    (patterns:{PatternBinding;PatternWithUnaryOp}+ \sep "," \ignore Ignorable), 
     sep_part:SepPart?, ignore_part:IgnorePart?, enclosedby_part:EnclosedbyPart? 
     \ignore Ignorable
     \enclosedby "()"
@@ -58,7 +60,7 @@ PatternSeq=(
 PatternBinding=(symbol:Symbol,":",pattern:TopLevelPattern \ignore Ignorable)=>[.symbol=symbol, .pattern=pattern];
 Rule=(pattern:PatternSeq,"=>",returned:Expr)=>[.pattern=pattern, .returned=returned];
 
-Pattern={Rule;PatternSeq;PatternSet;CharSet;StringLiteral;GeneralSymbol \associateby "()" \ignore Ignorable};
+Pattern={RawPattern;Rule;PatternSeq;PatternSet;CharSet;StringLiteral;GeneralSymbol \associateby "()" \ignore Ignorable};
 
 List=(exprs:Expr* \sep "," \ignore Ignorable \enclosedby "[]")=>exprs;
 

@@ -37,7 +37,7 @@ function synxExprToJson(expr: SynxExpr, cache: Map<SynxExpr, any>): any {
         }
         case SynxExprKind.ERROR_PATTERN_SET: {
             const e = expr as SynxErrorPatternSetExpr;
-            result = { kind: kind_str, patterns: e.patterns.map(p => synxExprToJson(p, cache)), associateby: synxExprToJson(e.associateby, cache), ignore: synxExprToJson(e.ignore, cache) };
+            result = { kind: kind_str, patterns: e.patterns.map(p => synxExprToJson(p, cache)), associateby: e.associateby ? synxExprToJson(e.associateby, cache) : null, ignore: e.ignore ? synxExprToJson(e.ignore, cache) : null };
             break;
         }
         case SynxExprKind.ERROR_PATTERN_WITH_UNARY_OP: {

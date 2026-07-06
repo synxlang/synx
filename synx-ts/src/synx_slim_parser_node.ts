@@ -213,10 +213,10 @@ export const PostfixOp: PARSER_NODE_TYPE.PatternSet = completePatternSet({
   sub_nodes: [NonGreedyQuantifier, GreedyQuantifier],
 });
 
-// PrefixOp={"\\raw"; "-"};
+// PrefixOp={"-"};
 const PrefixOp: PARSER_NODE_TYPE.PatternSet = completePatternSet({
   name: 'PrefixOp',
-  sub_nodes: [completeCharSeq({ literal: "\\raw" }), completeCharSeq({ literal: "-" })],
+  sub_nodes: [completeCharSeq({ literal: "-" })],
 });
 
 // PatternWithUnaryOp=(prefix_op:PrefixOp?, pattern:Pattern, postfix_op:PostfixOp? \ignore Ignorable)=>[.prefix_op=prefix_op, .pattern=pattern, .postfix_op=postfix_op];
@@ -232,6 +232,20 @@ export const PatternWithUnaryOp: PARSER_NODE_TYPE.PatternSeq = completePatternSe
 // TopLevelPattern=PatternWithUnaryOp;
 export const TopLevelPattern = PatternWithUnaryOp;
 
+// PatternPair={StringLiteral;(TopLevelPattern,TopLevelPattern \sep "," \enclosedby "()", \ignore Ignorable)};
+const PatternPairInner: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
+  name: "(TopLevelPattern,TopLevelPattern \\sep \",\" \\enclosedby \"()\", \\ignore Ignorable)",
+  sub_nodes: [TopLevelPattern, TopLevelPattern],
+  sub_quantifiers: "  ",
+  sep: completeCharSeq({ literal: "," }),
+  enclosure: "()",
+  ignore: Ignorable,
+});
+export const PatternPair: PARSER_NODE_TYPE.PatternSet = completePatternSet({
+  name: "{StringLiteral;(TopLevelPattern,TopLevelPattern \\sep \",\" \\enclosedby \"()\", \\ignore Ignorable)}",
+  sub_nodes: [StringLiteral, PatternPairInner],
+});
+
 // RawPattern=("\\raw", pattern:Pattern \ignore Ignorable)=>pattern;
 export const RawPattern: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   name: "RawPattern",
@@ -242,10 +256,10 @@ export const RawPattern: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   transform: (ctx) => ctx.bindings.pattern,
 });
 
-// AssociateByPart=("\\associateby", pattern:Pattern \ignore Ignorable)=>pattern;
+// AssociateByPart=("\\associateby", pattern:PatternPair \ignore Ignorable)=>pattern;
 export const AssociateByPart: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   name: "AssociateByPart",
-  sub_nodes: [completeCharSeq({ literal: "\\associateby" }), Pattern],
+  sub_nodes: [completeCharSeq({ literal: "\\associateby" }), PatternPair],
   sub_quantifiers: "  ",
   ignore: Ignorable,
   sub_node_bindings: [null, "pattern"],
@@ -263,17 +277,17 @@ export const NegPattern: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
 });
 
 
-// SepPart=("\\sep", pattern:Pattern \ignore Ignorable)=>pattern;
+// SepPart=("\\sep", pattern:TopLevelPattern \ignore Ignorable)=>pattern;
 export const SepPart: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   name: "SepPart",
-  sub_nodes: [completeCharSeq({ literal: "\\sep" }), Pattern],
+  sub_nodes: [completeCharSeq({ literal: "\\sep" }), TopLevelPattern],
   sub_quantifiers: "  ",
   ignore: Ignorable,
   sub_node_bindings: [null, "pattern"],
   transform: (ctx) => ctx.bindings.pattern,
 });
 
-// IgnorePart=({"\\ignore";"\\ignore_include_beginning"}, pattern:Pattern \ignore Ignorable)=>pattern;
+// IgnorePart=({"\\ignore";"\\ignore_include_beginning"}, pattern:TopLevelPattern \ignore Ignorable)=>pattern;
 const IgnorePartKeyword: PARSER_NODE_TYPE.PatternSet = completePatternSet({
   name: "{\"\\\\ignore\";\"\\\\ignore_include_beginning\"}",
   sub_nodes: [
@@ -283,17 +297,17 @@ const IgnorePartKeyword: PARSER_NODE_TYPE.PatternSet = completePatternSet({
 });
 export const IgnorePart: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   name: "IgnorePart",
-  sub_nodes: [IgnorePartKeyword, Pattern],
+  sub_nodes: [IgnorePartKeyword, TopLevelPattern],
   sub_quantifiers: "  ",
   ignore: Ignorable,
-  sub_node_bindings: [null, "pattern"],
-  transform: (ctx) => ctx.bindings.pattern,
+  sub_node_bindings: ["prefix", "pattern"],
+  transform: (ctx) => ({ prefix: ctx.bindings.prefix, pattern: ctx.bindings.pattern }),
 });
 
-// EnclosedbyPart=("\\enclosedby", pattern:Pattern \ignore Ignorable)=>pattern;
+// EnclosedbyPart=("\\enclosedby", pattern:PatternPair \ignore Ignorable)=>pattern;
 export const EnclosedbyPart: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   name: "EnclosedbyPart",
-  sub_nodes: [completeCharSeq({ literal: "\\enclosedby" }), Pattern],
+  sub_nodes: [completeCharSeq({ literal: "\\enclosedby" }), PatternPair],
   sub_quantifiers: "  ",
   ignore: Ignorable,
   sub_node_bindings: [null, "pattern"],
@@ -311,12 +325,12 @@ export const PatternBinding: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
 });
 
 const PatternItem: PARSER_NODE_TYPE.PatternSet = completePatternSet({
-  name: "{PatternBinding;TopLevelPattern}",
-  sub_nodes: [PatternBinding, TopLevelPattern],
+  name: "{PatternBinding;PatternWithUnaryOp}",
+  sub_nodes: [PatternBinding, PatternWithUnaryOp],
 });
 
 const PatternSeqPatterns: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
-  name: "(patterns:{PatternBinding;TopLevelPattern}+ \\sep \",\" \\ignore Ignorable)",
+  name: "(patterns:{PatternBinding;PatternWithUnaryOp}+ \\sep \",\" \\ignore Ignorable)",
   sub_nodes: [PatternItem],
   sub_quantifiers: "+",
   sep: completeCharSeq({ literal: "," }),
@@ -325,7 +339,7 @@ const PatternSeqPatterns: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   transform: (ctx) => ctx.bindings.patterns,
 });
 
-// PatternSeq=((patterns:{PatternBinding;Pattern}+ \sep "," \ignore Ignorable), sep_part:SepPart?, ignore_part:IgnorePart?, enclosedby_part:EnclosedbyPart? \ignore Ignorable \enclosedby "()")=>...
+// PatternSeq=((patterns:{PatternBinding;PatternWithUnaryOp}+ \sep "," \ignore Ignorable), sep_part:SepPart?, ignore_part:IgnorePart?, enclosedby_part:EnclosedbyPart? \ignore Ignorable \enclosedby "()")=>...
 export const PatternSeq: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   name: "PatternSeq",
   sub_nodes: [PatternSeqPatterns, SepPart, IgnorePart, EnclosedbyPart],
@@ -337,7 +351,7 @@ export const PatternSeq: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
 });
 
 const PatternSetPatterns: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
-  name: "(patterns:{PatternBinding;TopLevelPattern}* \\sep \";\" \\ignore Ignorable)",
+  name: "(patterns:{PatternBinding;PatternWithUnaryOp}* \\sep \";\" \\ignore Ignorable)",
   sub_nodes: [PatternItem],
   sub_quantifiers: "*",
   sep: completeCharSeq({ literal: ";" }),
@@ -407,8 +421,9 @@ CharSet.sub_nodes.push(CharRange, OneOfCharSet);
 CharSet.neg_flags.push(false, false);
 completePatternSet(CharSet);
 
-// Pattern={Rule;PatternSeq;PatternSet;CharSet;StringLiteral;GeneralSymbol \associateby "()" \ignore Ignorable};
+// Pattern={RawPattern;Rule;PatternSeq;PatternSet;CharSet;StringLiteral;GeneralSymbol \associateby "()" \ignore Ignorable};
 Pattern.sub_nodes.push(
+  RawPattern,
   Rule,
   PatternSeq,
   PatternSet,
@@ -416,7 +431,7 @@ Pattern.sub_nodes.push(
   StringLiteral,
   GeneralSymbol,
 );
-Pattern.neg_flags.push(false, false, false, false, false, false);
+Pattern.neg_flags.push(false, false, false, false, false, false, false);
 completePatternSet(Pattern);
 
 // Expr={ Assignment; List; Struct; TopLevelPattern; GeneralSymbol; };

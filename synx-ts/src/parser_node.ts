@@ -331,7 +331,7 @@ function validatePartialPatternSeq(partial: PatternSeqInput): Error | undefined 
     return new Error("completePatternSeq: sub_nodes must not be empty");
   }
   const n = partial.sub_nodes.length;
-  if (partial.sub_quantifiers.length !== n) {
+  if (partial.sub_quantifiers !== undefined && partial.sub_quantifiers.length !== n) {
     return new Error("completePatternSeq: sub_quantifiers length must match sub_nodes length");
   }
   if (partial.sub_node_bindings !== undefined && partial.sub_node_bindings !== null && partial.sub_node_bindings.length !== n) {
@@ -393,7 +393,6 @@ function normalizeTransform(
 
 type PatternSeqInput = Omit<Partial<PatternSeq>, "enclosure"> & {
   sub_nodes: ParserNode[];
-  sub_quantifiers: string;
   enclosure?: ParserNodePairInput;
 };
 
@@ -431,7 +430,8 @@ export function completePatternSeq(
   const err = validatePartialPatternSeq(partial);
   if (err) throw err;
   const n = partial.sub_nodes.length;
-  const greedy_flags = normalizeGreedyFlags(n, partial.sub_quantifiers, partial.sub_nodes, partial.greedy_flags);
+  const sub_quantifiers = partial.sub_quantifiers ?? " ".repeat(n);
+  const greedy_flags = normalizeGreedyFlags(n, sub_quantifiers, partial.sub_nodes, partial.greedy_flags);
   const sub_node_bindings = normalizeSubNodeBindings(n, partial.sub_node_bindings);
   const sub_node_isolated_scope_flags = normalizeSubNodeIsolatedScopeFlags(n, partial.sub_node_isolated_scope_flags, sub_node_bindings);
   const transform = normalizeTransform(partial.transform);
@@ -440,7 +440,7 @@ export function completePatternSeq(
     kind: ParserNodeKind.PatternSeq,
     name: partial.name ?? "",
     sub_nodes: partial.sub_nodes,
-    sub_quantifiers: partial.sub_quantifiers,
+    sub_quantifiers,
     raw: partial.raw ?? false,
     sep: partial.sep ?? null,
     accept_trailing_sep: partial.accept_trailing_sep ?? (enclosure !== null),
