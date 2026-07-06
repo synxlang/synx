@@ -213,13 +213,6 @@ export const PostfixOp: PARSER_NODE_TYPE.PatternSet = completePatternSet({
   sub_nodes: [NonGreedyQuantifier, GreedyQuantifier],
 });
 
-// PatternWithPostfixOp=(pattern:Pattern, op: PostfixOp);
-export const PatternWithPostfixOp: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
-  name: "PatternWithPostfixOp",
-  sub_nodes: [Pattern, PostfixOp],
-  sub_quantifiers: "  ",
-});
-
 // PrefixOp={"\\raw"; "-"};
 const PrefixOp: PARSER_NODE_TYPE.PatternSet = completePatternSet({
   name: 'PrefixOp',

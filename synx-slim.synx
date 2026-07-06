@@ -34,7 +34,6 @@ CharSet = {
 GreedyQuantifier=\oneof "?+*";
 NonGreedyQuantifier=\raw (GreedyQuantifier,"^");
 PostfixOp={NonGreedyQuantifier;GreedyQuantifier};
-PatternWithPostfixOp=(pattern:Pattern, op: PostfixOp);
 PrefixOp={"\\raw"; "-"};
 PatternWithUnaryOp=(prefix_op:PrefixOp?, pattern:Pattern, postfix_op:PostfixOp? \ignore Ignorable)=>[.prefix_op=prefix_op, .pattern=pattern, .postfix_op=postfix_op];
 TopLevelPattern=PatternWithUnaryOp;
