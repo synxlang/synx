@@ -42,7 +42,7 @@ TopLevelPattern=PatternWithUnaryOp;
 PatternPair={StringLiteral;(TopLevelPattern,TopLevelPattern \sep "," \ignore Ignorable \enclosedby "()")};
 AssociateByPart=("\\associateby", pattern:PatternPair \ignore Ignorable)=>pattern;
 IgnorePart=(prefix:{"\\ignore_include_beginning";"\\ignore"}, pattern:TopLevelPattern \ignore Ignorable)=>[.prefix=prefix, .pattern=pattern];
-PatternSet=((patterns:{PatternBinding;PatternWithUnaryOp}* \sep ";" \ignore Ignorable),
+PatternSet=((patterns:PatternWithUnaryOp* \sep ";" \ignore Ignorable),
     ";"?,
     associateby_part:AssociateByPart?, 
     ignore_part:IgnorePart? 

@@ -22,5 +22,8 @@
       "require": "./dist/src/index.js",
       "types": "./dist/src/index.d.ts"
     }
+  },
+  "dependencies": {
+    "graphemer": "^1.4.0"
   }
 }

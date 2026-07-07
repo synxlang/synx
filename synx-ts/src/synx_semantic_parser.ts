@@ -2,24 +2,33 @@ import assert from "assert";
 import { AstNode } from "./common";
 import {
   ParserNode, validatePartialCharRange, completeCharRange, completeCharSeq, completePatternSeq,
-  ParserNodeKind
+  ParserNodeKind,
+  completePatternSet
 } from "./parser_node";
 import * as SYNX_PARSER_NODE from "./synx_parser_node"
+import Graphemer from 'graphemer';
+const graphemer = new Graphemer;
 
 export enum SynxExprKind {
   ROOT,
   ASSIGNMENT,
   PATTERN,
   PATTERN_WITH_UNARY_OP,
+  PATTERN_PAIR,
   UNKNOWN,
   ERROR_RANGE,
   ERROR_PATTERN_SET,
   ERROR_PATTERN_WITH_UNARY_OP,
+  ERROR_PATTERN_PAIR,
   ERROR_TOP_LEVEL_PATTERN,
 }
 
-export type SynxErrorExpr = SynxUnknownExpr | SynxErrorRangeExpr | SynxErrorPatternSetExpr | SynxErrorPatternWithUnaryOpExpr | SynxErrorTopLevelPatternExpr;
-export type SynxExpr = SynxUnknownExpr | SynxRootExpr | SynxAssignmentExpr | SynxPatternExpr | SynxPatternWithUnaryOpExpr | SynxErrorExpr;
+export type SynxErrorExpr = SynxUnknownExpr | SynxErrorRangeExpr | SynxErrorPatternSetExpr
+  | SynxErrorPatternWithUnaryOpExpr | SynxErrorPatternPairExpr | SynxErrorTopLevelPatternExpr;
+
+export type SynxExpr = SynxUnknownExpr | SynxRootExpr | SynxAssignmentExpr | SynxPatternExpr
+  | SynxPatternWithUnaryOpExpr | SynxPatternPairExpr | SynxErrorExpr;
+
 export type SynxAssignmentValueExpr = SynxPatternExpr;
 
 export interface SynxUnknownExpr {
@@ -57,9 +66,19 @@ export interface SynxPatternWithUnaryOpExpr {
 
 export interface SynxErrorPatternWithUnaryOpExpr {
   kind: SynxExprKind.ERROR_PATTERN_WITH_UNARY_OP;
-  pattern: SynxPatternExpr | SynxErrorExpr;
+  pattern: SynxPatternExpr | SynxPatternWithUnaryOpExpr | SynxErrorExpr;
   prefix_op: string | null;
   postfix_op: string | null;
+}
+
+export interface SynxPatternPairExpr {
+  kind: SynxExprKind.PATTERN_PAIR;
+  value: string | [ParserNode, ParserNode];
+}
+
+export interface SynxErrorPatternPairExpr {
+  kind: SynxExprKind.ERROR_PATTERN_PAIR;
+  value: string | [ParserNode | SynxErrorExpr, ParserNode | SynxErrorExpr];
 }
 
 export interface SynxErrorRangeExpr {
@@ -69,9 +88,9 @@ export interface SynxErrorRangeExpr {
 
 export interface SynxErrorPatternSetExpr {
   kind: SynxExprKind.ERROR_PATTERN_SET;
-  patterns: (SynxPatternExpr | SynxErrorExpr)[];
-  associateby: SynxPatternExpr | SynxErrorExpr;
-  ignore: SynxPatternExpr | SynxErrorExpr;
+  patterns: (SynxPatternExpr | SynxPatternWithUnaryOpExpr | SynxErrorExpr)[];
+  associateby: SynxPatternPairExpr | SynxErrorPatternPairExpr | null;
+  ignore: SynxPatternExpr | SynxErrorExpr | null;
 }
 
 export type SynxSemanticSymbolTable = Map<string, SynxAssignmentValueExpr | SynxErrorExpr>;
@@ -208,29 +227,82 @@ class SynxSemanticParserImpl implements SynxSemanticParser {
     return ret;
   }
 
+  parsePatternPair(node: AstNode): SynxPatternPairExpr | SynxErrorPatternPairExpr {
+    const parser_node = node.parser_nodes[0];
+    const value = node.value;
+
+    let ret_value: string | [ParserNode | SynxErrorExpr, ParserNode | SynxErrorExpr];
+    let has_error = false;
+    if (parser_node === SYNX_PARSER_NODE.StringLiteral) {
+      ret_value = this.parseStringLiteral(node);
+      if (graphemer.countGraphemes(ret_value) !== 2) {
+        has_error = true;
+      }
+    } else {
+      assert.ok(Array.isArray(value) && value.length === 2);
+      const pattern_expr_pair = [this.parseTopLevelPattern(value[0]), this.parseTopLevelPattern(value[1])];
+      let tmp_value = [];
+      for (const pattern_expr of pattern_expr_pair) {
+        if (pattern_expr.kind === SynxExprKind.PATTERN) {
+          tmp_value.push(pattern_expr.value);
+        } else {
+          has_error = true;
+          tmp_value.push(pattern_expr);
+        }
+      }
+      ret_value = tmp_value as [ParserNode | SynxErrorExpr, ParserNode | SynxErrorExpr];
+    }
+
+    if (has_error) {
+      return {
+        kind: SynxExprKind.ERROR_PATTERN_PAIR,
+        value: ret_value
+      };
+    } else {
+      return {
+        kind: SynxExprKind.PATTERN_PAIR,
+        value: ret_value as string | [ParserNode, ParserNode]
+      };
+    }
+  }
+
   parsePatternSet(node: AstNode): SynxPatternExpr | SynxErrorPatternSetExpr {
     const value = node.value;
     let has_error = false;
-    let pattern_exprs: (SynxPatternExpr | SynxErrorExpr)[] = [];
+    let pattern_exprs: (SynxPatternExpr | SynxPatternWithUnaryOpExpr | SynxErrorExpr)[] = [];
+    let neg_flags: boolean[] = [];
     for (const pattern_ast_node of (value.patterns as AstNode[])) {
-      if (pattern_ast_node.parser_nodes[0] === SYNX_PARSER_NODE.PatternBinding) {
-        throw new Error("not implemented");
+      const pattern_with_unary_op_expr = this.parsePatternWithUnaryOp(pattern_ast_node);
+      if (pattern_with_unary_op_expr.kind === SynxExprKind.PATTERN_WITH_UNARY_OP) {
+        const pattern_eval = this.evalPatternWithUnaryOpExpr(pattern_with_unary_op_expr);
+        this.expr_to_ast_node_map.set(pattern_eval, pattern_ast_node);
+        pattern_exprs.push(pattern_eval);
+        neg_flags.push(pattern_with_unary_op_expr.prefix_op === "-");
+      } else {
+        has_error = true;
+        pattern_exprs.push(pattern_with_unary_op_expr);
+        neg_flags.push(false);
       }
-      let pattern_expr = this.parsePattern(pattern_ast_node);
-      if (pattern_expr.kind !== SynxExprKind.PATTERN) {
+    }
+
+    let associateby_pattern_expr = null;
+    if (value.associateby !== null) {
+      associateby_pattern_expr = this.parsePatternPair(value.associateby.value);
+      if (associateby_pattern_expr.kind !== SynxExprKind.PATTERN_PAIR) {
         has_error = true;
       }
-      pattern_exprs.push(pattern_expr);
     }
 
-    let associateby_pattern_expr = this.parsePattern(value.associateby.value);
-    if (associateby_pattern_expr.kind !== SynxExprKind.PATTERN) {
-      has_error = true;
-    }
-
-    let ignore_pattern_expr = this.parsePattern(value.ignore.value);
-    if (ignore_pattern_expr.kind !== SynxExprKind.PATTERN) {
-      has_error = true;
+    let ignore_pattern_expr = null;
+    if (value.ignore !== null) {
+      const prefix_value = value.ignore.value.prefix.value;
+      if (prefix_value !== "\\ignore") {
+        throw new Error("not implemented");
+      }
+      ignore_pattern_expr = this.parseTopLevelPattern(value.ignore.value.pattern);
+      if (ignore_pattern_expr.kind !== SynxExprKind.PATTERN) {
+        has_error = true;
+      }
     }
 
     let ret: SynxPatternExpr | SynxErrorPatternSetExpr;
@@ -242,9 +314,34 @@ class SynxSemanticParserImpl implements SynxSemanticParser {
         ignore: ignore_pattern_expr,
       };
     } else {
-      throw "todo";
+      let sub_nodes: ParserNode[] = [];
+      for (const pattern_expr of pattern_exprs) {
+        assert.ok(pattern_expr.kind === SynxExprKind.PATTERN);
+        sub_nodes.push(pattern_expr.value);
+      }
+
+      if (ignore_pattern_expr !== null) {
+        assert.ok(ignore_pattern_expr.kind === SynxExprKind.PATTERN);
+      }
+
+      if (associateby_pattern_expr !== null) {
+        assert.ok(associateby_pattern_expr.kind === SynxExprKind.PATTERN_PAIR);
+      }
+
+      let partial = {
+        sub_nodes: sub_nodes,
+        neg_flags: neg_flags,
+        associateby: associateby_pattern_expr?.value,
+        ignore: ignore_pattern_expr?.value
+      }
+
+      ret = {
+        kind: SynxExprKind.PATTERN,
+        value: completePatternSet(partial)
+      };
     }
 
+    this.expr_to_ast_node_map.set(ret, node);
     return ret;
   }
 
@@ -258,14 +355,9 @@ class SynxSemanticParserImpl implements SynxSemanticParser {
       ret = this.parseCharRange(node);
     } else if (parser_node === SYNX_PARSER_NODE.StringLiteral) {
       ret = this.parseCharSeq(node);
-    }
-    // TODO
-
-    // else if (parser_node === SYNX_PARSER_NODE.PatternSet) {
-    //   ret = this.parsePatternSet(node);
-    // } 
-
-    else {
+    } else if (parser_node === SYNX_PARSER_NODE.PatternSet) {
+      ret = this.parsePatternSet(node);
+    } else {
       ret = this.parseUnknownExpr(node);
     }
 
@@ -304,57 +396,54 @@ class SynxSemanticParserImpl implements SynxSemanticParser {
     return ret;
   }
 
+  /**
+   * 不会eval prefix_op，如果无法eval则返回原值
+   */
+  evalPatternWithUnaryOpExpr(pattern_wtih_unary_op_expr: SynxPatternWithUnaryOpExpr): SynxPatternExpr | SynxPatternWithUnaryOpExpr {
+    const parsed_pattern = pattern_wtih_unary_op_expr.pattern.value;
+    const postfix_op = pattern_wtih_unary_op_expr.postfix_op;
+    let sub_quantifiers = " ";
+    if (postfix_op !== null) {
+      if (postfix_op.length !== 1) {
+        return pattern_wtih_unary_op_expr;
+      }
+      sub_quantifiers = postfix_op;
+    }
+
+    let partial = {
+      sub_nodes: [parsed_pattern],
+      sub_quantifiers: sub_quantifiers
+    };
+
+    return {
+      kind: SynxExprKind.PATTERN,
+      value: completePatternSeq(partial)
+    };
+  }
+
   parseTopLevelPattern(node: AstNode): SynxPatternExpr | SynxErrorExpr {
     const parser_node = node.parser_nodes[0];
     if (parser_node === SYNX_PARSER_NODE.PatternWithUnaryOp) {
-      const pattern_wtih_unary_op_expr = this.parsePatternWithUnaryOp(node);
-      if (pattern_wtih_unary_op_expr.kind === SynxExprKind.PATTERN_WITH_UNARY_OP) {
-        if (pattern_wtih_unary_op_expr.prefix_op === "-") {
-          return {
-            kind: SynxExprKind.ERROR_TOP_LEVEL_PATTERN,
-            value: pattern_wtih_unary_op_expr
-          };
-        }
-        const parsed_pattern = pattern_wtih_unary_op_expr.pattern.value;
-        const prefix_op = pattern_wtih_unary_op_expr.prefix_op;
-        const postfix_op = pattern_wtih_unary_op_expr.postfix_op;
-        let ret_value: ParserNode | null = null;
-
-        if (postfix_op === null) {
-          if (prefix_op === null) {
-            ret_value = parsed_pattern;
-          } else if (prefix_op === "\\raw") {
-            if (parsed_pattern.kind === ParserNodeKind.PatternSet) {
-              throw new Error("not implemented");
-            }
-            if (parsed_pattern.kind !== ParserNodeKind.UnresolvedPattern) {
-              ret_value = parsed_pattern;
-              if (ret_value.kind === ParserNodeKind.PatternSeq) {
-                ret_value.raw = true;
-              }
-            }
-          } else {
-            assert.ok(false);
+      let ret: SynxPatternExpr | null = null;
+      const pattern_with_unary_op_expr = this.parsePatternWithUnaryOp(node);
+      if (pattern_with_unary_op_expr.kind === SynxExprKind.PATTERN_WITH_UNARY_OP) {
+        if (pattern_with_unary_op_expr.prefix_op !== '-') {
+          let pattern_eval = this.evalPatternWithUnaryOpExpr(pattern_with_unary_op_expr);
+          if (pattern_eval.kind == SynxExprKind.PATTERN) {
+            ret = pattern_eval;
           }
         }
-
-        if (!ret_value) {
-          let partial = {
-            sub_nodes: [parsed_pattern],
-            sub_quantifiers: prefix_op ?? " "
-          };
-          ret_value = completePatternSeq(partial);
+        if (ret == null) {
+          return {
+            kind: SynxExprKind.ERROR_TOP_LEVEL_PATTERN,
+            value: pattern_with_unary_op_expr
+          }
+        } else {
+          this.expr_to_ast_node_map.set(ret, node);
+          return ret;
         }
-
-        let ret: SynxPatternExpr = {
-          kind: SynxExprKind.PATTERN,
-          value: ret_value
-        };
-
-        this.expr_to_ast_node_map.set(ret, node);
-        return ret;
       } else {
-        return pattern_wtih_unary_op_expr;
+        return pattern_with_unary_op_expr;
       }
     } else {
       return this.parseUnknownExpr(node);

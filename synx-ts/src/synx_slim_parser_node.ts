@@ -336,7 +336,6 @@ const PatternSeqPatterns: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   sep: completeCharSeq({ literal: "," }),
   ignore: Ignorable,
   sub_node_bindings: ["patterns"],
-  transform: (ctx) => ctx.bindings.patterns,
 });
 
 // PatternSeq=((patterns:{PatternBinding;PatternWithUnaryOp}+ \sep "," \ignore Ignorable), sep_part:SepPart?, ignore_part:IgnorePart?, enclosedby_part:EnclosedbyPart? \ignore Ignorable \enclosedby "()")=>...
@@ -346,28 +345,29 @@ export const PatternSeq: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   sub_quantifiers: " ???",
   ignore: Ignorable,
   enclosure: "()",
-  sub_node_bindings: ["patterns", "sep_part", "ignore_part", "enclosedby_part"],
+  sub_node_isolated_scope_flags: [false, true, true, true],
+  sub_node_bindings: [null, "sep_part", "ignore_part", "enclosedby_part"],
   transform: (ctx) => ({ patterns: ctx.bindings.patterns, sep: ctx.bindings.sep_part, ignore: ctx.bindings.ignore_part, enclosedby: ctx.bindings.enclosedby_part }),
 });
 
 const PatternSetPatterns: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
-  name: "(patterns:{PatternBinding;PatternWithUnaryOp}* \\sep \";\" \\ignore Ignorable)",
-  sub_nodes: [PatternItem],
+  name: "(patterns:PatternWithUnaryOp* \\sep \";\" \\ignore Ignorable)",
+  sub_nodes: [PatternWithUnaryOp],
   sub_quantifiers: "*",
   sep: completeCharSeq({ literal: ";" }),
   ignore: Ignorable,
   sub_node_bindings: ["patterns"],
-  transform: (ctx) => ctx.bindings.patterns,
 });
 
-// PatternSet=((patterns:{PatternBinding;Pattern}* \sep ";" \ignore Ignorable), ";"?, associateby_part:AssociateByPart?, ignore_part:IgnorePart? \ignore Ignorable \enclosedby "{}")=>...
+// PatternSet=((patterns:PatternWithUnaryOp* \sep ";" \ignore Ignorable), ";"?, associateby_part:AssociateByPart?, ignore_part:IgnorePart? \ignore Ignorable \enclosedby "{}")=>...
 export const PatternSet: PARSER_NODE_TYPE.PatternSeq = completePatternSeq({
   name: "PatternSet",
   sub_nodes: [PatternSetPatterns, completeCharSeq({ literal: ";" }), AssociateByPart, IgnorePart],
   sub_quantifiers: " ???",
   ignore: Ignorable,
   enclosure: "{}",
-  sub_node_bindings: ["patterns", null, "associateby_part", "ignore_part"],
+  sub_node_isolated_scope_flags: [false, true, true, true],
+  sub_node_bindings: [null, null, "associateby_part", "ignore_part"],
   transform: (ctx) => ({ patterns: ctx.bindings.patterns, associateby: ctx.bindings.associateby_part, ignore: ctx.bindings.ignore_part }),
 });
 
