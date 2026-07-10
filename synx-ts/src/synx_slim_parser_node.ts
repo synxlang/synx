@@ -421,7 +421,7 @@ CharSet.sub_nodes.push(CharRange, OneOfCharSet);
 CharSet.neg_flags.push(false, false);
 completePatternSet(CharSet);
 
-// Pattern={RawPattern;Rule;PatternSeq;PatternSet;CharSet;StringLiteral;GeneralSymbol \associateby "()" \ignore Ignorable};
+// Pattern={RawPattern;Rule;PatternSeq;PatternSet;CharSet;StringLiteral;Symbol \associateby "()" \ignore Ignorable};
 Pattern.sub_nodes.push(
   RawPattern,
   Rule,
@@ -429,7 +429,7 @@ Pattern.sub_nodes.push(
   PatternSet,
   CharSet,
   StringLiteral,
-  GeneralSymbol,
+  Symbol,
 );
 Pattern.neg_flags.push(false, false, false, false, false, false, false);
 completePatternSet(Pattern);

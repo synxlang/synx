@@ -60,7 +60,7 @@ PatternSeq=(
 PatternBinding=(symbol:Symbol,":",pattern:TopLevelPattern \ignore Ignorable)=>[.symbol=symbol, .pattern=pattern];
 Rule=(pattern:PatternSeq,"=>",returned:Expr)=>[.pattern=pattern, .returned=returned];
 
-Pattern={RawPattern;Rule;PatternSeq;PatternSet;CharSet;StringLiteral;GeneralSymbol \associateby "()" \ignore Ignorable};
+Pattern={RawPattern;Rule;PatternSeq;PatternSet;CharSet;StringLiteral;Symbol \associateby "()" \ignore Ignorable};
 
 List=(exprs:Expr* \sep "," \ignore Ignorable \enclosedby "[]")=>exprs;
 

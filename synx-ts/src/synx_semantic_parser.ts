@@ -1,7 +1,7 @@
 import assert from "assert";
 import { AstNode } from "./common";
 import {
-  ParserNode, validatePartialCharRange, completeCharRange, completeCharSeq, completePatternSeq,
+  ParserNode, validatePartialCharRange, completeCharRange, completeCharSeq, completePatternSeq, completeUnresolvedPattern,
   ParserNodeKind,
   completePatternSet
 } from "./parser_node";
@@ -162,6 +162,16 @@ class SynxSemanticParserImpl implements SynxSemanticParser {
 
   pushErrExpr(expr: SynxErrorExpr) {
     this.err_exprs.push(expr);
+  }
+
+  parseSymbol(node: AstNode): SynxPatternExpr {
+    assert.ok(typeof node.value === "string");
+    let ret: SynxPatternExpr = {
+      kind: SynxExprKind.PATTERN,
+      value: completeUnresolvedPattern({ name: node.value })
+    };
+    this.expr_to_ast_node_map.set(ret, node);
+    return ret;
   }
 
   parseStringLiteral(node: AstNode): string {
@@ -351,12 +361,14 @@ class SynxSemanticParserImpl implements SynxSemanticParser {
     }
     let ret: SynxPatternExpr | SynxErrorExpr;
     const parser_node = node.parser_nodes[0];
-    if (parser_node === SYNX_PARSER_NODE.CharRange) {
+    if (parser_node === SYNX_PARSER_NODE.PatternSet) {
+      ret = this.parsePatternSet(node);
+    } else if (parser_node === SYNX_PARSER_NODE.CharRange) {
       ret = this.parseCharRange(node);
     } else if (parser_node === SYNX_PARSER_NODE.StringLiteral) {
       ret = this.parseCharSeq(node);
-    } else if (parser_node === SYNX_PARSER_NODE.PatternSet) {
-      ret = this.parsePatternSet(node);
+    } else if (parser_node === SYNX_PARSER_NODE.Symbol) {
+      ret = this.parseSymbol(node);
     } else {
       ret = this.parseUnknownExpr(node);
     }
@@ -410,21 +422,25 @@ class SynxSemanticParserImpl implements SynxSemanticParser {
       sub_quantifiers = postfix_op;
     }
 
-    let partial = {
-      sub_nodes: [parsed_pattern],
-      sub_quantifiers: sub_quantifiers
-    };
+    let ret_value = parsed_pattern;
+    if (sub_quantifiers !== " ") {
+      let partial = {
+        sub_nodes: [parsed_pattern],
+        sub_quantifiers: sub_quantifiers
+      };
+      ret_value = completePatternSeq(partial);
+    }
 
     return {
       kind: SynxExprKind.PATTERN,
-      value: completePatternSeq(partial)
+      value: ret_value
     };
   }
 
   parseTopLevelPattern(node: AstNode): SynxPatternExpr | SynxErrorExpr {
     const parser_node = node.parser_nodes[0];
     if (parser_node === SYNX_PARSER_NODE.PatternWithUnaryOp) {
-      let ret: SynxPatternExpr | null = null;
+      let ret: SynxPatternExpr | SynxErrorExpr | null = null;
       const pattern_with_unary_op_expr = this.parsePatternWithUnaryOp(node);
       if (pattern_with_unary_op_expr.kind === SynxExprKind.PATTERN_WITH_UNARY_OP) {
         if (pattern_with_unary_op_expr.prefix_op !== '-') {
@@ -434,14 +450,13 @@ class SynxSemanticParserImpl implements SynxSemanticParser {
           }
         }
         if (ret == null) {
-          return {
+          ret = {
             kind: SynxExprKind.ERROR_TOP_LEVEL_PATTERN,
             value: pattern_with_unary_op_expr
           }
-        } else {
-          this.expr_to_ast_node_map.set(ret, node);
-          return ret;
         }
+        this.expr_to_ast_node_map.set(ret, node);
+        return ret;
       } else {
         return pattern_with_unary_op_expr;
       }

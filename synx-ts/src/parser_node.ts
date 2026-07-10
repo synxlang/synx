@@ -546,3 +546,9 @@ function inferPatternSetCharsetFlag(
   }
   return true;
 }
+
+
+export function completeUnresolvedPattern(node: Partial<UnresolvedPattern> & { name: string }): UnresolvedPattern {
+  node.kind = ParserNodeKind.UnresolvedPattern;
+  return node as UnresolvedPattern;
+}
